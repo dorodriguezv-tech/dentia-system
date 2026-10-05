@@ -1,0 +1,64 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  object-fit: cover;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+}
+
+.name {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.status {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: calc(var(--radius) * 0.4);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  text-transform: uppercase;
+}
+
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 1rem;
+}
+
+.alert {
+  font-size: 0.8rem;
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-radius: calc(var(--radius) * 0.4);
+  padding: 0.3rem 0.6rem;
+}

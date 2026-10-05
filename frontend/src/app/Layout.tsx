@@ -2,6 +2,8 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { resolveApiAssetUrl } from '../api/client'
 import { canManageBranding, canManageUsers } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
+import { GlobalSearch } from '../modules/patients/GlobalSearch'
+import { useGlobalSearchStore } from '../modules/patients/searchStore'
 import { useThemeStore } from '../theme/store'
 import styles from './Layout.module.css'
 
@@ -12,6 +14,7 @@ export function Layout() {
   const activeClinicId = useAuthStore((s) => s.activeClinicId)
   const logout = useAuthStore((s) => s.logout)
   const branding = useThemeStore((s) => s.branding)
+  const openSearch = useGlobalSearchStore((s) => s.setOpen)
 
   const activeClinic = clinics.find((c) => c.clinic.id === activeClinicId)
   const activeRole = activeClinic?.role.code ?? null
@@ -36,6 +39,11 @@ export function Layout() {
               Inicio
             </NavLink>
           </li>
+          <li>
+            <NavLink to="/pacientes" className={styles.navLink}>
+              Pacientes
+            </NavLink>
+          </li>
           {canManageUsers(activeRole) && (
             <li>
               <NavLink to="/usuarios" className={styles.navLink}>
@@ -53,8 +61,11 @@ export function Layout() {
         </ul>
       </aside>
       <header className={styles.header}>
-        <strong>{activeClinic?.clinic.name ?? 'Sistema Clinico Dental'}</strong>
+        <button className={styles.searchButton} type="button" onClick={() => openSearch(true)}>
+          Buscar paciente... <span>Ctrl+K</span>
+        </button>
         <div className={styles.headerUser}>
+          <span>{activeClinic?.clinic.name}</span>
           <span>{user?.full_name}</span>
           <button className={styles.logoutButton} type="button" onClick={handleLogout}>
             Salir
@@ -64,6 +75,7 @@ export function Layout() {
       <main className={styles.content}>
         <Outlet />
       </main>
+      <GlobalSearch />
     </div>
   )
 }

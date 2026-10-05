@@ -6,7 +6,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "args": ["app.main:app", "--reload", "--port", "8001"],
       "cwd": "${workspaceFolder}/backend",
       "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
       "justMyCode": true
@@ -25,7 +25,7 @@
       "name": "Web: Chrome contra Vite",
       "type": "chrome",
       "request": "launch",
-      "url": "http://localhost:5173",
+      "url": "http://localhost:5174",
       "webRoot": "${workspaceFolder}/frontend/src"
     }
   ],

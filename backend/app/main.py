@@ -7,6 +7,7 @@ from app.core.db import async_session_factory
 from app.core.errors import register_error_handlers
 from app.modules.branding.router import router as branding_router
 from app.modules.iam.router import router as iam_router
+from app.modules.patients.router import router as patients_router
 
 settings = get_settings()
 
@@ -26,6 +27,7 @@ register_error_handlers(app)
 
 app.include_router(iam_router, prefix=settings.api_prefix)
 app.include_router(branding_router, prefix=settings.api_prefix)
+app.include_router(patients_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

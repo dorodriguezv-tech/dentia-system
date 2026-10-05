@@ -74,8 +74,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET/PUT | /branding (GET público) | Tema y marca de la sucursal (permiso `branding.manage`) |
 | POST/GET | /branding/logo, /branding/favicon | Subir logo (sanea SVG, genera favicon) y servirlo (publico) |
 | GET | /health | Estado del servicio (sin autenticacion) |
-| GET/POST | /patients, /patients/search?q=, /patients/duplicates-check | Pacientes |
-| GET | /patients/{id}/summary | Encabezado y alertas |
+| GET/POST/PATCH | /patients, /patients/search?q=, /patients/duplicates-check, /patients/{id} | Pacientes (alta, edicion controlada, busqueda tolerante, duplicados) |
+| GET | /patients/{id}/summary | Encabezado persistente (nombre, edad, alertas) |
+| GET/POST/PATCH/DELETE | /patients/{id}/contacts | Tutor/responsable y contacto de emergencia |
+| POST/GET | /patients/{id}/photo | Foto del paciente (permisionada, no publica) |
 | CRUD | /patients/{id}/allergies, /medications, /history | Expediente |
 | POST | /encounters, /encounters/{id}/notes | Atención y notas |
 | POST | /notes/{id}/finalize, /notes/{id}/correct | Reglas de nota |
@@ -129,6 +131,33 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   `GET /branding/logo` y `/branding/favicon`, publicos a propósito (son la imagen de marca, no
   datos clínicos) — a diferencia de `storage/` en general, que nunca se sirve como estático.
 
+### 5.3 Pacientes (Fase 3)
+- **Expediente:** `clinics.next_patient_number` es un contador por sucursal (se incrementa con
+  `SELECT ... FOR UPDATE` en la misma transacción del alta, sin condición de carrera) formateado
+  como `000001`, `000002`, ...
+- **Búsqueda tolerante a errores:** extensiones `pg_trgm` + `unaccent` de PostgreSQL. El nombre
+  completo se indexa con un índice GIN sobre `immutable_unaccent(lower(full_name))`.
+  `immutable_unaccent` es un envoltorio SQL propio porque `unaccent()` es `STABLE`, no
+  `IMMUTABLE` (Postgres lo exige para indexar una expresión), y además debe llamar a
+  `public.unaccent(...)` con el esquema explícito: al expandir la función en línea para
+  `CREATE INDEX`, Postgres resuelve nombres sin usar el `search_path` de la sesión, así que
+  `unaccent` a secas no se encuentra ahí aunque funcione en una consulta normal (es un
+  comportamiento real de Postgres, no un error de la app — reproducible incluso por `psql` puro).
+- **Detección de duplicados:** `POST /patients/duplicates-check` exige coincidencia de fecha de
+  nacimiento o teléfono **además** de similitud de nombre (`pg_trgm` > 0.4); sin uno de esos dos
+  datos no hay forma confiable de comparar y la búsqueda no se ejecuta. El alta en el frontend
+  llama a este endpoint antes de crear y obliga a confirmar explícitamente si aparecen
+  candidatos.
+- **Edición controlada:** cambiar `status` por `PATCH /patients/{id}` exige `status_reason`
+  (422 si falta); el cambio queda en el detalle del `AuditEvent` (`from`, `to`, `reason`).
+- **Lectura auditada:** `GET /patients/{id}` crea un `AuditEvent` `patients.read` en cada
+  llamada (regla de CLAUDE.md sec. 5); `GET /patients` (listado) y `/search` no, porque no
+  abren la ficha de un paciente concreto.
+- **Foto del paciente:** a diferencia del logo de marca, **no** es pública (dato sensible del
+  expediente). `GET /patients/{id}/photo` exige `patients.read`, así que el frontend no puede
+  usar un `<img src>` directo: la pide con `fetch` autenticado y la muestra como blob URL
+  (`api/client.ts: apiRequestBlobUrl`).
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Agenda | Cuenta.
@@ -146,8 +175,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 0 | Base del proyecto: estructura de carpetas, FastAPI con `/api/v1/health`, Alembic (async) configurado sin migraciones aún, frontend Vite + React 18 + TS con layout base (barra lateral, encabezado, contenido), `docker-compose.yml` (PostgreSQL 16), `.vscode/`, lint/format/test configurados en ambos lados | Hecho |
 | 1 | IAM (`organizations`, `clinics`, `users`, `roles`, `permissions`, `user_clinics`, `refresh_tokens`) y `audit` (`audit_events` append-only). Login JWT + MFA TOTP + rate limiting, `require_permission` por `X-Clinic-Id`, catálogo de permisos seedeado por migración (`docs/MATRIZ_PERMISOS.md`), `app/seed.py` con admin y odontólogo ficticios. Frontend: login, selección de sucursal, gestión de usuarios, guardia de rutas por permiso | Hecho |
 | 2 | `clinic_branding` (nombre, logo, favicon, preset o colores personalizados, modo oscuro, radio de bordes). `GET /branding` público, `PUT /branding` y `POST /branding/logo` con permiso `branding.manage`. 6 presets + derivación de hover/soft + validación de contraste WCAG (avisa y sugiere, no bloquea). SVG saneado (sin `<script>`/eventos), favicon generado con Pillow. Frontend: `ThemeProvider`, pantalla Configuración → Apariencia (preset, colores, logo, vista previa en vivo, restablecer) y script que verifica que no haya colores fijos fuera de `theme/` | Hecho |
-| 3–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 3 | `patients` (alta, edición controlada con motivo, 5 estados, contactos tutor/emergencia, foto permisionada) y expediente autonumérico por sucursal. Búsqueda tolerante (`pg_trgm` + `unaccent`) y detección de duplicados (nombre + nacimiento o teléfono) con confirmación obligatoria. Lectura de ficha auditada. Frontend: búsqueda global (`Ctrl+K`), listado con filtro de estado, alta en 3 pasos (datos → posibles duplicados → contactos), encabezado persistente del paciente (nombre, edad, foto, barra de alertas vacía) y controles de edición ocultos para roles sin `patients.write`. Seed con 50 pacientes ficticios (Faker es_MX) | Hecho |
+| 4–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de patients/records/odontogram/agenda/diagnosis/treatment/documents/imaging/billing/
-reports/ai de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía
-— se crean conforme avanza cada fase.
+Los módulos de records/odontogram/agenda/diagnosis/treatment/documents/imaging/billing/reports/ai
+de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean
+conforme avanza cada fase. `patients` ya existe pero todavía sin las pestañas de Expediente,
+Odontograma, etc. de la sección 6 (llegan con sus respectivas fases).

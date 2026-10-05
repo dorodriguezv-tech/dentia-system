@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,8 @@ class Clinic(AuditedMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Contador para el numero de expediente de pacientes (modulo patients, Fase 3).
+    next_patient_number: Mapped[int] = mapped_column(Integer, default=1)
 
     organization: Mapped[Organization] = relationship(back_populates="clinics")
 

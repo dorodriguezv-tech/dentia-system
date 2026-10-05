@@ -124,6 +124,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
+/** Codigo de rol del usuario en la sucursal activa, o null si no hay ninguna seleccionada. */
+export function useActiveRole(): string | null {
+  const clinics = useAuthStore((s) => s.clinics)
+  const activeClinicId = useAuthStore((s) => s.activeClinicId)
+  return clinics.find((c) => c.clinic.id === activeClinicId)?.role.code ?? null
+}
+
 setSessionHooks({
   getAccessToken: () => useAuthStore.getState().accessToken,
   getClinicId: () => useAuthStore.getState().activeClinicId,

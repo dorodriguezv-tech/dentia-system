@@ -104,13 +104,13 @@ python -m venv .venv && .venv\Scripts\activate      # Windows  (Linux/Mac: sourc
 pip install -r requirements.txt
 alembic upgrade head
 python -m app.seed                                   # datos ficticios
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001            # 8000 esta ocupado por otro sistema en esta maquina
 pytest
 
 # Frontend
 cd frontend
 npm install
-npm run dev                                          # http://localhost:5173
+npm run dev                                          # http://localhost:5174 (5173 ocupado tambien)
 npm run test
 
 # IA local

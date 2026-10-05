@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001/api/v1'
 const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1$/, '')
 
 /**
@@ -96,4 +96,21 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   return (await response.json()) as T
+}
+
+/**
+ * Para archivos permisionados (p.ej. la foto de un paciente): a diferencia del logo de
+ * marca, no son publicos, asi que un <img src> directo no puede mandar el Authorization
+ * header. Hay que pedirlos con fetch autenticado y convertir la respuesta a blob URL.
+ */
+export async function apiRequestBlobUrl(path: string): Promise<string> {
+  const response = await doFetch(path, {})
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, {
+      code: 'UNKNOWN_ERROR',
+      message: 'No se pudo cargar el archivo',
+    })
+  }
+  const blob = await response.blob()
+  return URL.createObjectURL(blob)
 }

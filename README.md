@@ -52,7 +52,7 @@ pip install -r requirements.txt
 copy .env.example .env
 alembic upgrade head
 python -m app.seed
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
 **Linux / macOS:**
@@ -64,14 +64,15 @@ pip install -r requirements.txt
 cp .env.example .env
 alembic upgrade head
 python -m app.seed
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
-Verifica: `curl http://localhost:8000/api/v1/health` → `{"status":"ok"}`.
+Verifica: `curl http://localhost:8001/api/v1/health` → `{"status":"ok"}`.
 
 `python -m app.seed` crea datos ficticios (Faker es_MX) de arranque: una clínica demo con un
-`admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar) y un
-`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`). Es idempotente.
+`admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar), un
+`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`) y 50 pacientes ficticios. Es
+idempotente.
 
 Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
 del paso 1):
@@ -87,7 +88,7 @@ mypy app
 cd frontend
 npm install
 cp .env.example .env
-npm run dev       # http://localhost:5173
+npm run dev       # http://localhost:5174
 ```
 
 Pruebas y calidad:
@@ -112,5 +113,6 @@ Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y s
 ## Estado del proyecto
 Se construye por fases (vertical slices), ver [`prompts/PROMPTS_CLAUDE_CODE.md`](./prompts/PROMPTS_CLAUDE_CODE.md).
 Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y auditoría**
-(ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos)
-y **Fase 2 — Tema y marca configurables** (Configuración → Apariencia).
+(ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos),
+**Fase 2 — Tema y marca configurables** (Configuración → Apariencia) y **Fase 3 — Pacientes**
+(búsqueda global `Ctrl+K`, alta con detección de duplicados, expediente, contactos, foto).

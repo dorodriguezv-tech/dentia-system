@@ -14,3 +14,4 @@
 | 10 | ¿Dentición mixta: cómo prefiere visualizarla? | Vista mixta con temporales sobre permanentes | 5 | |
 | 11 | ¿Qué permiso exacto debe tener cada rol (recepción, caja, asistente, etc.)? | Matriz por defecto en `docs/MATRIZ_PERMISOS.md`, generada de `backend/app/modules/iam/permissions_catalog.py` | 1 | |
 | 12 | Si la organización tiene varias sucursales con marca distinta, ¿qué nombre/logo se muestra en `GET /branding` (pantalla de login, antes de elegir sucursal)? | Se usa la sucursal creada primero (`clinics.created_at` más antiguo); solo importa si hay mas de una sucursal con branding propio | 2 | |
+| 13 | ¿Qué tan parecido debe ser un nombre para avisar de un posible paciente duplicado? ¿Y qué datos son obligatorios al dar de alta (más allá de nombre y fecha de nacimiento)? | Similitud de nombre (`pg_trgm`) > 0.4, combinada con misma fecha de nacimiento o mismo teléfono; obligatorios solo nombre(s), apellido paterno y fecha de nacimiento | 3 | |

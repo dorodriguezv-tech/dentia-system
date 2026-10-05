@@ -4,6 +4,9 @@ import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
+import { NewPatientPage } from '../modules/patients/NewPatientPage'
+import { PatientDetailPage } from '../modules/patients/PatientDetailPage'
+import { PatientsListPage } from '../modules/patients/PatientsListPage'
 import { UsersPage } from '../modules/users/UsersPage'
 import { HomePage } from './HomePage'
 import { Layout } from './Layout'
@@ -23,6 +26,12 @@ export const router = createBrowserRouter([
             element: <Layout />,
             children: [
               { index: true, element: <HomePage /> },
+              { path: 'pacientes', element: <PatientsListPage /> },
+              { path: 'pacientes/:id', element: <PatientDetailPage /> },
+              {
+                element: <RequireRole roles={['admin_clinica', 'recepcion', 'superadmin']} />,
+                children: [{ path: 'pacientes/nuevo', element: <NewPatientPage /> }],
+              },
               {
                 element: <RequireRole roles={['admin_clinica', 'superadmin']} />,
                 children: [

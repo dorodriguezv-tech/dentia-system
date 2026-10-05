@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import app.audit.models  # noqa: F401  (registra tablas en Base.metadata)
 import app.modules.branding.models  # noqa: F401
 import app.modules.iam.models  # noqa: F401
+import app.modules.patients.models  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
 

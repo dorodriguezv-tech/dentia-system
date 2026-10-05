@@ -58,6 +58,32 @@
   padding: 0 1.5rem;
 }
 
+.searchButton {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+  min-width: 220px;
+}
+
+.searchButton span {
+  margin-left: auto;
+  font-size: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.4);
+  padding: 0.05rem 0.4rem;
+}
+
+.searchButton:hover {
+  border-color: var(--color-primary);
+}
+
 .headerUser {
   display: flex;
   align-items: center;

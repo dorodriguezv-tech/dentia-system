@@ -1,0 +1,101 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NewPatientPage } from './NewPatientPage'
+
+vi.mock('./api')
+import * as api from './api'
+
+function renderWizard() {
+  const router = createMemoryRouter(
+    [
+      { path: '/pacientes/nuevo', element: <NewPatientPage /> },
+      { path: '/pacientes/:id', element: <div>Ficha del paciente</div> },
+      { path: '/pacientes', element: <div>Listado de pacientes</div> },
+    ],
+    { initialEntries: ['/pacientes/nuevo'] },
+  )
+  render(<RouterProvider router={router} />)
+}
+
+async function fillRequiredFields() {
+  await userEvent.type(screen.getByLabelText('Nombre(s)'), 'Jose')
+  await userEvent.type(screen.getByLabelText('Apellido paterno'), 'Perez')
+  const dob = screen.getByLabelText('Fecha de nacimiento')
+  await userEvent.type(dob, '1990-05-20')
+}
+
+describe('NewPatientPage', () => {
+  beforeEach(() => {
+    vi.mocked(api.checkDuplicates).mockReset()
+    vi.mocked(api.createPatient).mockReset()
+    vi.mocked(api.createContact).mockReset()
+  })
+
+  it('exige confirmar cuando hay posibles duplicados antes de poder crear', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([
+      {
+        id: 'p1',
+        expediente_number: '000001',
+        full_name: 'Jose Perez Gomez',
+        date_of_birth: '1990-05-20',
+        phone: null,
+        similarity: 0.9,
+      },
+    ])
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    expect(await screen.findByText('2. Posibles duplicados', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('Jose Perez Gomez', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText('Crear paciente')).not.toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Ninguno es el mismo paciente, continuar' }),
+    )
+
+    expect(await screen.findByRole('button', { name: 'Crear paciente' })).toBeInTheDocument()
+  })
+
+  it('salta directo a contactos cuando no hay duplicados', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    expect(await screen.findByRole('button', { name: 'Crear paciente' })).toBeInTheDocument()
+  })
+
+  it('crea el paciente y navega a su ficha', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000002',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '1990-05-20',
+      sex: null,
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+    })
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() => expect(screen.getByText('Ficha del paciente')).toBeInTheDocument())
+    expect(api.createPatient).toHaveBeenCalledWith(
+      expect.objectContaining({ first_name: 'Jose', last_name_paternal: 'Perez' }),
+    )
+  })
+})

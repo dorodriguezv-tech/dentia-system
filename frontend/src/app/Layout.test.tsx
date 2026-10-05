@@ -13,6 +13,6 @@ describe('Layout', () => {
     render(<RouterProvider router={router} />)
 
     expect(screen.getByText('DentalCare')).toBeInTheDocument()
-    expect(screen.getByText('Sistema Clinico Dental')).toBeInTheDocument()
+    expect(screen.getByText('Buscar paciente...')).toBeInTheDocument()
   })
 })

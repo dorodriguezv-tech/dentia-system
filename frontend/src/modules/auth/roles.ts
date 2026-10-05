@@ -25,3 +25,10 @@ const ROLES_THAT_MANAGE_BRANDING = new Set(['superadmin', 'admin_clinica'])
 export function canManageBranding(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_MANAGE_BRANDING.has(roleCode)
 }
+
+/** Roles con el permiso `patients.write` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion'])
+
+export function canWritePatients(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_PATIENTS.has(roleCode)
+}
