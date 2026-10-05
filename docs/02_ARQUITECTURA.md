@@ -71,7 +71,8 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | POST | /auth/mfa/setup, /auth/mfa/enable, /auth/mfa/disable | MFA TOTP (obligatoria para admin_clinica) |
 | GET | /me, /me/clinics | Usuario autenticado y sus sucursales (selección de sucursal) |
 | GET/POST/PATCH | /users (scope por header `X-Clinic-Id`) | Gestión de usuarios de la clinica (permiso `iam.manage_users`) |
-| GET/PUT | /branding (GET público), /branding/logo | Tema y logo |
+| GET/PUT | /branding (GET público) | Tema y marca de la sucursal (permiso `branding.manage`) |
+| POST/GET | /branding/logo, /branding/favicon | Subir logo (sanea SVG, genera favicon) y servirlo (publico) |
 | GET | /health | Estado del servicio (sin autenticacion) |
 | GET/POST | /patients, /patients/search?q=, /patients/duplicates-check | Pacientes |
 | GET | /patients/{id}/summary | Encabezado y alertas |
@@ -106,6 +107,28 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 - **Auditoría:** `AuditEvent` es append-only (trigger de PostgreSQL que bloquea UPDATE/DELETE).
   Un middleware registra `access_denied` en cada respuesta 403.
 
+### 5.2 Tema y marca (Fase 2)
+- **Catálogo único:** `backend/app/modules/branding/presets.py` es la fuente de verdad de los
+  6 presets y de los colores compartidos (`frontend/src/theme/presets.ts` es su copia para la
+  UI, igual que el patrón ya usado con el catálogo de permisos de IAM).
+- **`GET /branding` es público** (lo necesita la pantalla de login antes de autenticar) y
+  resuelve "la" sucursal como la más antigua (`clinics.created_at`); ver pendiente #12 en
+  `docs/PENDIENTES_CLINICOS.md` para multi-sucursal.
+- **Derivación de color:** `--color-primary-hover`/`-soft` (y `-danger-soft`) nunca se guardan;
+  se calculan en el cliente (`theme/colorUtils.ts`) cada vez que se aplica el tema, con la misma
+  fórmula HSL que el backend (`color_utils.py`) usa para sugerir ajustes de contraste.
+- **Contraste WCAG:** `PUT /branding` siempre guarda lo que mandó el admin (no lo rechaza) pero
+  devuelve `contrast_warnings` con el color sugerido si texto/fondo o texto-de-boton/primario
+  bajan de 4.5:1; la pantalla de Apariencia calcula lo mismo en vivo mientras se edita.
+- **Modo oscuro:** no hay una paleta oscura dibujada a mano por preset; se usa una base neutra
+  oscura fija (`DARK_OVERRIDES` en el frontend) y se conservan primary/secondary/accent/
+  success/warning/danger del preset.
+- **Logo:** PNG/JPG/SVG, máximo 1 MB. El SVG se sanea con `xml.etree` (quita `<script>`,
+  `<foreignObject>`, `<style>`, atributos `on*` y `javascript:`) en vez de rechazarse. El favicon
+  se genera con Pillow (PNG/JPG a 64×64) o reutiliza el SVG saneado. Los archivos se sirven por
+  `GET /branding/logo` y `/branding/favicon`, publicos a propósito (son la imagen de marca, no
+  datos clínicos) — a diferencia de `storage/` en general, que nunca se sirve como estático.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Agenda | Cuenta.
@@ -122,7 +145,8 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 |---|---|---|
 | 0 | Base del proyecto: estructura de carpetas, FastAPI con `/api/v1/health`, Alembic (async) configurado sin migraciones aún, frontend Vite + React 18 + TS con layout base (barra lateral, encabezado, contenido), `docker-compose.yml` (PostgreSQL 16), `.vscode/`, lint/format/test configurados en ambos lados | Hecho |
 | 1 | IAM (`organizations`, `clinics`, `users`, `roles`, `permissions`, `user_clinics`, `refresh_tokens`) y `audit` (`audit_events` append-only). Login JWT + MFA TOTP + rate limiting, `require_permission` por `X-Clinic-Id`, catálogo de permisos seedeado por migración (`docs/MATRIZ_PERMISOS.md`), `app/seed.py` con admin y odontólogo ficticios. Frontend: login, selección de sucursal, gestión de usuarios, guardia de rutas por permiso | Hecho |
-| 2–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 2 | `clinic_branding` (nombre, logo, favicon, preset o colores personalizados, modo oscuro, radio de bordes). `GET /branding` público, `PUT /branding` y `POST /branding/logo` con permiso `branding.manage`. 6 presets + derivación de hover/soft + validación de contraste WCAG (avisa y sugiere, no bloquea). SVG saneado (sin `<script>`/eventos), favicon generado con Pillow. Frontend: `ThemeProvider`, pantalla Configuración → Apariencia (preset, colores, logo, vista previa en vivo, restablecer) y script que verifica que no haya colores fijos fuera de `theme/` | Hecho |
+| 3–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
 Los módulos de patients/records/odontogram/agenda/diagnosis/treatment/documents/imaging/billing/
 reports/ai de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía

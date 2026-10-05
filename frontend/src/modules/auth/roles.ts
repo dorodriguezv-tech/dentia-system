@@ -18,3 +18,10 @@ const ROLES_THAT_MANAGE_USERS = new Set(['superadmin', 'admin_clinica'])
 export function canManageUsers(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_MANAGE_USERS.has(roleCode)
 }
+
+/** Roles con el permiso `branding.manage` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_MANAGE_BRANDING = new Set(['superadmin', 'admin_clinica'])
+
+export function canManageBranding(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_MANAGE_BRANDING.has(roleCode)
+}

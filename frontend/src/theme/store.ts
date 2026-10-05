@@ -1,0 +1,76 @@
+import { create } from 'zustand'
+import { resolveApiAssetUrl } from '../api/client'
+import * as api from '../modules/branding/api'
+import type { BrandingOut, ColorPalette, RadiusCode } from '../modules/branding/types'
+import { deriveHover, deriveSoft } from './colorUtils'
+import { DARK_OVERRIDES, RADIUS_VALUES } from './presets'
+
+interface ThemeState {
+  branding: BrandingOut | null
+  loading: boolean
+  load: () => Promise<void>
+  applyPreview: (colors: ColorPalette, darkMode: boolean, radius: RadiusCode) => void
+  applySaved: (branding: BrandingOut) => void
+  resetPreviewToSaved: () => void
+}
+
+function applyToDom(colors: ColorPalette, darkMode: boolean, radius: RadiusCode): void {
+  const root = document.documentElement.style
+  const effective = darkMode ? { ...colors, ...DARK_OVERRIDES } : colors
+
+  root.setProperty('--color-primary', effective.primary)
+  root.setProperty('--color-primary-hover', deriveHover(effective.primary))
+  root.setProperty('--color-primary-soft', deriveSoft(effective.primary))
+  root.setProperty('--color-secondary', effective.secondary)
+  root.setProperty('--color-accent', effective.accent)
+  root.setProperty('--color-bg', effective.bg)
+  root.setProperty('--color-surface', effective.surface)
+  root.setProperty('--color-border', effective.border)
+  root.setProperty('--color-text', effective.text)
+  root.setProperty('--color-text-muted', effective.text_muted)
+  root.setProperty('--color-success', effective.success)
+  root.setProperty('--color-warning', effective.warning)
+  root.setProperty('--color-danger', effective.danger)
+  root.setProperty('--color-danger-soft', deriveSoft(effective.danger))
+  root.setProperty('--radius', RADIUS_VALUES[radius])
+}
+
+function applyFavicon(faviconUrl: string | null): void {
+  if (!faviconUrl) return
+  const link =
+    document.querySelector<HTMLLinkElement>('link[rel="icon"]') ??
+    document.head.appendChild(document.createElement('link'))
+  link.rel = 'icon'
+  link.href = resolveApiAssetUrl(faviconUrl)
+}
+
+export const useThemeStore = create<ThemeState>((set, get) => ({
+  branding: null,
+  loading: true,
+
+  async load() {
+    try {
+      const branding = await api.getBranding()
+      set({ branding, loading: false })
+      applyToDom(branding.colors, branding.dark_mode, branding.radius)
+      applyFavicon(branding.favicon_url)
+    } catch {
+      set({ loading: false })
+    }
+  },
+
+  applyPreview(colors, darkMode, radius) {
+    applyToDom(colors, darkMode, radius)
+  },
+
+  applySaved(branding) {
+    set({ branding })
+    applyToDom(branding.colors, branding.dark_mode, branding.radius)
+    applyFavicon(branding.favicon_url)
+  },
+
+  resetPreviewToSaved() {
+    const branding = get().branding
+    if (branding) applyToDom(branding.colors, branding.dark_mode, branding.radius)
+  },
+}))

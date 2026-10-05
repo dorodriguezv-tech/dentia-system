@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiRequestError } from '../../api/client'
+import { ApiRequestError, resolveApiAssetUrl } from '../../api/client'
+import { useThemeStore } from '../../theme/store'
 import styles from './AuthForm.module.css'
 import * as api from './api'
 import { isMfaRequired } from './types'
@@ -10,6 +11,7 @@ import { postLoginRedirect } from './navigation'
 export function LoginPage() {
   const navigate = useNavigate()
   const applySession = useAuthStore((s) => s.applySession)
+  const branding = useThemeStore((s) => s.branding)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -62,7 +64,11 @@ export function LoginPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <p className={styles.brand}>DentalCare</p>
+        {branding?.logo_url && (
+          <img className={styles.brandLogo} src={resolveApiAssetUrl(branding.logo_url)} alt="" />
+        )}
+        <p className={styles.brand}>{branding?.display_name ?? 'DentalCare'}</p>
+        {branding?.subtitle && <p className={styles.hint}>{branding.subtitle}</p>}
 
         {error && <div className={styles.error}>{error}</div>}
 

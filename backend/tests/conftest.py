@@ -1,3 +1,5 @@
+import shutil
+import tempfile
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core.db import get_db
 from app.core.security import hash_password
+from app.core.storage import LocalStorageBackend, get_storage_backend
 from app.main import app
 from app.modules.iam.models import Clinic, Organization, Role, User, UserClinic
 
@@ -23,6 +26,7 @@ TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 TRANSACTIONAL_TABLES = (
     "audit_events",
+    "clinic_branding",
     "user_clinics",
     "refresh_tokens",
     "clinics",
@@ -62,7 +66,11 @@ async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
     async def _override_get_db() -> AsyncIterator[AsyncSession]:
         yield db_session
 
+    storage_dir = Path(tempfile.mkdtemp(prefix="dentia-test-storage-"))
+    test_storage = LocalStorageBackend(storage_dir)
+
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_storage_backend] = lambda: test_storage
     previous_sessionmaker = app.state.db_sessionmaker
     app.state.db_sessionmaker = TestSessionLocal
 
@@ -72,6 +80,7 @@ async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
 
     app.dependency_overrides.clear()
     app.state.db_sessionmaker = previous_sessionmaker
+    shutil.rmtree(storage_dir, ignore_errors=True)
 
 
 @pytest_asyncio.fixture

@@ -12,8 +12,16 @@
   max-width: 360px;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius);
   padding: 2rem;
+}
+
+.brandLogo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  margin: 0 auto 0.75rem;
 }
 
 .brand {
@@ -40,7 +48,7 @@
   font: inherit;
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   background-color: var(--color-bg);
   color: var(--color-text);
 }
@@ -53,7 +61,7 @@
 .error {
   background-color: var(--color-danger-soft);
   color: var(--color-danger);
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
   margin-bottom: 1rem;
@@ -63,7 +71,7 @@
   width: 100%;
   padding: 0.6rem;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   background-color: var(--color-primary);
   color: white;
   font: inherit;
@@ -93,7 +101,7 @@
   letter-spacing: 0.1em;
   background-color: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   padding: 0.6rem 0.8rem;
   text-align: center;
   margin-bottom: 1rem;
@@ -110,7 +118,7 @@
 .clinicButton {
   padding: 0.7rem 0.9rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   background-color: var(--color-bg);
   color: var(--color-text);
   text-align: left;

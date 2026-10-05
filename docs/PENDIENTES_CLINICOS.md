@@ -13,3 +13,4 @@
 | 9 | ¿Qué frases usa al dictar? (10–20 ejemplos reales, sin datos de pacientes) | Corpus ficticio | 8 | |
 | 10 | ¿Dentición mixta: cómo prefiere visualizarla? | Vista mixta con temporales sobre permanentes | 5 | |
 | 11 | ¿Qué permiso exacto debe tener cada rol (recepción, caja, asistente, etc.)? | Matriz por defecto en `docs/MATRIZ_PERMISOS.md`, generada de `backend/app/modules/iam/permissions_catalog.py` | 1 | |
+| 12 | Si la organización tiene varias sucursales con marca distinta, ¿qué nombre/logo se muestra en `GET /branding` (pantalla de login, antes de elegir sucursal)? | Se usa la sucursal creada primero (`clinics.created_at` más antiguo); solo importa si hay mas de una sucursal con branding propio | 2 | |

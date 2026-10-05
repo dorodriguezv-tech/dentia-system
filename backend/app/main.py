@@ -5,6 +5,7 @@ from app.audit.middleware import AccessDeniedAuditMiddleware
 from app.core.config import get_settings
 from app.core.db import async_session_factory
 from app.core.errors import register_error_handlers
+from app.modules.branding.router import router as branding_router
 from app.modules.iam.router import router as iam_router
 
 settings = get_settings()
@@ -24,6 +25,7 @@ app.add_middleware(
 register_error_handlers(app)
 
 app.include_router(iam_router, prefix=settings.api_prefix)
+app.include_router(branding_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

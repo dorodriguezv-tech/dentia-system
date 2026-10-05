@@ -1,4 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1$/, '')
+
+/**
+ * Convierte una ruta relativa de la API (p.ej. "/api/v1/branding/logo", tal como la
+ * devuelve el backend) en una URL absoluta. Necesario para <img src>: a diferencia de
+ * fetch() via apiRequest, el navegador resuelve una ruta relativa contra el origen de la
+ * pagina (el dev server de Vite), no contra el backend.
+ */
+export function resolveApiAssetUrl(path: string): string {
+  return `${API_ORIGIN}${path}`
+}
 
 export interface ApiError {
   code: string

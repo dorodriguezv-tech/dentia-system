@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -37,7 +38,8 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        details = jsonable_encoder(exc.errors())
         return JSONResponse(
             status_code=422,
-            content=_error_body("VALIDATION_ERROR", "Datos de entrada invalidos", exc.errors()),
+            content=_error_body("VALIDATION_ERROR", "Datos de entrada invalidos", details),
         )

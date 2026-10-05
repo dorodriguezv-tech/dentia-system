@@ -13,10 +13,19 @@
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--color-primary);
   margin-bottom: 1.5rem;
+}
+
+.brandLogo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 .nav {
@@ -31,7 +40,7 @@
 .navLink {
   display: block;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) * 0.5);
   color: var(--color-text);
   text-decoration: none;
 }
@@ -61,7 +70,7 @@
   border: 1px solid var(--color-border);
   background-color: var(--color-bg);
   color: var(--color-text);
-  border-radius: 0.4rem;
+  border-radius: calc(var(--radius) * 0.5);
   padding: 0.35rem 0.7rem;
   font: inherit;
   cursor: pointer;

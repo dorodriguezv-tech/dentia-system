@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
+import { AppearancePage } from '../modules/branding/AppearancePage'
 import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
@@ -24,7 +25,10 @@ export const router = createBrowserRouter([
               { index: true, element: <HomePage /> },
               {
                 element: <RequireRole roles={['admin_clinica', 'superadmin']} />,
-                children: [{ path: 'usuarios', element: <UsersPage /> }],
+                children: [
+                  { path: 'usuarios', element: <UsersPage /> },
+                  { path: 'configuracion/apariencia', element: <AppearancePage /> },
+                ],
               },
             ],
           },

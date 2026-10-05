@@ -93,7 +93,7 @@ npm run dev       # http://localhost:5173
 Pruebas y calidad:
 ```bash
 npm run test
-npm run lint
+npm run lint   # eslint + script que verifica que no haya colores #hex fuera de src/theme/
 npm run build
 ```
 
@@ -111,5 +111,6 @@ Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y s
 
 ## Estado del proyecto
 Se construye por fases (vertical slices), ver [`prompts/PROMPTS_CLAUDE_CODE.md`](./prompts/PROMPTS_CLAUDE_CODE.md).
-Completadas: **Fase 0 — Base del proyecto** y **Fase 1 — IAM, sucursales y auditoría**
-(ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos).
+Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y auditoría**
+(ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos)
+y **Fase 2 — Tema y marca configurables** (Configuración → Apariencia).
