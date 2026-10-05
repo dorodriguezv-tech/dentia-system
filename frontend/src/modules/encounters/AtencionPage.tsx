@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import { AiAssistant } from '../ai/AiAssistant'
+import { canUseAi } from '../auth/roles'
+import { useActiveRole } from '../auth/store'
 import * as recordsApi from '../records/api'
 import * as api from './api'
 import styles from './AtencionPage.module.css'
@@ -67,10 +70,14 @@ function NoteEditor({
   note,
   patientId,
   encounterId,
+  insertText,
+  onInsertConsumed,
 }: {
   note: ClinicalNoteOut
   patientId: string
   encounterId: string
+  insertText?: string | null
+  onInsertConsumed?: () => void
 }) {
   const queryClient = useQueryClient()
   const [fields, setFields] = useState<ClinicalNoteFields>(() => noteFieldsOf(note))
@@ -100,6 +107,14 @@ function NoteEditor({
     dirtyRef.current = true
     setFields(next)
   }
+
+  useEffect(() => {
+    if (!insertText) return
+    const previous = fieldsRef.current.free_text ?? ''
+    updateField('free_text', previous ? `${previous}\n${insertText}` : insertText)
+    onInsertConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertText])
 
   const [alertsToConfirm, setAlertsToConfirm] = useState<string[] | null>(null)
 
@@ -235,6 +250,7 @@ export function AtencionPage() {
   const { patientId, encounterId } = useParams<{ patientId: string; encounterId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const activeRole = useActiveRole()
 
   const encounterQuery = useQuery({
     queryKey: ['encounter', encounterId],
@@ -253,6 +269,8 @@ export function AtencionPage() {
     mutationFn: () => api.createNote(encounterId as string, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['encounter-notes', encounterId] }),
   })
+
+  const [fallbackText, setFallbackText] = useState<string | null>(null)
 
   useEffect(() => {
     if (notesQuery.isSuccess && notes.length === 0 && !createNoteMutation.isPending) {
@@ -273,7 +291,22 @@ export function AtencionPage() {
 
       <h1>Atencion — {encounterQuery.data?.chief_complaint ?? 'Sin motivo registrado'}</h1>
 
-      <NoteEditor key={activeNote.id} note={activeNote} patientId={patientId as string} encounterId={encounterId as string} />
+      {canUseAi(activeRole) && (
+        <AiAssistant
+          patientId={patientId as string}
+          encounterId={encounterId as string}
+          onInsertFallbackText={setFallbackText}
+        />
+      )}
+
+      <NoteEditor
+        key={activeNote.id}
+        note={activeNote}
+        patientId={patientId as string}
+        encounterId={encounterId as string}
+        insertText={fallbackText}
+        onInsertConsumed={() => setFallbackText(null)}
+      />
 
       {priorNotes.length > 0 && (
         <div className={styles.history}>

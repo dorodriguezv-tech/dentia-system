@@ -16,6 +16,19 @@ python-dotenv==1.0.1
 faker==33.1.0
 pillow==11.0.0
 reportlab==4.2.5
+faster-whisper==1.1.1
+# faster-whisper no fija un limite superior para av y pip instala la ultima (19.x), cuyo
+# av.open() ya no acepta metadata_errors (lo que usa faster_whisper.audio.decode_audio) y
+# truena con TypeError al transcribir. 13.1.0 es la version mas reciente que aun lo acepta
+# y tiene wheel para Windows/cp313.
+av==13.1.0
+requests==2.34.2
+# Windows: python-requests/httpx no usan el almacen de certificados del sistema, asi que
+# si la red tiene un proxy con inspeccion TLS (comun en redes corporativas), la descarga
+# del modelo de Whisper desde Hugging Face falla con CERTIFICATE_VERIFY_FAILED. Este
+# paquete no hace nada inseguro: solo hace que Python confie en el mismo almacen de
+# certificados de Windows que ya usan curl/el navegador.
+pip-system-certs==5.3; sys_platform == "win32"
 
 ruff==0.8.4
 black==24.10.0

@@ -26,8 +26,12 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `imaging` | ImageStudy, Image (metadatos + pieza/procedimiento) |
 | `billing` | Charge, Payment, PaymentAllocation, Receipt, CashSession |
 | `reports` | Vistas/consultas de solo lectura |
-| `ai` | AiSession, AiTranscript, AiSuggestion, AiSettings |
 | `audit` | AuditEvent |
+
+`app/ai/` (Fase 8) no vive en `app/modules/`: es su propio paquete de nivel superior
+(`stt.py`, `dental_parser.py`, `ollama_client.py`, `actions.py`, `interpreter.py`,
+`applier.py`, `service.py`, `router.py`, `models.py`, `prompts/`), tal como lo describe
+CLAUDE.md sec. 3. Entidades: `AiSuggestion`, `AiClinicSettings`.
 
 ## 3. Modelo de datos clave
 
@@ -52,7 +56,16 @@ El estado vigente se calcula con `is_current`; el historial completo se consulta
 `id, encounter_id, status (DRAFT/FINAL/CORRECTED/CANCELLED), soap_s, soap_o, soap_a, soap_p, free_text, version, previous_version_id, finalized_at, finalized_by, correction_reason, content_hash`
 
 ### AiSuggestion
-`id, ai_session_id, patient_id, encounter_id, action_type, payload (jsonb), confidence, status (PENDING/ACCEPTED/EDITED/REJECTED/EXPIRED), applied_entity_type, applied_entity_id, model_name, model_digest, transcript_excerpt, decided_by, decided_at`
+`id, clinic_id, patient_id, encounter_id, batch_id, action_type, payload (jsonb), status (PENDING/ACCEPTED/REJECTED), model_name, model_digest, transcript_excerpt, created_by, created_at, reviewed_by, reviewed_at, reject_reason`
+
+Una fila por **acción**, no una fila con la lista completa del dictado: `batch_id` agrupa
+las que vinieron de la misma llamada a `POST /ai/interpret` solo para mostrarlas juntas en
+el panel, pero cada una se acepta/edita/rechaza por separado. No hay `confidence` ni
+`EXPIRED` (el modelo de Ollama no da una puntuación de confianza utilizable, y nada expira
+sugerencias automáticamente todavía — ver `docs/PENDIENTES_CLINICOS.md`). Tampoco hay
+`applied_entity_type`/`applied_entity_id`: esa trazabilidad vive en el `AuditEvent
+ai.suggestion_accepted` que crea `applier.py` (`entity_type`/`entity_id` de la fila que
+realmente se creó).
 
 ### AuditEvent
 `event_id, timestamp, actor_user_id, clinic_id, action (CREATE/READ/UPDATE/CLOSE/EXPORT/SIGN/DENY/AI_SUGGEST/AI_APPLY), resource_type, resource_id, patient_id, result, ip, user_agent, before_hash, after_hash, reason, metadata jsonb`
@@ -97,8 +110,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /treatment-plans/{id}/pdf | PDF del presupuesto con el logo de la clínica |
 | POST/GET | /procedures-performed; /patients/{id}/procedures-performed | Procedimientos realizados (regla 3) |
 | GET | /patients/{id}/charges | Cargos sugeridos (regla 4, módulo `billing` mínimo) |
-| POST | /ai/transcribe, /ai/interpret, /ai/suggestions/{id}/accept\|reject | Asistente IA |
-| GET | /ai/status | Estado de Ollama y Whisper |
+| POST | /ai/transcribe, /ai/interpret | Voz a texto y texto a propuestas de acción |
+| GET | /ai/suggestions?encounter_id= | Propuestas pendientes de una atención |
+| POST | /ai/suggestions/{id}/accept\|reject | Aplica (regla 9) o descarta una propuesta |
+| GET | /ai/status; GET/PUT /ai/settings | Estado de Ollama/Whisper; modelo preferido por sucursal (permiso `ai.configure`) |
 | POST | /payments | Cobranza (Fase 10) |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
 
@@ -386,6 +401,114 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   (comparando contra `GET /patients/{id}/procedures-performed` para no duplicar el registro) y el
   botón de descargar PDF.
 
+### 5.8 Agente de IA por voz (Fase 8)
+- **`origin` se extiende a todo lo que la IA puede crear (regla 10):** `ToothFinding` ya
+  tenía esta columna desde la Fase 5 (anticipándola); esta fase agrega la misma columna
+  (`String(15)`, default `"MANUAL"`) a `Allergy`, `Medication`, `MedicalHistory`,
+  `VitalSigns`, `Diagnosis`, `ProcedurePlanned` y `ProcedurePerformed`, con el mismo tuple
+  `ORIGINS = ("MANUAL", "AI_ASSISTED")` duplicado en cada `rules.py` (mismo patrón que
+  `_AnnullableMixin`). Cada `create_*` de esos servicios gana un parámetro `origin: str =
+  "MANUAL"` opcional, así que ningún llamador existente cambia. `set_chief_complaint`
+  (un campo de `Encounter`, no una fila nueva) y `append_note` (texto agregado a una nota
+  DRAFT ya existente) no tienen dónde guardar un origen propio; para esos dos, la
+  trazabilidad de que vinieron de la IA vive solo en el `AuditEvent ai.suggestion_accepted`
+  — ver pendiente en `docs/PENDIENTES_CLINICOS.md`.
+- **Una fila de `AiSuggestion` por acción, nunca un lote:** `POST /ai/interpret` valida
+  cada acción del JSON de Ollama por separado y crea una fila `PENDING` por cada una que
+  pasa validación (`batch_id` compartido solo para agruparlas en el panel). Esto es lo que
+  permite aceptar/editar/rechazar cada propuesta de un mismo dictado de forma independiente,
+  tal como pide el panel "Propuestas del asistente" de docs/03.
+- **Validación en dos capas, porque un `JSON Schema` no puede expresar todo:** `actions.py`
+  define las 11 acciones como una unión discriminada por `"type"` (Pydantic) que se manda a
+  Ollama como `format` en `/api/chat` — esto ya obliga la forma del JSON. Pero `procedure_code`
+  no puede ser un `Literal` (es una tabla `procedure_catalog` por sucursal, no un catálogo
+  fijo), así que `interpreter.py` valida cada acción aceptada por Pydantic otra vez contra
+  los catálogos reales de la clínica (`_validate_against_real_catalogs`: pieza/superficie
+  con `odontogram/rules.py`, `procedure_code` contra `treatment_service.list_procedure_catalog`).
+  Lo que no pasa cualquiera de las dos capas va a `unrecognized`, nunca se descarta en
+  silencio.
+- **Acciones prohibidas se descartan por `"type"`, no solo por el esquema:** aunque el
+  esquema que recibe Ollama ya excluye finalizar/firmar notas, borrar, recetar y cobrar
+  (regla 9), `interpreter.py` igual revisa cada `"type"` crudo contra
+  `rules.PROHIBITED_ACTION_TYPES` antes de intentar validarlo — por si el modelo alucina un
+  tipo fuera del esquema declarado — y deja un `AuditEvent ai.prohibited_action_discarded`.
+- **`applier.py` llama al servicio de dominio normal, nunca SQL directo:** aceptar una
+  sugerencia arma el `*CreateRequest` del módulo correspondiente con `origin="AI_ASSISTED"`
+  y llama al mismo `service.create_*` que usa un formulario manual — ninguna ruta de la IA
+  escribe en una tabla clínica por su cuenta (prueba de integración dedicada que lo verifica
+  explícitamente). `add_planned_procedure` necesita un plan y una fase donde vivir que el
+  dictado no especifica: se reutiliza un plan `BORRADOR` de esa atención si ya existe, o se
+  crea uno nuevo con una sola fase "General" (`_get_or_create_draft_plan_and_phase`) — ver
+  pendiente. `append_note` reutiliza o crea la nota `DRAFT` de la atención y llama a
+  `encounters_service.update_note` (respeta la regla 1: nunca toca una nota `FINAL`).
+  `schedule_followup` es "solo propuesta" (docs/03 sec. 4): aceptarla no crea una cita real
+  (la IA no tiene profesional/gabinete/horario para elegir), solo marca la sugerencia como
+  revisada — ver pendiente.
+- **Dos bugs de raíz encontrados probando contra Ollama real (no contra el `FakeOllama` de
+  las pruebas automatizadas):**
+  1. *Bucle de repetición infinito:* con `temperature=0` (exigido por docs/03 para que el
+     mismo dictado siempre produzca el mismo resultado) y decodificación forzada por una
+     gramática tan grande como la unión de 11 acciones, `qwen2.5:7b` a veces quedaba
+     repitiendo el mismo objeto válido-pero-inútil sin parar — visto en vivo: más de 2700
+     tokens generados antes de que el servidor de Ollama cortara la petición a los 2
+     minutos. Se agregó `repeat_penalty=1.3` (penaliza tokens recientes, sigue siendo
+     determinista) más `num_predict=800` como red de seguridad, para que un bucle que la
+     penalización no alcance a romper termine en un error rápido en vez de agotar
+     `OLLAMA_TIMEOUT_S` completo.
+  2. *`add_vital_signs` como "salida gratis":* es la única de las 11 acciones con todos sus
+     campos opcionales, así que un objeto con todo en `null` es válido para la gramática sin
+     que el modelo tenga que extraer ningún dato real del dictado — y en pruebas reales el
+     modelo lo usaba como salida de mínimo esfuerzo para dictados que no tenían nada que ver
+     con signos vitales. Se agregó un `model_validator` a `AddVitalSignsAction` que exige al
+     menos un valor no nulo; lo que antes se aceptaba como una sugerencia vacía ahora se
+     rechaza en el servidor y el texto cae en `unrecognized` para revisión humana.
+  3. `OLLAMA_TIMEOUT_S` subió de 60 a 120 (en `.env.example` y el default de `Settings`):
+     con el prompt completo (catálogos reales + ejemplos few-shot) un modelo local de 7B a
+     veces tarda más de 60 s incluso sin entrar en el bucle del punto 1.
+  Con ambos fixes, el pipeline completo (transcripción real con faster-whisper, llamada
+  real a Ollama, parseo, validación de catálogos, creación de `AiSuggestion`) corre de
+  extremo a extremo sin errores; la **precisión** del modelo para elegir la acción correcta
+  sigue siendo limitada con este modelo de 7B local — exactamente lo que `python -m app.ai.eval`
+  existe para medir, y exactamente el caso para el que existe el flujo de aceptar/editar/
+  rechazar (regla 9): una propuesta equivocada nunca se guarda sola, el odontólogo la
+  rechaza o la corrige.
+- **`dental_parser.py` resuelve números hablados a FDI antes de llamar a Ollama:** cubre
+  dígitos ("36"), palabras compuestas ("treinta y seis"), irregulares (teens: "dieciocho";
+  veintes: "veinticuatro") y dos unidades seguidas leídas como dígitos ("tres seis" = 36),
+  con las palabras gatillo "pieza"/"diente"/"órgano dentario" o el artículo "la"/"el". El
+  resultado (`build_hints`) se manda como pista en el prompt; es además la pieza con
+  pruebas unitarias exhaustivas (28 casos, números 11 a 85 en varias formas) porque es
+  determinista y no depende de Ollama.
+- **`eval.py` + `tests/ai/corpus.jsonl` (50 dictados):** `python -m app.ai.eval` llama al
+  Ollama real configurado (no el `FakeOllama` de pytest) con el mismo `system_es.md` que usa
+  la app, y reporta precisión por tipo de acción y por pieza/superficie reconocida — la
+  forma de medir mejoras futuras de prompt o de modelo sin depender de lectura manual.
+- **`faster-whisper` necesitó dos ajustes de entorno, no de código, para funcionar en esta
+  máquina Windows:** `av` (dependencia de `faster-whisper` para decodificar audio) no tiene
+  límite superior fijado, así que `pip` instaló la versión más nueva (19.x), cuya
+  `av.open()` ya no acepta el parámetro `metadata_errors` que usa `faster_whisper.audio
+  .decode_audio` — se fijó `av==13.1.0`, la más reciente que aún lo acepta y tiene wheel
+  para Windows/cp313. Descargar el modelo de Hugging Face además fallaba con
+  `CERTIFICATE_VERIFY_FAILED` porque esta red usa un proxy con inspección TLS cuyo
+  certificado raíz Python no conocía (aunque `curl`/el navegador sí, via el almacén de
+  Windows) — `pip-system-certs` resuelve esto haciendo que Python confíe en el mismo
+  almacén de certificados que ya usa el sistema, sin desactivar la verificación.
+- **Frontend:** `AiAssistant` vive dentro de `AtencionPage` (no una pestaña del paciente:
+  el dictado es de una atención concreta), gated por `canUseAi`. Botón de micrófono con
+  `MediaRecorder` en fragmentos de 5 s, transcripción editable, "Interpretar dictado" y un
+  panel de propuestas agrupadas por destino (Expediente/Odontograma/Diagnóstico/Plan/
+  Agenda) con badge "IA" y Aceptar/Editar/Rechazar por tarjeta — "Editar" genera un
+  formulario genérico a partir de los campos primitivos del `payload`, sin un formulario
+  a medida por cada una de las 11 acciones. Si Ollama no responde (503), se ofrece
+  "Insertar como texto en la nota": en vez de una llamada aparte a la API que dejaría
+  desincronizado el estado local de `NoteEditor` (su `useState` solo lee `note` al montar),
+  `AtencionPage` le pasa el texto como prop (`insertText`) y `NoteEditor` lo agrega a
+  `free_text` con su propio `updateField` — reutiliza el mecanismo de autoguardado/dirty ya
+  existente de la Fase 4 en vez de bypasearlo. Configuración → Asistente IA (gated por
+  `ai.configure`, solo `admin_clinica`) muestra el estado de Ollama/Whisper, el selector de
+  modelo instalado y una prueba de micrófono; la opción de guardar audio se muestra
+  deshabilitada (se cambia por `.env`, no desde la UI).
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Cuenta.
@@ -393,7 +516,9 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   (`/agenda`), porque una cita es de la clínica/profesional, no de un paciente concreto — se llega
   a un paciente *desde* la cita, no al revés.
 - **Odontograma:** componente SVG propio con `<Arch>`, `<Quadrant>`, `<Tooth>` y `<Surface>` (5 zonas clicables), leyenda configurable y un control deslizante de historial por fecha.
-- **Asistente de voz:** botón flotante del micrófono, presente en todas las pantallas de atención, más un panel lateral de “Propuestas del asistente”.
+- **Asistente de voz (Fase 8):** botón de micrófono y panel de "Propuestas del asistente"
+  dentro de la pantalla de Atención (`Alt+M`), no flotante en toda la app: el dictado
+  pertenece a una atención concreta, igual que la nota SOAP que lo acompaña.
 - Atajos de teclado: `Alt+N` nueva atención, `Alt+O` odontograma, `Alt+M` micrófono, `Esc` cancelar dictado.
 
 ## 7. Respaldo
@@ -411,10 +536,12 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 5 | `odontogram` (`ToothFinding` como eventos con `supersedes_id`/`is_current`, índice único parcial por pieza/superficie/tipo; catálogos de piezas FDI, superficies y hallazgos en `rules.py`/`finding_catalog.py`). Reconstrucción histórica vía `GET .../odontogram?at=`. Frontend: pestaña Odontograma con SVG propio (arcadas superior/inferior, vistas permanente/temporal/mixta, 5 superficies clicables, menú rápido de hallazgos, leyenda, deslizador de fecha de solo lectura, panel de historial por pieza) | Hecho |
 | 6 | `agenda` (`Provider`, `Resource`, horario laboral y bloqueos informativos, `Appointment` con máquina de estados RESERVADA→CONFIRMADA→EN_SALA→EN_ATENCION→TERMINADA \| CANCELADA/NO_SHOW/REPROGRAMADA, `AppointmentStatusHistory`, `ReminderTask` idempotente, lista de espera). Traslapes validados en el backend y respaldados por restricciones `EXCLUDE` de Postgres (`btree_gist` + `tstzrange`). Reprogramar crea una cita nueva y marca la vieja `REPROGRAMADA` (nunca la edita). Frontend: pantalla Agenda con vistas día/semana/mes, agrupación por profesional o gabinete, calendario propio con arrastrar-para-reprogramar (HTML5 DnD, sin librería), colores por estado desde variables de tema, y botón "Iniciar atención" que crea el `Encounter` y navega a la nota SOAP | Hecho |
 | 7 | `diagnosis` (texto libre + código opcional del catálogo, pieza/superficie validadas contra `odontogram/rules.py`) y `treatment` (`ProcedureCatalog` por sucursal, `TreatmentPlan` con fases y prioridad, `ProcedurePlanned`/`ProcedurePerformed` como entidades separadas —regla 3—, descuentos autorizados, aceptación total o parcial por ítem con fecha y responsable, PDF del presupuesto con el logo de la clínica). Lo planificado se refleja como `PLANNED` en el odontograma y, al realizarse, genera `PERFORMED` + `EXISTING` y retira el `PLANNED` (reusando la Fase 5 sin modificarla). Registrar un realizado genera un `Charge` "SUGERIDO" (módulo `billing` mínimo, nunca un pago —regla 4—). Dos permisos que faltaban desde la Fase 1 (`diagnosis.read`, `treatment.read`) agregados por migración incremental; bug de raíz corregido en `AccessDeniedAuditMiddleware` (guardaba la ruta completa en una columna de 100 caracteres). Frontend: quinta sección "Diagnósticos" en Expediente, pestaña nueva "Tratamientos" con el plan por fases, aceptación por checkboxes, descuentos, "marcar como realizado" y descarga de PDF | Hecho |
-| 8–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 8 | `app/ai/` (`AiSuggestion`, `AiClinicSettings`): transcripción con `faster-whisper` (vocabulario dental en `initial_prompt`, VAD), pre-parser determinista de números FDI hablados (`dental_parser.py`), interpretación con Ollama (unión discriminada de 11 acciones como `format`, `temperature=0`, catálogos reales de la clínica), validación en dos capas (esquema + catálogos de BD), acciones prohibidas descartadas por tipo, aceptar/editar/rechazar por sugerencia (nunca escritura directa — regla 9), `origin=AI_ASSISTED` extendido a expediente/odontograma/diagnóstico/tratamiento (regla 10). `python -m app.ai.eval` + `tests/ai/corpus.jsonl` (50 dictados) miden precisión contra el Ollama real. Dos bugs de raíz corregidos probando con el modelo real: bucle de repetición infinito bajo decodificación forzada (`repeat_penalty`) y una acción con todos los campos opcionales que el modelo usaba como salida de mínimo esfuerzo (validador que exige al menos un valor). Frontend: micrófono + transcripción editable + panel de propuestas por destino dentro de la pantalla de Atención, con reserva de texto libre si Ollama no responde; Configuración → Asistente IA (estado, modelo, prueba de micrófono) | Hecho |
+| 9–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de documents/imaging/reports/ai de la sección 2 son el diseño objetivo; ninguno tiene
+Los módulos de documents/imaging/reports de la sección 2 son el diseño objetivo; ninguno tiene
 modelos ni migraciones todavía — se crean conforme avanza cada fase. `billing` ya existe pero solo
 con `Charge` (la Fase 10 agrega `Payment` y el resto de la cobranza). `patients`, `records`/
-`encounters`, `odontogram`, `agenda`, `diagnosis` y `treatment` ya existen pero todavía sin las
-pestañas de Imágenes, Documentos, Cuenta, etc. de la sección 6 (llegan con sus respectivas fases).
+`encounters`, `odontogram`, `agenda`, `diagnosis`, `treatment` y `ai` ya existen pero todavía sin
+las pestañas de Imágenes, Documentos, Cuenta, etc. de la sección 6 (llegan con sus respectivas
+fases).

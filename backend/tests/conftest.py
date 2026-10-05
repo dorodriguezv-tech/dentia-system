@@ -26,6 +26,8 @@ TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 TRANSACTIONAL_TABLES = (
     "audit_events",
+    "ai_suggestions",
+    "ai_clinic_settings",
     "clinic_branding",
     "medical_history",
     "allergies",

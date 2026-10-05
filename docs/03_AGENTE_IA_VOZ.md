@@ -82,7 +82,7 @@ Se incluyen 5–8 ejemplos “few-shot” de dictado → JSON. El pre-parser env
 AI_ENABLED=true
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b          # alternativa: llama3.1:8b ; equipos modestos: qwen2.5:3b
-OLLAMA_TIMEOUT_S=60
+OLLAMA_TIMEOUT_S=120
 WHISPER_MODEL=small              # medium/large-v3 = más precisión, requieren más RAM/GPU
 WHISPER_DEVICE=cpu               # cuda si hay GPU NVIDIA
 WHISPER_COMPUTE_TYPE=int8

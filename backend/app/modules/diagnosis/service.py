@@ -55,6 +55,7 @@ async def create_diagnosis(
     patient_id: uuid.UUID,
     data: DiagnosisCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> Diagnosis:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     await _get_encounter_in_clinic(db, clinic_id=clinic_id, encounter_id=data.encounter_id)
@@ -69,6 +70,7 @@ async def create_diagnosis(
         surface=data.surface,
         code=data.code,
         text=data.text,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)

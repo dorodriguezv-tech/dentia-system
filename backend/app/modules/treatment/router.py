@@ -59,6 +59,7 @@ def _item_out(item) -> ItemOut:  # type: ignore[no-untyped-def]
         discount_reason=item.discount_reason,
         accepted=item.accepted,
         is_active=item.is_active,
+        origin=item.origin,
         subtotal=service.item_subtotal(item),
     )
 
@@ -300,6 +301,7 @@ async def register_performed(
         procedure_name=performed.procedure_name,
         material=performed.material,
         performed_at=performed.performed_at,
+        origin=performed.origin,
         charge_amount=charge_amount,
     )
 
@@ -326,6 +328,7 @@ async def list_performed(
             procedure_name=performed.procedure_name,
             material=performed.material,
             performed_at=performed.performed_at,
+            origin=performed.origin,
             charge_amount=amount,
         )
         for performed, amount in rows

@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AgendaPage } from '../modules/agenda/AgendaPage'
+import { AiSettingsPage } from '../modules/ai/AiSettingsPage'
 import { AppearancePage } from '../modules/branding/AppearancePage'
 import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
                   { path: 'usuarios', element: <UsersPage /> },
                   { path: 'configuracion/apariencia', element: <AppearancePage /> },
                 ],
+              },
+              {
+                element: <RequireRole roles={['admin_clinica']} />,
+                children: [{ path: 'configuracion/asistente-ia', element: <AiSettingsPage /> }],
               },
             ],
           },

@@ -114,3 +114,33 @@ export async function apiRequestBlobUrl(path: string): Promise<string> {
   const blob = await response.blob()
   return URL.createObjectURL(blob)
 }
+
+/**
+ * Para subir archivos (p.ej. un fragmento de audio dictado): a diferencia de
+ * apiRequest, el body es FormData, asi que no se manda Content-Type: application/json
+ * ni se serializa a texto -- el navegador pone su propio Content-Type con el boundary.
+ */
+export async function apiRequestFormData<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (sessionHooks) {
+    const token = sessionHooks.getAccessToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+    const clinicId = sessionHooks.getClinicId()
+    if (clinicId) headers['X-Clinic-Id'] = clinicId
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as ApiError | null
+    throw new ApiRequestError(
+      response.status,
+      error ?? { code: 'UNKNOWN_ERROR', message: 'Error de comunicacion con el servidor' },
+    )
+  }
+  return (await response.json()) as T
+}

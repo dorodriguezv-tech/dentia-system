@@ -25,6 +25,9 @@ def is_editable(status: str) -> bool:
 PRIORITIES = ("alta", "media", "baja")
 ACCEPTANCE_TYPES = ("TOTAL", "PARCIAL")
 
+# Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+ORIGINS = ("MANUAL", "AI_ASSISTED")
+
 # Catalogo provisional de tipos de cita de la Fase 6 (agenda/rules.py); el catalogo de
 # PROCEDIMIENTOS real de esta fase vive en la tabla procedure_catalog (editable por
 # sucursal, a diferencia de los catalogos Python usados en fases anteriores) porque

@@ -4,8 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.diagnosis.rules import DIAGNOSIS_CODES
+from app.modules.diagnosis.rules import DIAGNOSIS_CODES, ORIGINS
 from app.modules.odontogram.schemas import Surface
+
+Origin = Literal["MANUAL", "AI_ASSISTED"]
 
 DiagnosisCode = Literal[
     "caries",
@@ -40,6 +42,7 @@ class DiagnosisOut(BaseModel):
     code: DiagnosisCode | None
     text: str
     is_active: bool
+    origin: Origin
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -51,6 +54,7 @@ class AnnulRequest(BaseModel):
 
 def _validate_catalogs() -> None:
     assert set(DIAGNOSIS_CODES) == set(DiagnosisCode.__args__)  # type: ignore[attr-defined]
+    assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
 
 
 _validate_catalogs()

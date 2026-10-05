@@ -109,3 +109,15 @@ export function canReadTreatment(roleCode: string | null): boolean {
 export function canAcceptBudget(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_ACCEPT_BUDGET.has(roleCode)
 }
+
+/** Roles con los permisos `ai.use`/`ai.configure` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_USE_AI = new Set(['odontologo', 'especialista'])
+const ROLES_THAT_CONFIGURE_AI = new Set(['admin_clinica'])
+
+export function canUseAi(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_USE_AI.has(roleCode)
+}
+
+export function canConfigureAi(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_CONFIGURE_AI.has(roleCode)
+}

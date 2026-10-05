@@ -21,3 +21,6 @@ DIAGNOSIS_CATALOG: dict[str, str] = {
     "sin_hallazgos": "Sin hallazgos patologicos",
 }
 DIAGNOSIS_CODES: tuple[str, ...] = tuple(DIAGNOSIS_CATALOG.keys())
+
+# Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+ORIGINS = ("MANUAL", "AI_ASSISTED")

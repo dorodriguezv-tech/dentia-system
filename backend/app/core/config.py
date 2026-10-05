@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ai_enabled: bool = True
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
-    ollama_timeout_s: int = 60
+    ollama_timeout_s: int = 120
     whisper_model: str = "small"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"

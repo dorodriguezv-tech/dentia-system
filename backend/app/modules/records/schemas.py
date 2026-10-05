@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.records.rules import HISTORY_CATEGORIES, SEVERITY_LEVELS
+from app.modules.records.rules import HISTORY_CATEGORIES, ORIGINS, SEVERITY_LEVELS
 
 HistoryCategory = Literal[
     "heredofamiliar",
@@ -15,6 +15,7 @@ HistoryCategory = Literal[
     "factor_riesgo",
 ]
 Severity = Literal["leve", "moderada", "severa"]
+Origin = Literal["MANUAL", "AI_ASSISTED"]
 
 
 class MedicalHistoryCreateRequest(BaseModel):
@@ -29,6 +30,7 @@ class MedicalHistoryOut(BaseModel):
     category: HistoryCategory
     text: str
     is_active: bool
+    origin: Origin
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -48,6 +50,7 @@ class AllergyOut(BaseModel):
     reaction: str | None
     severity: Severity
     is_active: bool
+    origin: Origin
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -67,6 +70,7 @@ class MedicationOut(BaseModel):
     dose: str | None
     frequency: str | None
     is_active: bool
+    origin: Origin
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -88,6 +92,7 @@ class VitalSignsOut(BaseModel):
     bp_diastolic: int | None
     heart_rate: int | None
     temperature: float | None
+    origin: Origin
 
     model_config = {"from_attributes": True}
 
@@ -99,6 +104,7 @@ class AnnulRequest(BaseModel):
 def _validate_catalogs() -> None:
     assert set(HISTORY_CATEGORIES) == set(HistoryCategory.__args__)  # type: ignore[attr-defined]
     assert set(SEVERITY_LEVELS) == set(Severity.__args__)  # type: ignore[attr-defined]
+    assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
 
 
 _validate_catalogs()

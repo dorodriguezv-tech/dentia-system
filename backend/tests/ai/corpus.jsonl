@@ -1,0 +1,50 @@
+{"transcript": "Dolor al frio en el lado inferior izquierdo.", "expected": [{"type": "set_chief_complaint"}]}
+{"transcript": "El motivo de consulta es sensibilidad al masticar del lado derecho.", "expected": [{"type": "set_chief_complaint"}]}
+{"transcript": "Paciente acude por dolor espontaneo de tres dias de evolucion.", "expected": [{"type": "set_chief_complaint"}]}
+{"transcript": "Refiere molestia al tomar bebidas frias desde hace una semana.", "expected": [{"type": "set_chief_complaint"}]}
+{"transcript": "Alergica a la penicilina.", "expected": [{"type": "add_allergy", "substance": "Penicilina"}]}
+{"transcript": "Es alergico al latex, le provoca ronchas.", "expected": [{"type": "add_allergy", "substance": "Latex"}]}
+{"transcript": "Tiene alergia severa a la aspirina.", "expected": [{"type": "add_allergy", "substance": "Aspirina", "severity": "severa"}]}
+{"transcript": "Alergica al nicel de las joyas, le causa dermatitis.", "expected": [{"type": "add_allergy", "substance": "Nicel"}]}
+{"transcript": "Toma losartan cincuenta miligramos una vez al dia.", "expected": [{"type": "add_medication", "name": "Losartan"}]}
+{"transcript": "Esta tomando metformina ochocientos cada doce horas.", "expected": [{"type": "add_medication", "name": "Metformina"}]}
+{"transcript": "Usa insulina por las noches.", "expected": [{"type": "add_medication", "name": "Insulina"}]}
+{"transcript": "Toma aspirina cien miligramos diario.", "expected": [{"type": "add_medication", "name": "Aspirina"}]}
+{"transcript": "Antecedente de diabetes tipo dos diagnosticada hace cinco anos.", "expected": [{"type": "add_medical_history", "category": "personal_patologico"}]}
+{"transcript": "Antecedente heredofamiliar de hipertension por parte de la madre.", "expected": [{"type": "add_medical_history", "category": "heredofamiliar"}]}
+{"transcript": "Fuma medio paquete de cigarros al dia desde hace diez anos.", "expected": [{"type": "add_medical_history", "category": "habito"}]}
+{"transcript": "Antecedente odontologico de extraccion del tercer molar hace dos anos.", "expected": [{"type": "add_medical_history", "category": "odontologico"}]}
+{"transcript": "Se cepilla los dientes solo una vez al dia.", "expected": [{"type": "add_medical_history", "category": "factor_riesgo"}]}
+{"transcript": "No fuma ni consume alcohol, sin antecedentes relevantes.", "expected": [{"type": "add_medical_history", "category": "personal_no_patologico"}]}
+{"transcript": "Presion ciento veinte sobre ochenta, frecuencia setenta y dos.", "expected": [{"type": "add_vital_signs", "bp_sys": 120, "bp_dia": 80, "hr": 72}]}
+{"transcript": "Temperatura de treinta y seis punto cinco grados.", "expected": [{"type": "add_vital_signs", "temp": 36.5}]}
+{"transcript": "Frecuencia cardiaca de ochenta y presion once sobre siete.", "expected": [{"type": "add_vital_signs", "hr": 80}]}
+{"transcript": "Pieza treinta y seis con caries oclusal y distal.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 36, "surfaces": ["O", "D"], "finding_code": "caries"}]}
+{"transcript": "La cuarenta y seis tiene resina oclusal.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 46, "surfaces": ["O"], "finding_code": "restauracion"}]}
+{"transcript": "Falta la dieciocho.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 18, "surfaces": [], "finding_code": "ausente"}]}
+{"transcript": "Pieza once con corona.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 11, "surfaces": [], "finding_code": "corona"}]}
+{"transcript": "La veinticuatro con endodoncia previa.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 24, "surfaces": [], "finding_code": "endodoncia"}]}
+{"transcript": "Pieza cuarenta y ocho con fractura en la cara vestibular.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 48, "surfaces": ["V"], "finding_code": "fractura"}]}
+{"transcript": "La treinta y seis presenta movilidad grado uno.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 36, "surfaces": [], "finding_code": "movilidad"}]}
+{"transcript": "Pieza dieciseis con sellador en la superficie oclusal.", "expected": [{"type": "add_tooth_finding", "tooth_fdi": 16, "surfaces": ["O"], "finding_code": "sellador"}]}
+{"transcript": "Diagnostico pulpitis reversible en la treinta y seis.", "expected": [{"type": "add_diagnosis", "diagnosis_code": "pulpitis_reversible", "tooth_fdi": 36}]}
+{"transcript": "Impresion diagnostica de gingivitis generalizada.", "expected": [{"type": "add_diagnosis", "diagnosis_code": "gingivitis"}]}
+{"transcript": "Diagnostico de absceso periapical en la cuarenta y seis.", "expected": [{"type": "add_diagnosis", "diagnosis_code": "absceso_periapical", "tooth_fdi": 46}]}
+{"transcript": "Se observa periodontitis moderada en cuadrantes posteriores.", "expected": [{"type": "add_diagnosis", "diagnosis_code": "periodontitis"}]}
+{"transcript": "Diagnostico de necrosis pulpar en la once.", "expected": [{"type": "add_diagnosis", "diagnosis_code": "necrosis_pulpar", "tooth_fdi": 11}]}
+{"transcript": "Plan: resina en treinta y seis.", "expected": [{"type": "add_planned_procedure", "tooth_fdi": 36, "procedure_code": "resina"}]}
+{"transcript": "Se planea una endodoncia en la cuarenta y seis.", "expected": [{"type": "add_planned_procedure", "tooth_fdi": 46, "procedure_code": "endodoncia_unirradicular"}]}
+{"transcript": "Plan de tratamiento: corona en la veinticuatro.", "expected": [{"type": "add_planned_procedure", "tooth_fdi": 24, "procedure_code": "corona"}]}
+{"transcript": "Se propone limpieza dental general.", "expected": [{"type": "add_planned_procedure", "procedure_code": "limpieza"}]}
+{"transcript": "Hoy se realizo limpieza dental completa.", "expected": [{"type": "add_performed_procedure", "procedure_code": "limpieza"}]}
+{"transcript": "Se coloco resina en la pieza treinta y seis oclusal.", "expected": [{"type": "add_performed_procedure", "tooth_fdi": 36, "surfaces": ["O"], "procedure_code": "resina"}]}
+{"transcript": "Se realizo endodoncia unirradicular en la cuarenta y seis.", "expected": [{"type": "add_performed_procedure", "tooth_fdi": 46, "procedure_code": "endodoncia_unirradicular"}]}
+{"transcript": "Nota: paciente tolero bien el procedimiento, sin complicaciones.", "expected": [{"type": "append_note", "section": "free"}]}
+{"transcript": "En la exploracion se observa tejido gingival inflamado y sangrante al sondeo.", "expected": [{"type": "append_note", "section": "O"}]}
+{"transcript": "La valoracion indica buen pronostico tras el tratamiento.", "expected": [{"type": "append_note", "section": "A"}]}
+{"transcript": "Control en quince dias.", "expected": [{"type": "schedule_followup", "in_days": 15}]}
+{"transcript": "Cita de revision en un mes.", "expected": [{"type": "schedule_followup", "in_days": 30}]}
+{"transcript": "Revisar en una semana para evaluar cicatrizacion.", "expected": [{"type": "schedule_followup", "in_days": 7}]}
+{"transcript": "Paciente refiere dolor al frio en el lado inferior izquierdo. Alergica a la penicilina. Pieza treinta y seis caries oclusal y distal. La cuarenta y seis tiene resina oclusal. Falta la dieciocho. Diagnostico pulpitis reversible en la treinta y seis. Plan resina en treinta y seis. Control en quince dias.", "expected": [{"type": "set_chief_complaint"}, {"type": "add_allergy", "substance": "Penicilina"}, {"type": "add_tooth_finding", "tooth_fdi": 36, "surfaces": ["O", "D"], "finding_code": "caries"}, {"type": "add_tooth_finding", "tooth_fdi": 46, "surfaces": ["O"], "finding_code": "restauracion"}, {"type": "add_tooth_finding", "tooth_fdi": 18, "surfaces": [], "finding_code": "ausente"}, {"type": "add_diagnosis", "diagnosis_code": "pulpitis_reversible", "tooth_fdi": 36}, {"type": "add_planned_procedure", "tooth_fdi": 36, "procedure_code": "resina"}, {"type": "schedule_followup", "in_days": 15}]}
+{"transcript": "Finaliza la nota y firma.", "expected": []}
+{"transcript": "Hay que revisar la pieza de arriba, no me quedo clara cual.", "expected": []}

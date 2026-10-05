@@ -42,6 +42,7 @@ async def create_finding(
     clinic_id: uuid.UUID,
     data: ToothFindingCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> ToothFinding:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
     encounter = await _get_encounter_in_clinic(
@@ -86,7 +87,7 @@ async def create_finding(
         material=data.material,
         supersedes_id=previous.id if previous else None,
         is_current=True,
-        origin="MANUAL",
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)

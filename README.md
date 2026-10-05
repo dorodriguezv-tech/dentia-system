@@ -110,7 +110,20 @@ ollama pull qwen2.5:7b
 ollama serve
 ```
 Ver [`docs/03_AGENTE_IA_VOZ.md`](./docs/03_AGENTE_IA_VOZ.md). Si Ollama no está disponible,
-el resto del sistema funciona sin cambios.
+el resto del sistema funciona sin cambios (la transcripción sigue funcionando; solo
+`/ai/interpret` responde 503 y el frontend ofrece insertar el dictado como texto libre).
+
+`faster-whisper` descarga el modelo (`WHISPER_MODEL`, por defecto `small`, ~500 MB) de
+Hugging Face la primera vez que se usa, no al instalar. En Windows, si la red tiene un
+proxy con inspección TLS, esa descarga puede fallar con `CERTIFICATE_VERIFY_FAILED` aunque
+`curl`/el navegador sí funcionen: `pip-system-certs` (ya en `requirements.txt` para
+`sys_platform == "win32"`) lo resuelve haciendo que Python confíe en el mismo almacén de
+certificados que ya usa el sistema.
+
+`python -m app.ai.eval` mide la precisión del modelo configurado contra
+`tests/ai/corpus.jsonl` (50 dictados de ejemplo) llamando al Ollama real — a diferencia de
+las pruebas automatizadas (`pytest`), que usan un `FakeOllama` y no necesitan Ollama
+instalado.
 
 ## Decisiones de arquitectura
 Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y stack) está en
@@ -134,4 +147,8 @@ por una restricción `EXCLUDE` de Postgres, calendario propio con arrastrar-para
 **Fase 7 — Diagnóstico y tratamiento** (plan por fases con presupuesto, planificado/realizado como
 entidades separadas que se reflejan en el odontograma, PDF del presupuesto con el logo de la
 clínica, cargo sugerido al registrar un procedimiento realizado; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#57-diagnóstico-y-tratamiento-fase-7)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#57-diagnóstico-y-tratamiento-fase-7)) y
+**Fase 8 — Asistente de IA por voz** (dictado → transcripción local con faster-whisper → propuestas
+de acción interpretadas por Ollama, validadas contra los catálogos reales de la clínica y aceptadas/
+editadas/rechazadas una por una — la IA nunca escribe directo en el expediente; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#58-agente-de-ia-por-voz-fase-8)).

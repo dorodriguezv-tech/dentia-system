@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.router import router as ai_router
 from app.audit.middleware import AccessDeniedAuditMiddleware
 from app.core.config import get_settings
 from app.core.db import async_session_factory
@@ -42,6 +43,7 @@ app.include_router(agenda_router, prefix=settings.api_prefix)
 app.include_router(diagnosis_router, prefix=settings.api_prefix)
 app.include_router(treatment_router, prefix=settings.api_prefix)
 app.include_router(billing_router, prefix=settings.api_prefix)
+app.include_router(ai_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

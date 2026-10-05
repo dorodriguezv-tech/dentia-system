@@ -1,0 +1,196 @@
+.panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.micRow {
+  display: flex;
+}
+
+.micButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.micButton.listening {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.micButton.processing {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  cursor: default;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.transcript {
+  width: 100%;
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.errorBox {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.unrecognizedBox {
+  background-color: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.alertBox {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.suggestionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.suggestionsHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.destinationGroup h4 {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background-color: var(--color-bg);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.badge {
+  background-color: var(--color-secondary);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.primaryButton {
+  padding: 0.5rem 0.9rem;
+  border: none;
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-primary);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.secondaryButton {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.linkButton {
+  border: none;
+  background: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.editField input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}

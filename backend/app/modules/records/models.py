@@ -33,6 +33,8 @@ class MedicalHistory(_AnnullableMixin, AuditedMixin, Base):
     )
     category: Mapped[str] = mapped_column(String(30))
     text: Mapped[str] = mapped_column(Text)
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")
 
 
 class Allergy(_AnnullableMixin, AuditedMixin, Base):
@@ -50,6 +52,8 @@ class Allergy(_AnnullableMixin, AuditedMixin, Base):
     substance: Mapped[str] = mapped_column(String(200))
     reaction: Mapped[str | None] = mapped_column(String(300), nullable=True)
     severity: Mapped[str] = mapped_column(String(10))
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")
 
 
 class Medication(_AnnullableMixin, AuditedMixin, Base):
@@ -67,6 +71,8 @@ class Medication(_AnnullableMixin, AuditedMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     dose: Mapped[str | None] = mapped_column(String(100), nullable=True)
     frequency: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")
 
 
 class VitalSigns(AuditedMixin, Base):
@@ -86,3 +92,5 @@ class VitalSigns(AuditedMixin, Base):
     bp_diastolic: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     heart_rate: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     temperature: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")

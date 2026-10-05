@@ -15,6 +15,9 @@ HISTORY_CATEGORIES = (
 
 SEVERITY_LEVELS = ("leve", "moderada", "severa")
 
+# Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+ORIGINS = ("MANUAL", "AI_ASSISTED")
+
 # Alertas clinicas derivadas (regla 8 de CLAUDE.md): no es una tabla editable por CRUD,
 # se calculan a partir de alergias activas (siempre) y de palabras clave en medicamentos
 # activos / antecedentes (catalogo de abajo). Comparacion sin acentos ni mayusculas.

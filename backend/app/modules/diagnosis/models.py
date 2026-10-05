@@ -40,3 +40,5 @@ class Diagnosis(_AnnullableMixin, AuditedMixin, Base):
     surface: Mapped[str | None] = mapped_column(String(1), nullable=True)
     code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     text: Mapped[str] = mapped_column(Text)
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")

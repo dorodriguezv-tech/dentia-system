@@ -348,6 +348,7 @@ async def add_item(
     phase_id: uuid.UUID,
     data: ItemCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> ProcedurePlanned:
     plan = await _get_plan_in_clinic(db, clinic_id=clinic_id, plan_id=plan_id)
     if not rules.is_editable(plan.status):
@@ -381,6 +382,7 @@ async def add_item(
         unit_price=unit_price,
         quantity=data.quantity,
         alternative=data.alternative,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)
@@ -399,6 +401,7 @@ async def add_item(
                 kind="PLANNED",
             ),
             actor_id=actor_id,
+            origin=origin,
         )
 
     await audit_service.log(
@@ -497,6 +500,7 @@ async def register_performed(
     clinic_id: uuid.UUID,
     data: ProcedurePerformedCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> tuple[ProcedurePerformed, Decimal]:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
     await _get_encounter_in_clinic(db, clinic_id=clinic_id, encounter_id=data.encounter_id)
@@ -542,6 +546,7 @@ async def register_performed(
         finding_code=finding_code,
         material=data.material,
         performed_at=datetime.now(UTC),
+        origin=origin,
         created_by=actor_id,
     )
     db.add(performed)
@@ -564,6 +569,7 @@ async def register_performed(
                     kind=kind,
                 ),
                 actor_id=actor_id,
+                origin=origin,
             )
         if planned is not None:
             await odontogram_service.retire_planned(

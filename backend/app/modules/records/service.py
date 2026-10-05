@@ -46,6 +46,7 @@ async def create_history(
     patient_id: uuid.UUID,
     data: MedicalHistoryCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> MedicalHistory:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     item = MedicalHistory(
@@ -54,6 +55,7 @@ async def create_history(
         encounter_id=data.encounter_id,
         category=data.category,
         text=data.text,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)
@@ -116,6 +118,7 @@ async def create_allergy(
     patient_id: uuid.UUID,
     data: AllergyCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> Allergy:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     item = Allergy(
@@ -125,6 +128,7 @@ async def create_allergy(
         substance=data.substance,
         reaction=data.reaction,
         severity=data.severity,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)
@@ -187,6 +191,7 @@ async def create_medication(
     patient_id: uuid.UUID,
     data: MedicationCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> Medication:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     item = Medication(
@@ -196,6 +201,7 @@ async def create_medication(
         name=data.name,
         dose=data.dose,
         frequency=data.frequency,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)
@@ -258,6 +264,7 @@ async def create_vital_signs(
     patient_id: uuid.UUID,
     data: VitalSignsCreateRequest,
     actor_id: uuid.UUID,
+    origin: str = "MANUAL",
 ) -> VitalSigns:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     item = VitalSigns(
@@ -269,6 +276,7 @@ async def create_vital_signs(
         bp_diastolic=data.bp_diastolic,
         heart_rate=data.heart_rate,
         temperature=data.temperature,
+        origin=origin,
         created_by=actor_id,
     )
     db.add(item)

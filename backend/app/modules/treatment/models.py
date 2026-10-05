@@ -132,6 +132,8 @@ class ProcedurePlanned(_AnnullableMixin, AuditedMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")
 
 
 class ProcedurePerformed(AuditedMixin, Base):
@@ -165,3 +167,5 @@ class ProcedurePerformed(AuditedMixin, Base):
     finding_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     material: Mapped[str | None] = mapped_column(String(100), nullable=True)
     performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Regla 10 de CLAUDE.md: todo lo que provenga de la IA queda marcado AI_ASSISTED.
+    origin: Mapped[str] = mapped_column(String(15), default="MANUAL")

@@ -6,11 +6,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.modules.odontogram.schemas import FindingCode, Surface
-from app.modules.treatment.rules import ACCEPTANCE_TYPES, PLAN_STATUSES, PRIORITIES
+from app.modules.treatment.rules import ACCEPTANCE_TYPES, ORIGINS, PLAN_STATUSES, PRIORITIES
 
 PlanStatus = Literal["BORRADOR", "PRESENTADO", "ACEPTADO", "RECHAZADO", "EN_PROGRESO", "TERMINADO"]
 Priority = Literal["alta", "media", "baja"]
 AcceptanceType = Literal["TOTAL", "PARCIAL"]
+Origin = Literal["MANUAL", "AI_ASSISTED"]
 
 
 class ProcedureCatalogCreateRequest(BaseModel):
@@ -84,6 +85,7 @@ class ItemOut(BaseModel):
     discount_reason: str | None
     accepted: bool
     is_active: bool
+    origin: Origin
     subtotal: Decimal
 
     model_config = {"from_attributes": True}
@@ -156,6 +158,7 @@ class ProcedurePerformedOut(BaseModel):
     procedure_name: str
     material: str | None
     performed_at: datetime
+    origin: Origin
     charge_amount: Decimal
 
     model_config = {"from_attributes": True}
@@ -165,6 +168,7 @@ def _validate_catalogs() -> None:
     assert set(PLAN_STATUSES) == set(PlanStatus.__args__)  # type: ignore[attr-defined]
     assert set(PRIORITIES) == set(Priority.__args__)  # type: ignore[attr-defined]
     assert set(ACCEPTANCE_TYPES) == set(AcceptanceType.__args__)  # type: ignore[attr-defined]
+    assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
 
 
 _validate_catalogs()

@@ -39,8 +39,21 @@ module = "app.modules.*.service"
 strict = true
 
 [[tool.mypy.overrides]]
+module = "app.ai.rules"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "app.ai.service"
+strict = true
+
+[[tool.mypy.overrides]]
 # reportlab no distribuye stubs ni py.typed (a diferencia de pillow/faker, que si).
 module = "reportlab.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# faster-whisper tampoco distribuye stubs ni py.typed.
+module = "faster_whisper.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
