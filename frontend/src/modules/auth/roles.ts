@@ -121,3 +121,32 @@ export function canUseAi(roleCode: string | null): boolean {
 export function canConfigureAi(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_CONFIGURE_AI.has(roleCode)
 }
+
+/** Roles con los permisos `documents.*` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_DOCUMENTS = new Set(['admin_clinica', 'odontologo', 'especialista'])
+const ROLES_THAT_WRITE_DOCUMENTS = new Set(['odontologo', 'especialista'])
+const ROLES_THAT_SIGN_DOCUMENTS = new Set(['odontologo', 'especialista'])
+
+export function canReadDocuments(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_DOCUMENTS.has(roleCode)
+}
+
+export function canWriteDocuments(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_DOCUMENTS.has(roleCode)
+}
+
+export function canSignDocuments(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_SIGN_DOCUMENTS.has(roleCode)
+}
+
+/** Roles con los permisos `imaging.*` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_IMAGING = new Set(['odontologo', 'especialista', 'asistente'])
+const ROLES_THAT_WRITE_IMAGING = new Set(['odontologo', 'especialista', 'asistente'])
+
+export function canReadImaging(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_IMAGING.has(roleCode)
+}
+
+export function canWriteImaging(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_IMAGING.has(roleCode)
+}

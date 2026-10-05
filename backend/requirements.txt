@@ -15,7 +15,11 @@ httpx==0.28.1
 python-dotenv==1.0.1
 faker==33.1.0
 pillow==11.0.0
-reportlab==4.2.5
+reportlab==4.5.1
+# xhtml2pdf (Fase 9: plantillas de consentimiento en HTML -> PDF) exige una version mas
+# nueva de reportlab que la que fijaba la Fase 7; las pruebas de treatment/pdf.py pasan
+# igual con esta version.
+xhtml2pdf==0.2.16
 faster-whisper==1.1.1
 # faster-whisper no fija un limite superior para av y pip instala la ultima (19.x), cuyo
 # av.open() ya no acepta metadata_errors (lo que usa faster_whisper.audio.decode_audio) y

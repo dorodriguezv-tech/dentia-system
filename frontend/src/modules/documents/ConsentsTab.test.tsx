@@ -1,0 +1,95 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ConsentsTab } from './ConsentsTab'
+import * as api from './api'
+import type { ConsentOut, DocumentTemplateOut } from './types'
+
+vi.mock('./api')
+vi.mock('../encounters/api')
+vi.mock('../treatment/api')
+import * as encountersApi from '../encounters/api'
+import * as treatmentApi from '../treatment/api'
+
+const template: DocumentTemplateOut = {
+  id: 'tpl-1',
+  code: 'general',
+  name: 'Consentimiento general',
+  version: 1,
+  html_content: '<p>Autorizo</p>',
+  is_current: true,
+  created_at: '2026-10-05T12:00:00Z',
+}
+
+const consent: ConsentOut = {
+  id: 'consent-1',
+  patient_id: 'pat-1',
+  encounter_id: 'enc-1',
+  template_id: 'tpl-1',
+  procedure_planned_id: null,
+  treatment_plan_id: null,
+  professional_id: 'prof-1',
+  signer_name: 'Jose Perez',
+  signer_relationship: 'paciente',
+  content_hash: 'abc123',
+  signed_at: '2026-10-05T12:00:00Z',
+  is_active: true,
+  annul_reason: null,
+}
+
+function renderTab(canWrite = true, canSign = true) {
+  const queryClient = new QueryClient()
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ConsentsTab patientId="pat-1" canWrite={canWrite} canSign={canSign} />
+    </QueryClientProvider>,
+  )
+}
+
+describe('ConsentsTab', () => {
+  beforeEach(() => {
+    vi.mocked(api.listTemplates).mockReset().mockResolvedValue([template])
+    vi.mocked(api.listConsents).mockReset().mockResolvedValue([consent])
+    vi.mocked(api.createConsent).mockReset()
+    vi.mocked(api.annulConsent).mockReset()
+    vi.mocked(encountersApi.listPatientEncounters).mockReset().mockResolvedValue([
+      {
+        id: 'enc-1',
+        patient_id: 'pat-1',
+        professional_id: 'prof-1',
+        appointment_id: null,
+        started_at: '2026-10-05T12:00:00Z',
+        ended_at: null,
+        chief_complaint: 'Dolor',
+      },
+    ])
+    vi.mocked(treatmentApi.listPlans).mockReset().mockResolvedValue([])
+  })
+
+  it('muestra las plantillas y los consentimientos firmados', async () => {
+    renderTab()
+    expect(await screen.findByText(/Consentimiento general/)).toBeInTheDocument()
+    expect(await screen.findByText(/Jose Perez/)).toBeInTheDocument()
+  })
+
+  it('anular un consentimiento pide motivo y llama a la API', async () => {
+    vi.mocked(api.annulConsent).mockResolvedValue({ ...consent, is_active: false })
+    renderTab()
+
+    await screen.findByText(/Jose Perez/)
+    await userEvent.click(screen.getByRole('button', { name: 'Anular' }))
+    await userEvent.type(screen.getByPlaceholderText('Motivo de anulacion'), 'Error de paciente')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+
+    await waitFor(() =>
+      expect(api.annulConsent).toHaveBeenCalledWith('consent-1', 'Error de paciente'),
+    )
+  })
+
+  it('oculta el formulario de firma cuando no se tiene permiso', async () => {
+    renderTab(true, false)
+    await screen.findByText(/Jose Perez/)
+    expect(screen.queryByText('Firmar y generar PDF')).not.toBeInTheDocument()
+  })
+})

@@ -22,8 +22,8 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `agenda` | Provider, Resource (gabinete), Appointment, AppointmentStatusHistory |
 | `diagnosis` | DiagnosisCatalog, Diagnosis |
 | `treatment` | ProcedureCatalog, PriceList, TreatmentPlan, TreatmentPhase, ProcedurePlanned, ProcedurePerformed, PlanAcceptance |
-| `documents` | DocumentTemplate (versionada), Document, Consent, SignatureEvidence |
-| `imaging` | ImageStudy, Image (metadatos + pieza/procedimiento) |
+| `documents` | DocumentTemplate (versionada), Consent |
+| `imaging` | Image (metadatos + pieza/procedimiento) |
 | `billing` | Charge, Payment, PaymentAllocation, Receipt, CashSession |
 | `reports` | Vistas/consultas de solo lectura |
 | `audit` | AuditEvent |
@@ -66,6 +66,26 @@ sugerencias automáticamente todavía — ver `docs/PENDIENTES_CLINICOS.md`). Ta
 `applied_entity_type`/`applied_entity_id`: esa trazabilidad vive en el `AuditEvent
 ai.suggestion_accepted` que crea `applier.py` (`entity_type`/`entity_id` de la fila que
 realmente se creó).
+
+### DocumentTemplate y Consent (Fase 9)
+`DocumentTemplate`: `id, clinic_id, code, name, version, html_content, supersedes_id, is_current`
+-- versionada como `ToothFinding` (regla 7): editarla crea una fila nueva con `version`
+incrementada, nunca sobrescribe `html_content`.
+
+`Consent`: `id, clinic_id, patient_id, encounter_id, template_id, procedure_planned_id?,
+treatment_plan_id?, professional_id, signer_name, signer_relationship, signature_path,
+pdf_path, content_hash (sha256), signed_at, is_active, annul_reason?`
+-- se crea ya firmado (capturar la firma y generar el PDF es un solo acto atómico);
+despues no se edita, solo se anula con motivo (regla 2). `template_id` apunta a la
+versión exacta de la plantilla usada, no al código, para que un cambio de plantilla
+posterior no altere retroactivamente lo que un paciente ya firmó.
+
+### Image (Fase 9)
+`id, clinic_id, patient_id, encounter_id, study_type, tooth_fdi?, procedure_planned_id?,
+procedure_performed_id?, file_path, thumbnail_path?, content_type, original_filename,
+notes?, is_active, annul_reason?`
+-- una fila por archivo: "carga múltiple" es el endpoint aceptando varios archivos en una
+peticion con los mismos metadatos, no una entidad "estudio" separada.
 
 ### AuditEvent
 `event_id, timestamp, actor_user_id, clinic_id, action (CREATE/READ/UPDATE/CLOSE/EXPORT/SIGN/DENY/AI_SUGGEST/AI_APPLY), resource_type, resource_id, patient_id, result, ip, user_agent, before_hash, after_hash, reason, metadata jsonb`
@@ -114,6 +134,13 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /ai/suggestions?encounter_id= | Propuestas pendientes de una atención |
 | POST | /ai/suggestions/{id}/accept\|reject | Aplica (regla 9) o descarta una propuesta |
 | GET | /ai/status; GET/PUT /ai/settings | Estado de Ollama/Whisper; modelo preferido por sucursal (permiso `ai.configure`) |
+| GET/POST | /document-templates; /document-templates/{code}/history | Plantillas de consentimiento, versionadas (regla 7) |
+| GET/POST | /patients/{id}/consents | Firmar un consentimiento (genera el PDF y el hash en el mismo acto) |
+| GET | /consents/{id}/pdf | PDF firmado (lectura auditada) |
+| POST | /consents/{id}/annul | Anula un consentimiento con motivo (regla 2) |
+| POST/GET | /patients/{id}/images | Subir (uno o varios archivos) y listar imágenes/radiografías |
+| GET | /images/{id}; /images/{id}/thumbnail | Archivo completo (lectura auditada) y miniatura |
+| POST | /images/{id}/annul | Anula una imagen con motivo (regla 2) |
 | POST | /payments | Cobranza (Fase 10) |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
 
@@ -509,9 +536,62 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   modelo instalado y una prueba de micrófono; la opción de guardar audio se muestra
   deshabilitada (se cambia por `.env`, no desde la UI).
 
+### 5.9 Consentimientos e imagenología (Fase 9)
+- **`DocumentTemplate` versionada igual que `ToothFinding` (regla 7):** editar una
+  plantilla nunca sobrescribe `html_content` -- crea una fila nueva con `version`
+  incrementada y `supersedes_id` apuntando a la anterior, marcando `is_current=False` en
+  la vieja. `Consent.template_id` guarda el id de la version exacta usada al firmar, no el
+  codigo, para que editar la plantilla despues no altere retroactivamente lo que un
+  paciente ya firmo.
+- **Las plantillas son HTML de verdad, con una sustitucion deliberadamente simple:**
+  `render_template` solo reemplaza rutas conocidas (`{{paciente.nombre}}`,
+  `{{procedimiento.nombre}}`, `{{plan.titulo}}`, `{{clinica.nombre}}`, `{{fecha}}`,
+  `{{profesional.nombre}}`) con un regex, sin condicionales ni expresiones -- a proposito,
+  para que una plantilla editable por la clinica (permiso `documents.write`) no pueda
+  ejecutar nada mas que texto. Cada valor se escapa con `html.escape` antes de insertarse.
+- **xhtml2pdf en vez de reportlab/platypus armado a mano (a diferencia del presupuesto de
+  la Fase 7):** la plantilla ya es HTML real, asi que se necesita un renderizador de HTML
+  a PDF en vez de construir el documento con Table/Paragraph. Trajo consigo una version
+  mas nueva de `reportlab` de la que fijaba la Fase 7 (las pruebas de `treatment/pdf.py`
+  siguen pasando igual).
+- **Firmar un consentimiento es un solo acto atomico (regla 7):** no hay un estado
+  "borrador" -- `POST /patients/{id}/consents` recibe la firma ya capturada (PNG en
+  base64 desde el `<canvas>`), renderiza la plantilla con las variables reales, genera el
+  PDF con xhtml2pdf, calcula su SHA-256 y guarda ambos (PNG y PDF) via `StorageBackend`.
+  Despues de creado, un `Consent` no se edita: corregir un dato significa anularlo (regla
+  2, con motivo) y capturar uno nuevo, nunca sobrescribir el PDF ya firmado.
+- **"Ligado a procedimiento o plan" es a lo sumo uno de los dos:** `ConsentCreateRequest`
+  valida con un `model_validator` que no vengan `procedure_planned_id` y
+  `treatment_plan_id` juntos. El frontend solo expone vincular a un plan completo (no a un
+  item individual) para mantener el formulario simple -- el backend ya soporta ambos.
+- **`Image` es una fila por archivo, no una entidad "estudio":** "carga multiple" (docs/09)
+  es `POST /patients/{id}/images` aceptando varios `UploadFile` con los mismos metadatos
+  (tipo de estudio, pieza opcional) en una sola peticion, no un agrupador propio. Solo
+  JPG/PNG generan miniatura (Pillow, 320x320, mismo patron que el favicon de marca de la
+  Fase 2); un PDF se guarda igual pero sin miniatura -- el frontend muestra un marcador
+  generico en su lugar.
+- **Lectura auditada, a diferencia del resto de la API:** ningun otro modulo audita un GET
+  (solo escrituras). Esta fase si audita la lectura del PDF de un consentimiento
+  (`documents.consent_read`) y de una imagen en resolucion completa
+  (`imaging.image_viewed`) -- miniaturas no se auditan, para no saturar la bitacora en una
+  galeria con muchas imagenes.
+- **`StorageBackend` reutilizado tal cual (Fase 0):** las claves ya eran no-adivinables
+  (`uuid4().hex`) desde que se creo, asi que no hizo falta ningun cambio para cumplir ese
+  requisito de docs/09 -- firmas, PDFs e imagenes solo agregan sus propios `subdir`
+  (`documents/{clinic}/{patient}`, `imaging/{clinic}/{patient}[/thumbnails]`).
+- **Frontend:** `SignaturePad` dibuja con eventos de puntero (unifica mouse y touch) sobre
+  un `<canvas>`, sin libreria externa, y exporta un PNG en base64 al soltar el trazo. El
+  color del trazo se resuelve en tiempo de ejecucion con
+  `getComputedStyle(...).getPropertyValue('--color-text')` porque un `<canvas>` no entiende
+  `var(--color-...)` directamente (CLAUDE.md sec. 6 se sigue cumpliendo: el valor viene del
+  tema, no esta fijo en el codigo). El visor de imagenes usa `transform: scale()` para el
+  zoom y `filter: brightness()/contrast()` para brillo/contraste -- ambos puramente en el
+  frontend, sin reprocesar el archivo en el servidor. Dos pestañas nuevas en el paciente,
+  "Consentimientos" e "Imágenes", junto a Tratamientos.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
-- **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Cuenta.
+- **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
   La Agenda (Fase 6) no es una pestaña del paciente: es una pantalla propia en el menú lateral
   (`/agenda`), porque una cita es de la clínica/profesional, no de un paciente concreto — se llega
   a un paciente *desde* la cita, no al revés.
@@ -537,11 +617,11 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 6 | `agenda` (`Provider`, `Resource`, horario laboral y bloqueos informativos, `Appointment` con máquina de estados RESERVADA→CONFIRMADA→EN_SALA→EN_ATENCION→TERMINADA \| CANCELADA/NO_SHOW/REPROGRAMADA, `AppointmentStatusHistory`, `ReminderTask` idempotente, lista de espera). Traslapes validados en el backend y respaldados por restricciones `EXCLUDE` de Postgres (`btree_gist` + `tstzrange`). Reprogramar crea una cita nueva y marca la vieja `REPROGRAMADA` (nunca la edita). Frontend: pantalla Agenda con vistas día/semana/mes, agrupación por profesional o gabinete, calendario propio con arrastrar-para-reprogramar (HTML5 DnD, sin librería), colores por estado desde variables de tema, y botón "Iniciar atención" que crea el `Encounter` y navega a la nota SOAP | Hecho |
 | 7 | `diagnosis` (texto libre + código opcional del catálogo, pieza/superficie validadas contra `odontogram/rules.py`) y `treatment` (`ProcedureCatalog` por sucursal, `TreatmentPlan` con fases y prioridad, `ProcedurePlanned`/`ProcedurePerformed` como entidades separadas —regla 3—, descuentos autorizados, aceptación total o parcial por ítem con fecha y responsable, PDF del presupuesto con el logo de la clínica). Lo planificado se refleja como `PLANNED` en el odontograma y, al realizarse, genera `PERFORMED` + `EXISTING` y retira el `PLANNED` (reusando la Fase 5 sin modificarla). Registrar un realizado genera un `Charge` "SUGERIDO" (módulo `billing` mínimo, nunca un pago —regla 4—). Dos permisos que faltaban desde la Fase 1 (`diagnosis.read`, `treatment.read`) agregados por migración incremental; bug de raíz corregido en `AccessDeniedAuditMiddleware` (guardaba la ruta completa en una columna de 100 caracteres). Frontend: quinta sección "Diagnósticos" en Expediente, pestaña nueva "Tratamientos" con el plan por fases, aceptación por checkboxes, descuentos, "marcar como realizado" y descarga de PDF | Hecho |
 | 8 | `app/ai/` (`AiSuggestion`, `AiClinicSettings`): transcripción con `faster-whisper` (vocabulario dental en `initial_prompt`, VAD), pre-parser determinista de números FDI hablados (`dental_parser.py`), interpretación con Ollama (unión discriminada de 11 acciones como `format`, `temperature=0`, catálogos reales de la clínica), validación en dos capas (esquema + catálogos de BD), acciones prohibidas descartadas por tipo, aceptar/editar/rechazar por sugerencia (nunca escritura directa — regla 9), `origin=AI_ASSISTED` extendido a expediente/odontograma/diagnóstico/tratamiento (regla 10). `python -m app.ai.eval` + `tests/ai/corpus.jsonl` (50 dictados) miden precisión contra el Ollama real. Dos bugs de raíz corregidos probando con el modelo real: bucle de repetición infinito bajo decodificación forzada (`repeat_penalty`) y una acción con todos los campos opcionales que el modelo usaba como salida de mínimo esfuerzo (validador que exige al menos un valor). Frontend: micrófono + transcripción editable + panel de propuestas por destino dentro de la pantalla de Atención, con reserva de texto libre si Ollama no responde; Configuración → Asistente IA (estado, modelo, prueba de micrófono) | Hecho |
-| 9–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 9 | `documents` (`DocumentTemplate` versionada regla 7, `Consent` firmado con `<canvas>` táctil, PDF con xhtml2pdf, hash SHA-256, ligado a lo sumo a un procedimiento o un plan) e `imaging` (`Image` por archivo, carga múltiple con metadatos compartidos, miniatura solo para JPG/PNG, lectura de PDF/imagen completa auditada). `StorageBackend` de la Fase 0 reutilizado tal cual (ya generaba rutas no adivinables). Frontend: `SignaturePad` con eventos de puntero (sin librería), visor de imágenes con zoom (`scale`) y brillo/contraste (`filter`) puramente en el cliente; pestañas nuevas "Consentimientos" e "Imágenes" en el paciente | Hecho |
+| 10–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de documents/imaging/reports de la sección 2 son el diseño objetivo; ninguno tiene
-modelos ni migraciones todavía — se crean conforme avanza cada fase. `billing` ya existe pero solo
-con `Charge` (la Fase 10 agrega `Payment` y el resto de la cobranza). `patients`, `records`/
-`encounters`, `odontogram`, `agenda`, `diagnosis`, `treatment` y `ai` ya existen pero todavía sin
-las pestañas de Imágenes, Documentos, Cuenta, etc. de la sección 6 (llegan con sus respectivas
-fases).
+Los módulos de reports de la sección 2 son el diseño objetivo; no tiene modelos ni migraciones
+todavía — se crea conforme avanza su fase. `billing` ya existe pero solo con `Charge` (la Fase 10
+agrega `Payment` y el resto de la cobranza). `patients`, `records`/`encounters`, `odontogram`,
+`agenda`, `diagnosis`, `treatment`, `ai`, `documents` e `imaging` ya existen pero todavía sin la
+pestaña Cuenta de la sección 6 (llega con la Fase 10).

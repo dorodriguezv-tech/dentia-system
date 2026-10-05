@@ -151,4 +151,8 @@ clínica, cargo sugerido al registrar un procedimiento realizado; ver
 **Fase 8 — Asistente de IA por voz** (dictado → transcripción local con faster-whisper → propuestas
 de acción interpretadas por Ollama, validadas contra los catálogos reales de la clínica y aceptadas/
 editadas/rechazadas una por una — la IA nunca escribe directo en el expediente; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#58-agente-de-ia-por-voz-fase-8)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#58-agente-de-ia-por-voz-fase-8)) y
+**Fase 9 — Consentimientos e imagenología** (plantillas HTML versionadas, firma en pantalla táctil
+con `<canvas>`, PDF generado con hash SHA-256 e inmutable una vez firmado, carga múltiple de
+imágenes/radiografías con miniaturas y visor con zoom/brillo/contraste, lectura auditada; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#59-consentimientos-e-imagenología-fase-9)).
