@@ -24,6 +24,8 @@ from app.modules.encounters.schemas import (
     FinalizeNoteRequest,
 )
 from app.modules.iam.models import Clinic, Organization, Role, User, UserClinic
+from app.modules.odontogram import service as odontogram_service
+from app.modules.odontogram.schemas import ToothFindingCreateRequest
 from app.modules.patients import service as patients_service
 from app.modules.patients.models import Patient
 from app.modules.patients.schemas import PatientCreateRequest
@@ -142,6 +144,55 @@ async def _seed_clinical_records(
         actor_id=professional_id,
     )
 
+    # Odontograma (Fase 5) de la paciente 1: caries oclusal en 36 que ya se trato con
+    # resina (demuestra la cadena supersedes_id/is_current, regla 5), caries distal en
+    # 36 todavia activa (misma pieza, superficie distinta) y una pieza ausente (18).
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=p1.id,
+            encounter_id=encounter1.id,
+            tooth_fdi=36,
+            surface="O",
+            finding_code="caries",
+        ),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=p1.id,
+            encounter_id=encounter1.id,
+            tooth_fdi=36,
+            surface="O",
+            finding_code="restauracion",
+            material="resina",
+        ),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=p1.id,
+            encounter_id=encounter1.id,
+            tooth_fdi=36,
+            surface="D",
+            finding_code="caries",
+        ),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=p1.id, encounter_id=encounter1.id, tooth_fdi=18, finding_code="ausente"
+        ),
+        actor_id=professional_id,
+    )
+
     # Paciente 2: atencion con nota todavia en borrador (autoguardado en curso).
     p2 = patients[1]
     encounter2 = await encounters_service.create_encounter(
@@ -190,6 +241,18 @@ async def _seed_clinical_records(
         note_id=note3.id,
         data=CorrectNoteRequest(
             reason="Faltaba registrar que tambien se afecto la superficie distal"
+        ),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=p3.id,
+            encounter_id=encounter3.id,
+            tooth_fdi=46,
+            surface="O",
+            finding_code="caries",
         ),
         actor_id=professional_id,
     )
@@ -257,6 +320,10 @@ async def seed() -> None:
         print(f"Pacientes ficticios creados: {PATIENT_COUNT}")
         print(
             "Expediente de muestra (Fase 4) en 3 de los pacientes sembrados (alertas, nota SOAP)."
+        )
+        print(
+            "Odontograma de muestra (Fase 5): caries tratada con resina en 36-O "
+            "(historial), caries activa en 36-D y 46-O, pieza 18 ausente."
         )
 
 

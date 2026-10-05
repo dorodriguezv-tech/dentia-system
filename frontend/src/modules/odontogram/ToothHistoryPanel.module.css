@@ -1,0 +1,19 @@
+.entry,
+.entryCurrent {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.entryCurrent {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.meta {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}

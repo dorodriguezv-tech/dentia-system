@@ -1,0 +1,50 @@
+.tooth,
+.toothSmall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  cursor: pointer;
+  /* Objetivo tactil >= 44px (CLAUDE.md Fase 5): el recuadro completo de la pieza es
+     el area de toque principal; las 5 zonas internas son para precision con mouse. */
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.toothSmall {
+  min-width: 34px;
+  min-height: 34px;
+  opacity: 0.9;
+}
+
+.tooth:focus-visible,
+.toothSmall:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.svg rect,
+.svgSelected rect {
+  transition: fill 0.15s ease;
+}
+
+.svgSelected {
+  filter: drop-shadow(0 0 0 2px var(--color-primary));
+  outline: 2px solid var(--color-primary);
+  border-radius: 6px;
+}
+
+.symbol {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--color-surface);
+  pointer-events: none;
+}
+
+.label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}

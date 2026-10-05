@@ -1,0 +1,128 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.viewToggle {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.viewButton,
+.viewButtonActive {
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.viewButtonActive {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.dateSlider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.dateSlider input {
+  min-height: 44px;
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.todayButton {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--color-primary);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pastBanner {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.archContainer {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.rowLabel {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.midline {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 0.5rem 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legendSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+
+.sidePanels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 860px) {
+  .sidePanels {
+    grid-template-columns: 1fr;
+  }
+}

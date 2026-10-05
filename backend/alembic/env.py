@@ -10,6 +10,7 @@ import app.audit.models  # noqa: F401  (registra tablas en Base.metadata)
 import app.modules.branding.models  # noqa: F401
 import app.modules.encounters.models  # noqa: F401
 import app.modules.iam.models  # noqa: F401
+import app.modules.odontogram.models  # noqa: F401
 import app.modules.patients.models  # noqa: F401
 import app.modules.records.models  # noqa: F401
 from app.core.config import get_settings

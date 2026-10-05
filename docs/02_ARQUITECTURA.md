@@ -83,8 +83,9 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | POST/GET | /encounters, /encounters/{id}, /patients/{id}/encounters, /patients/{id}/timeline | Atenciones y línea de tiempo |
 | POST/GET/PATCH | /encounters/{id}/notes, /notes/{id} | Nota clínica SOAP (autoguardado) |
 | POST | /notes/{id}/finalize, /notes/{id}/correct, /notes/{id}/cancel | Transiciones de la nota (regla 1) |
-| GET | /patients/{id}/odontogram?at=fecha | Estado vigente o a una fecha |
-| POST | /tooth-findings | Registrar evento |
+| GET | /patients/{id}/odontogram?at=fecha | Estado vigente o a una fecha (reconstruido) |
+| POST | /tooth-findings | Registrar evento (supersede al vigente de esa pieza/superficie/tipo) |
+| GET | /patients/{id}/teeth/{tooth_fdi}/history | Historial completo de una pieza, con autor |
 | CRUD | /appointments; PATCH /appointments/{id}/status | Agenda |
 | POST | /diagnoses, /treatment-plans, /treatment-plans/{id}/accept | Clínico |
 | POST | /ai/transcribe, /ai/interpret, /ai/suggestions/{id}/accept\|reject | Asistente IA |
@@ -214,6 +215,52 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   Corregir/Cancelar con motivo obligatorio; las versiones anteriores de la nota se listan de solo
   lectura debajo.
 
+### 5.5 Odontograma (Fase 5)
+- **Catálogos configurables (sec. 7):** `odontogram/rules.py` genera las 32 piezas FDI permanentes
+  (11–48) y las 20 temporales (51–85) por fórmula (no a mano); calcula las 5 superficies clicables
+  de cada pieza (P solo en piezas superiores, L en inferiores; I solo en anteriores —incisivos y
+  canino—, O en posteriores). `odontogram/finding_catalog.py` trae los 12 hallazgos por defecto
+  (sano, caries, restauración, corona, endodoncia, ausente, extracción indicada, implante, prótesis
+  fija, sellador, fractura, movilidad) con color y símbolo; ninguno validado aún con la clínica
+  (pendientes #14 en `docs/PENDIENTES_CLINICOS.md`).
+- **`ToothFinding` como eventos, nunca sobrescritos (regla 5):** cada hallazgo nuevo para la misma
+  `(paciente, pieza, superficie, tipo)` marca `is_current=False` en el anterior y guarda
+  `supersedes_id` apuntando a él; el historial completo nunca se borra. Un índice único parcial en
+  Postgres (`ux_tooth_findings_current`) impide tener dos hallazgos vigentes a la vez para la misma
+  clave — usa `COALESCE(surface, '')` para que "toda la pieza" (superficie `NULL`, p.ej. una pieza
+  ausente) cuente como un valor concreto, porque Postgres no trata dos `NULL` como iguales en un
+  índice único por defecto (mismo patrón que `immutable_unaccent` en la Fase 3: una función SQL en
+  la expresión del índice).
+- **`EXISTING` / `PLANNED` / `PERFORMED` son cadenas independientes:** la clave de unicidad incluye
+  el tipo, así que un hallazgo `PLANNED` (Fase 7, plan de tratamiento) y uno `EXISTING` para la
+  misma pieza/superficie coexisten sin pisarse — el planificado no se confunde con lo ya existente
+  (precedente de la regla 3). Esta fase solo crea `EXISTING` desde la UI; `PLANNED`/`PERFORMED`
+  quedan listos en el modelo para cuando Fase 7 los produzca.
+- **`GET /patients/{id}/odontogram?at=YYYY-MM-DD` reconstruye el estado histórico:** trae todos los
+  eventos con `created_at <= at` ordenados ascendente y, por cada `(pieza, superficie, tipo)`, se
+  queda con el más reciente — sin esto, `is_current` por sí solo no alcanza para "cómo se veía la
+  pieza hace 3 meses", porque un hallazgo pudo haber sido reemplazado desde entonces. Sin `at`, usa
+  el camino rápido de filtrar por `is_current=True`.
+- **Un hallazgo de "toda la pieza" reemplaza, no combina, la vista de esa pieza:** si existe un
+  evento vigente con `surface=NULL` (p.ej. ausente, implante), el frontend dibuja un solo recuadro
+  para toda la pieza en vez de las 5 zonas; los hallazgos por superficie que pudieran seguir
+  vigentes para esa misma pieza no se anulan automáticamente al registrar el de toda la pieza (no
+  hay cascada) — coexisten en la base aunque la UI solo muestre uno. Ver pendiente #15.
+- **Frontend — SVG propio sin librerías de terceros:** `Tooth.tsx` dibuja 5 rectángulos en cruz
+  (arriba=V, abajo=P/L según si la pieza es superior o inferior, centro=O/I según sea posterior o
+  anterior, izquierda/derecha=M/D según el lado de la arcada para que mesial siempre mire a la línea
+  media) dentro de un `viewBox` de 44×44 — el recuadro completo de la pieza es el objetivo táctil
+  principal (≥44 px, CLAUDE.md Fase 5); las 5 zonas internas son más finas y pensadas para precisión
+  con mouse/stylus. El color de cada hallazgo se aplica vía `fill="var(--color-finding-<codigo>)"`
+  (variables nuevas en `theme/tokens.css`, semánticas y fijas como `--color-danger`, no derivadas de
+  la marca de la clínica) — nunca un `#hex` literal en el componente (CLAUDE.md sec. 6).
+  `kind="PLANNED"` se dibuja con `stroke-dasharray` (contorno discontinuo).
+  `Arch.tsx`/`Odontograma.tsx` arman las arcadas superior/inferior y las vistas permanente/
+  temporal/mixta (en mixta, la fila de temporales se dibuja sobre la de permanentes, pendiente #10).
+  Elegir una pieza/superficie abre `FindingQuickMenu` (selector de atención + catálogo de hallazgos
+  en botones de ≥44 px) y `ToothHistoryPanel` (historial completo de esa pieza, con autor). El
+  control de fecha (`<input type="date">`) cambia `at` y pone la vista en solo lectura con un aviso.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Agenda | Cuenta.
@@ -233,9 +280,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 2 | `clinic_branding` (nombre, logo, favicon, preset o colores personalizados, modo oscuro, radio de bordes). `GET /branding` público, `PUT /branding` y `POST /branding/logo` con permiso `branding.manage`. 6 presets + derivación de hover/soft + validación de contraste WCAG (avisa y sugiere, no bloquea). SVG saneado (sin `<script>`/eventos), favicon generado con Pillow. Frontend: `ThemeProvider`, pantalla Configuración → Apariencia (preset, colores, logo, vista previa en vivo, restablecer) y script que verifica que no haya colores fijos fuera de `theme/` | Hecho |
 | 3 | `patients` (alta, edición controlada con motivo, 5 estados, contactos tutor/emergencia, foto permisionada) y expediente autonumérico por sucursal. Búsqueda tolerante (`pg_trgm` + `unaccent`) y detección de duplicados (nombre + nacimiento o teléfono) con confirmación obligatoria. Lectura de ficha auditada. Frontend: búsqueda global (`Ctrl+K`), listado con filtro de estado, alta en 3 pasos (datos → posibles duplicados → contactos), encabezado persistente del paciente (nombre, edad, foto, barra de alertas vacía) y controles de edición ocultos para roles sin `patients.write`. Seed con 50 pacientes ficticios (Faker es_MX) | Hecho |
 | 4 | `records` (antecedentes, alergias, medicamentos, signos vitales; anulación con motivo, no borrado) y `encounters` (atención + nota clínica SOAP versionada: DRAFT→FINAL→CORRECTED\|CANCELLED). Alertas críticas derivadas (no almacenadas) a partir de alergias/medicamentos/antecedentes, exigidas antes de finalizar una nota (regla 8). Dos bugs de raíz corregidos: constraint de paciente ausente del modelo (autogenerate destructivo) y `MissingGreenlet` en columnas `onupdate` (fix global con `eager_defaults`). Frontend: pestañas Resumen (línea de tiempo clínica, "Iniciar atención") y Expediente (secciones colapsables) del paciente, pantalla de Atención con SOAP, autoguardado cada 10 s, modal de alertas antes de finalizar, corregir/cancelar con motivo. Seed con 3 encounters de ejemplo (nota finalizada, nota en borrador, nota corregida) | Hecho |
-| 5–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 5 | `odontogram` (`ToothFinding` como eventos con `supersedes_id`/`is_current`, índice único parcial por pieza/superficie/tipo; catálogos de piezas FDI, superficies y hallazgos en `rules.py`/`finding_catalog.py`). Reconstrucción histórica vía `GET .../odontogram?at=`. Frontend: pestaña Odontograma con SVG propio (arcadas superior/inferior, vistas permanente/temporal/mixta, 5 superficies clicables, menú rápido de hallazgos, leyenda, deslizador de fecha de solo lectura, panel de historial por pieza) | Hecho |
+| 6–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de odontogram/agenda/diagnosis/treatment/documents/imaging/billing/reports/ai de la
-sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean conforme
-avanza cada fase. `patients` y `records`/`encounters` ya existen pero todavía sin las pestañas de
-Odontograma, Tratamientos, etc. de la sección 6 (llegan con sus respectivas fases).
+Los módulos de agenda/diagnosis/treatment/documents/imaging/billing/reports/ai de la sección 2 son
+el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean conforme avanza cada
+fase. `patients`, `records`/`encounters` y `odontogram` ya existen pero todavía sin las pestañas de
+Tratamientos, Imágenes, etc. de la sección 6 (llegan con sus respectivas fases).

@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { OdontogramaTab } from '../odontogram/OdontogramaTab'
 import * as api from './api'
 import { ExpedienteTab } from './ExpedienteTab'
 import styles from './PatientDetailPage.module.css'
 import { PatientHeader } from './PatientHeader'
 import { ResumenTab } from './ResumenTab'
 
-type Tab = 'resumen' | 'expediente'
+type Tab = 'resumen' | 'expediente' | 'odontograma'
 
 export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -41,13 +42,18 @@ export function PatientDetailPage() {
         >
           Expediente
         </button>
+        <button
+          className={tab === 'odontograma' ? styles.tabActive : styles.tab}
+          type="button"
+          onClick={() => setTab('odontograma')}
+        >
+          Odontograma
+        </button>
       </div>
 
-      {tab === 'resumen' ? (
-        <ResumenTab patientId={patientId} />
-      ) : (
-        <ExpedienteTab patientId={patientId} />
-      )}
+      {tab === 'resumen' && <ResumenTab patientId={patientId} />}
+      {tab === 'expediente' && <ExpedienteTab patientId={patientId} />}
+      {tab === 'odontograma' && <OdontogramaTab patientId={patientId} />}
     </section>
   )
 }

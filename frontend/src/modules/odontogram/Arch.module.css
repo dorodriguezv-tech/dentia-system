@@ -1,0 +1,7 @@
+.row {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  justify-content: center;
+}

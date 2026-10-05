@@ -32,6 +32,7 @@ TRANSACTIONAL_TABLES = (
     "medications",
     "vital_signs",
     "clinical_notes",
+    "tooth_findings",
     "encounters",
     "patient_contacts",
     "patients",

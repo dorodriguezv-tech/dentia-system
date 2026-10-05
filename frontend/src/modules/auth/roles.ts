@@ -46,3 +46,17 @@ const ROLES_THAT_READ_RECORDS = new Set(['odontologo', 'especialista'])
 export function canReadRecords(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_READ_RECORDS.has(roleCode)
 }
+
+/** Roles con el permiso `odontogram.write` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_ODONTOGRAM = new Set(['odontologo', 'especialista'])
+
+export function canWriteOdontogram(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_ODONTOGRAM.has(roleCode)
+}
+
+/** Roles con el permiso `odontogram.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_ODONTOGRAM = new Set(['odontologo', 'especialista', 'asistente'])
+
+export function canReadOdontogram(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_ODONTOGRAM.has(roleCode)
+}

@@ -71,9 +71,11 @@ Verifica: `curl http://localhost:8001/api/v1/health` → `{"status":"ok"}`.
 
 `python -m app.seed` crea datos ficticios (Faker es_MX) de arranque: una clínica demo con un
 `admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar), un
-`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`), 50 pacientes ficticios y 3
+`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`), 50 pacientes ficticios, 3
 atenciones de ejemplo (una nota finalizada con alergia/medicamento/antecedente que disparan
-alertas, una nota en borrador y una nota corregida con dos versiones). Es idempotente.
+alertas, una nota en borrador y una nota corregida con dos versiones) y un odontograma de muestra
+(caries tratada con resina en la pieza 36 —con su historial—, caries activa en 36 y 46, pieza 18
+ausente). Es idempotente.
 
 Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
 del paso 1):
@@ -119,4 +121,7 @@ Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y au
 (búsqueda global `Ctrl+K`, alta con detección de duplicados, expediente, contactos, foto) y
 **Fase 4 — Expediente clínico y atención** (antecedentes/alergias/medicamentos/signos vitales,
 alertas críticas derivadas, nota clínica SOAP versionada con autoguardado, finalizar/corregir/
-cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4)).
+cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4))
+y **Fase 5 — Odontograma** (SVG propio por pieza y superficie, historial por eventos que nunca se
+sobrescribe, reconstrucción a una fecha pasada, vistas permanente/temporal/mixta; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#55-odontograma-fase-5)).
