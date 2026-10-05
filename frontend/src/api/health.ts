@@ -5,5 +5,5 @@ export interface HealthStatus {
 }
 
 export function getHealth(): Promise<HealthStatus> {
-  return apiRequest<HealthStatus>('/health')
+  return apiRequest<HealthStatus>('/health', { auth: false })
 }

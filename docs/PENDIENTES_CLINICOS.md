@@ -12,3 +12,4 @@
 | 8 | ¿Qué reportes necesita para decidir? | Ver Fase 11 | 11 | |
 | 9 | ¿Qué frases usa al dictar? (10–20 ejemplos reales, sin datos de pacientes) | Corpus ficticio | 8 | |
 | 10 | ¿Dentición mixta: cómo prefiere visualizarla? | Vista mixta con temporales sobre permanentes | 5 | |
+| 11 | ¿Qué permiso exacto debe tener cada rol (recepción, caja, asistente, etc.)? | Matriz por defecto en `docs/MATRIZ_PERMISOS.md`, generada de `backend/app/modules/iam/permissions_catalog.py` | 1 | |

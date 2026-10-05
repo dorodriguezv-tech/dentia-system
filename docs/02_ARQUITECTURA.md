@@ -67,8 +67,12 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 ## 5. API base (`/api/v1`)
 | Método | Ruta | Uso |
 |---|---|---|
-| POST | /auth/login, /auth/refresh, /auth/mfa/verify | Autenticación |
+| POST | /auth/login, /auth/login/mfa, /auth/refresh, /auth/logout | Autenticación (JWT + rotación de refresh) |
+| POST | /auth/mfa/setup, /auth/mfa/enable, /auth/mfa/disable | MFA TOTP (obligatoria para admin_clinica) |
+| GET | /me, /me/clinics | Usuario autenticado y sus sucursales (selección de sucursal) |
+| GET/POST/PATCH | /users (scope por header `X-Clinic-Id`) | Gestión de usuarios de la clinica (permiso `iam.manage_users`) |
 | GET/PUT | /branding (GET público), /branding/logo | Tema y logo |
+| GET | /health | Estado del servicio (sin autenticacion) |
 | GET/POST | /patients, /patients/search?q=, /patients/duplicates-check | Pacientes |
 | GET | /patients/{id}/summary | Encabezado y alertas |
 | CRUD | /patients/{id}/allergies, /medications, /history | Expediente |
@@ -82,6 +86,25 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /ai/status | Estado de Ollama y Whisper |
 | POST | /payments, /charges | Cobranza |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
+
+### 5.1 Autenticación y autorización (Fase 1)
+- **JWT:** access token (15 min) firmado HS256 + refresh token opaco (8 h) guardado hasheado
+  (SHA-256) en `refresh_tokens`, con rotación: cada `/auth/refresh` revoca el anterior y emite uno
+  nuevo (`replaced_by_id`).
+- **MFA:** TOTP (`pyotp`). Opcional por usuario; obligatoria para `admin_clinica` — el login no se
+  bloquea antes de configurarla (no hay forma de configurarla sin iniciar sesión primero), pero
+  `UserOut.mfa_setup_required` se marca `true` hasta que la activa, y no se puede desactivar
+  mientras el rol la exija.
+- **Rate limiting del login:** 5 intentos fallidos en 15 minutos por correo (consulta sobre
+  `audit_events`, sin tabla ni servicio adicional).
+- **ABAC por sucursal:** el cliente envía el encabezado `X-Clinic-Id` con la sucursal activa
+  (elegida tras `/me/clinics`). `require_permission("modulo.accion")` verifica
+  `UserClinic(user, clinic) → Role → RolePermission → Permission.code` antes de autorizar.
+- **superadmin sin acceso clínico (regla 5 de CLAUDE.md):** no es un bypass en código; el
+  catálogo de permisos (`docs/MATRIZ_PERMISOS.md`) simplemente no le asigna ningún permiso
+  `patients.*`, `records.*`, `odontogram.*`, etc.
+- **Auditoría:** `AuditEvent` es append-only (trigger de PostgreSQL que bloquea UPDATE/DELETE).
+  Un middleware registra `access_denied` en cada respuesta 403.
 
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
@@ -98,7 +121,9 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | Fase | Alcance | Estado |
 |---|---|---|
 | 0 | Base del proyecto: estructura de carpetas, FastAPI con `/api/v1/health`, Alembic (async) configurado sin migraciones aún, frontend Vite + React 18 + TS con layout base (barra lateral, encabezado, contenido), `docker-compose.yml` (PostgreSQL 16), `.vscode/`, lint/format/test configurados en ambos lados | Hecho |
-| 1–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 1 | IAM (`organizations`, `clinics`, `users`, `roles`, `permissions`, `user_clinics`, `refresh_tokens`) y `audit` (`audit_events` append-only). Login JWT + MFA TOTP + rate limiting, `require_permission` por `X-Clinic-Id`, catálogo de permisos seedeado por migración (`docs/MATRIZ_PERMISOS.md`), `app/seed.py` con admin y odontólogo ficticios. Frontend: login, selección de sucursal, gestión de usuarios, guardia de rutas por permiso | Hecho |
+| 2–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía
+Los módulos de patients/records/odontogram/agenda/diagnosis/treatment/documents/imaging/billing/
+reports/ai de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía
 — se crean conforme avanza cada fase.

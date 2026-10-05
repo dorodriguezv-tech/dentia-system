@@ -39,6 +39,7 @@ como superusuario (`psql -U postgres`):
 ```sql
 CREATE ROLE dentia WITH LOGIN PASSWORD 'dentia';
 CREATE DATABASE dentia OWNER dentia;
+CREATE DATABASE dentia_test OWNER dentia;  -- usada solo por las pruebas de integracion (pytest)
 ```
 
 ### 2. Backend
@@ -50,6 +51,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 alembic upgrade head
+python -m app.seed
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -61,12 +63,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 alembic upgrade head
+python -m app.seed
 uvicorn app.main:app --reload --port 8000
 ```
 
 Verifica: `curl http://localhost:8000/api/v1/health` → `{"status":"ok"}`.
 
-Pruebas y calidad:
+`python -m app.seed` crea datos ficticios (Faker es_MX) de arranque: una clínica demo con un
+`admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar) y un
+`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`). Es idempotente.
+
+Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
+del paso 1):
 ```bash
 pytest
 ruff check app tests
@@ -103,4 +111,5 @@ Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y s
 
 ## Estado del proyecto
 Se construye por fases (vertical slices), ver [`prompts/PROMPTS_CLAUDE_CODE.md`](./prompts/PROMPTS_CLAUDE_CODE.md).
-Completada: **Fase 0 — Base del proyecto**.
+Completadas: **Fase 0 — Base del proyecto** y **Fase 1 — IAM, sucursales y auditoría**
+(ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos).
