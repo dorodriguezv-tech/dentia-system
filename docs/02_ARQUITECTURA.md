@@ -78,9 +78,11 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /patients/{id}/summary | Encabezado persistente (nombre, edad, alertas) |
 | GET/POST/PATCH/DELETE | /patients/{id}/contacts | Tutor/responsable y contacto de emergencia |
 | POST/GET | /patients/{id}/photo | Foto del paciente (permisionada, no publica) |
-| CRUD | /patients/{id}/allergies, /medications, /history | Expediente |
-| POST | /encounters, /encounters/{id}/notes | Atención y notas |
-| POST | /notes/{id}/finalize, /notes/{id}/correct | Reglas de nota |
+| CRUD | /patients/{id}/history, /allergies, /medications (+/{id}/annul); /vital-signs | Expediente clínico |
+| GET | /patients/{id}/alerts | Alertas críticas derivadas (alergias/medicamentos/antecedentes) |
+| POST/GET | /encounters, /encounters/{id}, /patients/{id}/encounters, /patients/{id}/timeline | Atenciones y línea de tiempo |
+| POST/GET/PATCH | /encounters/{id}/notes, /notes/{id} | Nota clínica SOAP (autoguardado) |
+| POST | /notes/{id}/finalize, /notes/{id}/correct, /notes/{id}/cancel | Transiciones de la nota (regla 1) |
 | GET | /patients/{id}/odontogram?at=fecha | Estado vigente o a una fecha |
 | POST | /tooth-findings | Registrar evento |
 | CRUD | /appointments; PATCH /appointments/{id}/status | Agenda |
@@ -158,6 +160,60 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   usar un `<img src>` directo: la pide con `fetch` autenticado y la muestra como blob URL
   (`api/client.ts: apiRequestBlobUrl`).
 
+### 5.4 Expediente, atención y notas (Fase 4)
+- **Catálogos configurables (sec. 7 de CLAUDE.md):** `records/rules.py` define 6 categorías de
+  antecedente (heredofamiliar, personal patológico, personal no patológico, odontológico, hábito,
+  factor de riesgo), 3 niveles de severidad de alergia (leve/moderada/severa) y dos diccionarios
+  palabra-clave → etiqueta (`CONDITION_ALERT_KEYWORDS`, `MEDICATION_ALERT_KEYWORDS`) usados para
+  derivar alertas a partir de antecedentes y medicamentos en texto libre. Los catálogos no están
+  validados clínicamente todavía; ver pendiente en `docs/PENDIENTES_CLINICOS.md`.
+- **Anulación, no borrado (regla 2):** `MedicalHistory`, `Allergy` y `Medication` usan
+  `_AnnullableMixin` (`is_active`, `annul_reason`, `annulled_by`, `annulled_at`); `VitalSigns` es
+  un registro de solo-append (sin anulación, es una medición puntual, no una afirmación clínica
+  que se pueda "retractar"). Todos exigen `encounter_id` (no hay antecedente/alergia/medicamento
+  sin un contexto de atención, regla 6).
+- **Alertas clínicas derivadas, no almacenadas (regla 8):** `records.service.get_patient_alerts`
+  no es una tabla; se recalcula en cada llamada a partir de alergias activas (siempre alertan, con
+  su severidad), y coincidencias de palabra clave (sin acentos, sin mayúsculas) contra medicamentos
+  y antecedentes activos. La reutiliza tanto `GET /patients/{id}/summary` (barra de alertas del
+  encabezado) como `GET /patients/{id}/alerts` (modal de confirmación antes de finalizar una nota).
+- **Máquina de estados de la nota clínica (regla 1):** `encounters/rules.py` define las
+  transiciones válidas DRAFT→{FINAL,CANCELLED}, FINAL→{CORRECTED,CANCELLED}; CORRECTED y CANCELLED
+  son terminales. `is_editable` solo permite PATCH en DRAFT (403 `NOTE_NOT_EDITABLE` en cualquier
+  otro estado — probado explícitamente con una prueba de integración dedicada). `correct_note` no
+  modifica la nota FINAL: la marca CORRECTED y crea una fila nueva DRAFT con
+  `version = anterior + 1`, `previous_version_id` apuntando a la vieja y `correction_reason` en la
+  nueva fila (el motivo describe la corrección, no el estado anterior). `finalize_note` calcula
+  `content_hash` (SHA-256 de los 5 campos SOAP/texto libre, regla 7) y exige
+  `alerts_acknowledged: true` en el body (400 `ALERTS_NOT_ACKNOWLEDGED` con el detalle de alertas si
+  el paciente tiene alguna activa y no se confirmó) — la validación vive en el backend, no solo en
+  la UI.
+- **`Encounter.appointment_id`:** columna nullable sin FK todavía; la tabla `appointments` llega en
+  la Fase 6 (Agenda). Se deja preparada para no requerir una migración de columna después.
+- **Dos bugs de raíz corregidos durante esta fase** (no específicos de un endpoint, afectaban a
+  cualquier módulo futuro con el mismo patrón):
+  1. *Autogenerate destructivo:* el modelo `Patient` nunca declaraba `uq_patient_expediente_per_clinic`
+     (solo existía en la migración de la Fase 3) ni podía declarar el índice trigram (depende de la
+     función `immutable_unaccent`, no expresable en el ORM). Alembic autogenerate los marcaba para
+     `DROP` en cada migración nueva. Se añadió el `UniqueConstraint` al modelo (con comentario
+     explicando que el índice trigram seguirá marcándose y debe limpiarse a mano) y se verificó con
+     un ciclo upgrade→downgrade→upgrade que ambos sobreviven.
+  2. *`MissingGreenlet` en cualquier columna con `onupdate=func.now()`:* SQLAlchemy async marca esas
+     columnas como "expiradas" tras un `UPDATE`; `Pydantic.model_validate(orm_obj)` fuera de una
+     sesión async dispara un lazy-load síncrono y revienta. Se corrigió una sola vez y para siempre
+     con `Base.__mapper_args__ = {"eager_defaults": True}` en `core/db.py` (usa `RETURNING` para
+     traer los valores generados por el servidor en el mismo `flush`), en vez de parchear cada
+     schema que expusiera `updated_at`.
+- **Frontend:** `PatientDetailPage` es ahora un shell con dos pestañas — `ResumenTab` (datos
+  generales, foto, cambio de estado, contactos, línea de tiempo clínica con botón "Iniciar
+  atención") y `ExpedienteTab` (secciones colapsables de antecedentes/alergias/medicamentos/signos
+  vitales, cada una con su propio selector de atención para asociar el registro nuevo). La pantalla
+  de atención (`AtencionPage`, ruta `/pacientes/:patientId/atencion/:encounterId`, protegida a
+  `odontologo`/`especialista`) edita el SOAP de la nota activa con autoguardado cada 10 s mientras
+  está en DRAFT, bloquea la finalización con un modal si hay alertas activas sin confirmar, y ofrece
+  Corregir/Cancelar con motivo obligatorio; las versiones anteriores de la nota se listan de solo
+  lectura debajo.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Agenda | Cuenta.
@@ -176,9 +232,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 1 | IAM (`organizations`, `clinics`, `users`, `roles`, `permissions`, `user_clinics`, `refresh_tokens`) y `audit` (`audit_events` append-only). Login JWT + MFA TOTP + rate limiting, `require_permission` por `X-Clinic-Id`, catálogo de permisos seedeado por migración (`docs/MATRIZ_PERMISOS.md`), `app/seed.py` con admin y odontólogo ficticios. Frontend: login, selección de sucursal, gestión de usuarios, guardia de rutas por permiso | Hecho |
 | 2 | `clinic_branding` (nombre, logo, favicon, preset o colores personalizados, modo oscuro, radio de bordes). `GET /branding` público, `PUT /branding` y `POST /branding/logo` con permiso `branding.manage`. 6 presets + derivación de hover/soft + validación de contraste WCAG (avisa y sugiere, no bloquea). SVG saneado (sin `<script>`/eventos), favicon generado con Pillow. Frontend: `ThemeProvider`, pantalla Configuración → Apariencia (preset, colores, logo, vista previa en vivo, restablecer) y script que verifica que no haya colores fijos fuera de `theme/` | Hecho |
 | 3 | `patients` (alta, edición controlada con motivo, 5 estados, contactos tutor/emergencia, foto permisionada) y expediente autonumérico por sucursal. Búsqueda tolerante (`pg_trgm` + `unaccent`) y detección de duplicados (nombre + nacimiento o teléfono) con confirmación obligatoria. Lectura de ficha auditada. Frontend: búsqueda global (`Ctrl+K`), listado con filtro de estado, alta en 3 pasos (datos → posibles duplicados → contactos), encabezado persistente del paciente (nombre, edad, foto, barra de alertas vacía) y controles de edición ocultos para roles sin `patients.write`. Seed con 50 pacientes ficticios (Faker es_MX) | Hecho |
-| 4–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 4 | `records` (antecedentes, alergias, medicamentos, signos vitales; anulación con motivo, no borrado) y `encounters` (atención + nota clínica SOAP versionada: DRAFT→FINAL→CORRECTED\|CANCELLED). Alertas críticas derivadas (no almacenadas) a partir de alergias/medicamentos/antecedentes, exigidas antes de finalizar una nota (regla 8). Dos bugs de raíz corregidos: constraint de paciente ausente del modelo (autogenerate destructivo) y `MissingGreenlet` en columnas `onupdate` (fix global con `eager_defaults`). Frontend: pestañas Resumen (línea de tiempo clínica, "Iniciar atención") y Expediente (secciones colapsables) del paciente, pantalla de Atención con SOAP, autoguardado cada 10 s, modal de alertas antes de finalizar, corregir/cancelar con motivo. Seed con 3 encounters de ejemplo (nota finalizada, nota en borrador, nota corregida) | Hecho |
+| 5–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de records/odontogram/agenda/diagnosis/treatment/documents/imaging/billing/reports/ai
-de la sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean
-conforme avanza cada fase. `patients` ya existe pero todavía sin las pestañas de Expediente,
-Odontograma, etc. de la sección 6 (llegan con sus respectivas fases).
+Los módulos de odontogram/agenda/diagnosis/treatment/documents/imaging/billing/reports/ai de la
+sección 2 son el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean conforme
+avanza cada fase. `patients` y `records`/`encounters` ya existen pero todavía sin las pestañas de
+Odontograma, Tratamientos, etc. de la sección 6 (llegan con sus respectivas fases).

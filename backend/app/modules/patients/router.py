@@ -25,6 +25,7 @@ from app.modules.patients.schemas import (
     PatientUpdateRequest,
     StatusCode,
 )
+from app.modules.records import service as records_service
 
 router = APIRouter(tags=["patients"])
 
@@ -58,7 +59,10 @@ def _patient_list_item(patient: Patient) -> PatientListItemOut:
     )
 
 
-def _summary_out(patient: Patient) -> PatientSummaryOut:
+async def _summary_out(db: AsyncSession, patient: Patient) -> PatientSummaryOut:
+    alerts = await records_service.get_patient_alerts(
+        db, clinic_id=patient.clinic_id, patient_id=patient.id
+    )
     return PatientSummaryOut(
         id=patient.id,
         expediente_number=patient.expediente_number,
@@ -66,7 +70,7 @@ def _summary_out(patient: Patient) -> PatientSummaryOut:
         age=calculate_age(patient.date_of_birth),
         status=patient.status,
         has_photo=patient.photo_path is not None,
-        alerts=[],
+        alerts=alerts,
     )
 
 
@@ -151,7 +155,7 @@ async def get_patient_summary(
     patient = await service.get_patient_summary(
         db, clinic_id=clinic_id, patient_id=patient_id, actor_id=actor.id
     )
-    return _summary_out(patient)
+    return await _summary_out(db, patient)
 
 
 @router.patch("/patients/{patient_id}", response_model=PatientOut)

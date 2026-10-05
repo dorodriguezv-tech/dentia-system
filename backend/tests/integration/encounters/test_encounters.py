@@ -1,0 +1,257 @@
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.patients.schemas import PatientCreateRequest
+from app.modules.patients.service import create_patient
+
+
+async def _login(client: AsyncClient, email: str, password: str = "Contrasena123") -> str:
+    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return response.json()["access_token"]
+
+
+def _headers(token: str, clinic_id) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}", "X-Clinic-Id": str(clinic_id)}
+
+
+async def _odontologo_token(client: AsyncClient, make_user, clinic) -> str:
+    await make_user(email="odonto@example.com", role_code="odontologo")
+    return await _login(client, "odonto@example.com")
+
+
+async def _make_patient(db_session: AsyncSession, clinic, actor_id) -> str:
+    patient = await create_patient(
+        db_session,
+        clinic_id=clinic.id,
+        data=PatientCreateRequest(
+            first_name="Jose", last_name_paternal="Perez", date_of_birth="1990-05-20"
+        ),
+        actor_id=actor_id,
+    )
+    return str(patient.id)
+
+
+async def _create_encounter(
+    client: AsyncClient, headers: dict, db_session: AsyncSession, clinic, actor_id
+) -> str:
+    patient_id = await _make_patient(db_session, clinic, actor_id)
+    response = await client.post(
+        "/api/v1/encounters", headers=headers, json={"patient_id": patient_id}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+async def test_create_encounter_denied_without_records_write(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    await make_user(email="recepcion@example.com", role_code="recepcion")
+    token = await _login(client, "recepcion@example.com")
+    admin_user_id = (await make_user(email="odonto2@example.com", role_code="odontologo")).id
+    patient_id = await _make_patient(db_session, clinic, admin_user_id)
+
+    response = await client.post(
+        "/api/v1/encounters",
+        headers=_headers(token, clinic.id),
+        json={"patient_id": patient_id},
+    )
+    assert response.status_code == 403
+
+
+async def test_create_note_and_autosave_draft(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+
+    created = await client.post(
+        f"/api/v1/encounters/{encounter_id}/notes",
+        headers=headers,
+        json={"soap_s": "Dolor al frio"},
+    )
+    assert created.status_code == 201
+    note = created.json()
+    assert note["status"] == "DRAFT"
+    assert note["version"] == 1
+
+    updated = await client.patch(
+        f"/api/v1/notes/{note['id']}", headers=headers, json={"soap_o": "Caries en 36"}
+    )
+    assert updated.status_code == 200
+    assert updated.json()["soap_o"] == "Caries en 36"
+    assert updated.json()["soap_s"] == "Dolor al frio"
+
+
+async def test_finalize_note_without_alerts_succeeds(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Bien"}
+        )
+    ).json()
+
+    response = await client.post(f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "FINAL"
+    assert body["content_hash"] is not None
+
+
+async def test_finalize_note_with_alerts_requires_acknowledgement(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    encounter = (await client.get(f"/api/v1/encounters/{encounter_id}", headers=headers)).json()
+    patient_id = encounter["patient_id"]
+
+    await client.post(
+        f"/api/v1/patients/{patient_id}/allergies",
+        headers=headers,
+        json={"encounter_id": encounter_id, "substance": "Penicilina", "severity": "severa"},
+    )
+
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Bien"}
+        )
+    ).json()
+
+    denied = await client.post(f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={})
+    assert denied.status_code == 400
+    assert denied.json()["code"] == "ALERTS_NOT_ACKNOWLEDGED"
+    assert "Alergia severa: Penicilina" in denied.json()["details"]["alerts"]
+
+    accepted = await client.post(
+        f"/api/v1/notes/{note['id']}/finalize",
+        headers=headers,
+        json={"alerts_acknowledged": True},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "FINAL"
+
+
+async def test_final_note_cannot_be_edited(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Prueba obligatoria (CLAUDE.md regla 1): una nota FINAL no se puede editar."""
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Bien"}
+        )
+    ).json()
+    await client.post(f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={})
+
+    response = await client.patch(
+        f"/api/v1/notes/{note['id']}", headers=headers, json={"soap_s": "Intento de cambio"}
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "NOTE_NOT_EDITABLE"
+
+
+async def test_correct_final_note_creates_new_version(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes",
+            headers=headers,
+            json={"soap_s": "Version original"},
+        )
+    ).json()
+    await client.post(f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={})
+
+    corrected = await client.post(
+        f"/api/v1/notes/{note['id']}/correct",
+        headers=headers,
+        json={"reason": "Se me olvido registrar la alergia"},
+    )
+    assert corrected.status_code == 200
+    new_note = corrected.json()
+    assert new_note["status"] == "DRAFT"
+    assert new_note["version"] == 2
+    assert new_note["previous_version_id"] == note["id"]
+    assert new_note["soap_s"] == "Version original"
+
+    old_note = (await client.get(f"/api/v1/notes/{note['id']}", headers=headers)).json()
+    assert old_note["status"] == "CORRECTED"
+    assert old_note["soap_s"] == "Version original"
+
+
+async def test_correct_requires_the_note_to_be_final(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Borrador"}
+        )
+    ).json()
+
+    response = await client.post(
+        f"/api/v1/notes/{note['id']}/correct", headers=headers, json={"reason": "x"}
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "INVALID_TRANSITION"
+
+
+async def test_cancel_draft_note_requires_reason(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "x"}
+        )
+    ).json()
+
+    missing_reason = await client.post(
+        f"/api/v1/notes/{note['id']}/cancel", headers=headers, json={"reason": ""}
+    )
+    assert missing_reason.status_code == 422
+
+    cancelled = await client.post(
+        f"/api/v1/notes/{note['id']}/cancel",
+        headers=headers,
+        json={"reason": "Paciente no se presento"},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "CANCELLED"
+    assert cancelled.json()["cancel_reason"] == "Paciente no se presento"
+
+
+async def test_timeline_includes_encounter_and_notes(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    encounter = (await client.get(f"/api/v1/encounters/{encounter_id}", headers=headers)).json()
+    await client.post(
+        f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "x"}
+    )
+
+    timeline = await client.get(
+        f"/api/v1/patients/{encounter['patient_id']}/timeline", headers=headers
+    )
+    assert timeline.status_code == 200
+    entries = timeline.json()
+    assert len(entries) == 1
+    assert entries[0]["encounter_id"] == encounter_id
+    assert len(entries[0]["notes"]) == 1

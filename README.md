@@ -71,8 +71,9 @@ Verifica: `curl http://localhost:8001/api/v1/health` → `{"status":"ok"}`.
 
 `python -m app.seed` crea datos ficticios (Faker es_MX) de arranque: una clínica demo con un
 `admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar), un
-`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`) y 50 pacientes ficticios. Es
-idempotente.
+`odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`), 50 pacientes ficticios y 3
+atenciones de ejemplo (una nota finalizada con alergia/medicamento/antecedente que disparan
+alertas, una nota en borrador y una nota corregida con dos versiones). Es idempotente.
 
 Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
 del paso 1):
@@ -114,5 +115,8 @@ Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y s
 Se construye por fases (vertical slices), ver [`prompts/PROMPTS_CLAUDE_CODE.md`](./prompts/PROMPTS_CLAUDE_CODE.md).
 Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y auditoría**
 (ver [`docs/MATRIZ_PERMISOS.md`](./docs/MATRIZ_PERMISOS.md) para el catálogo de roles y permisos),
-**Fase 2 — Tema y marca configurables** (Configuración → Apariencia) y **Fase 3 — Pacientes**
-(búsqueda global `Ctrl+K`, alta con detección de duplicados, expediente, contactos, foto).
+**Fase 2 — Tema y marca configurables** (Configuración → Apariencia), **Fase 3 — Pacientes**
+(búsqueda global `Ctrl+K`, alta con detección de duplicados, expediente, contactos, foto) y
+**Fase 4 — Expediente clínico y atención** (antecedentes/alergias/medicamentos/signos vitales,
+alertas críticas derivadas, nota clínica SOAP versionada con autoguardado, finalizar/corregir/
+cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4)).

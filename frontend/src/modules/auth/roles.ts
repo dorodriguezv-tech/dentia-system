@@ -32,3 +32,17 @@ const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion'])
 export function canWritePatients(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_WRITE_PATIENTS.has(roleCode)
 }
+
+/** Roles con el permiso `records.write` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_RECORDS = new Set(['odontologo', 'especialista'])
+
+export function canWriteRecords(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_RECORDS.has(roleCode)
+}
+
+/** Roles con el permiso `records.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_RECORDS = new Set(['odontologo', 'especialista'])
+
+export function canReadRecords(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_RECORDS.has(roleCode)
+}

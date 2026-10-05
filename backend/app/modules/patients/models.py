@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, String
+from sqlalchemy import Date, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +11,16 @@ from app.modules.patients.rules import DEFAULT_STATUS
 
 class Patient(AuditedMixin, Base):
     __tablename__ = "patients"
+    __table_args__ = (
+        UniqueConstraint("clinic_id", "expediente_number", name="uq_patient_expediente_per_clinic"),
+    )
+    # Ademas existe el indice GIN "ix_patients_full_name_trgm" sobre
+    # immutable_unaccent(lower(full_name)) para la busqueda tolerante a errores (ver
+    # migracion 0079b0a977a3). No se declara aqui como Index() porque depende de la
+    # funcion SQL immutable_unaccent (creada con DDL crudo, no mapeable como columna de
+    # SQLAlchemy); por eso cada `alembic revision --autogenerate` lo marcara como
+    # "a eliminar" aunque siga existiendo — hay que quitar esa linea a mano antes de
+    # aplicar la migracion generada.
 
     clinic_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("clinics.id", ondelete="CASCADE")

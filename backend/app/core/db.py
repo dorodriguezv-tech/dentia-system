@@ -16,7 +16,12 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
-    pass
+    # SQLAlchemy async: una columna con onupdate=func.now() (updated_at, en AuditedMixin)
+    # queda "expirada" tras un UPDATE porque el valor lo calcula el servidor. Sin
+    # eager_defaults, leerla despues (p.ej. Pydantic model_validate) dispara una carga
+    # perezosa que falla con MissingGreenlet fuera de un await. eager_defaults pide ese
+    # valor con RETURNING en el mismo INSERT/UPDATE, sin round-trip extra.
+    __mapper_args__ = {"eager_defaults": True}
 
 
 class UUIDPkMixin:
