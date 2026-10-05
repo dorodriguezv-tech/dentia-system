@@ -73,9 +73,10 @@ Verifica: `curl http://localhost:8001/api/v1/health` → `{"status":"ok"}`.
 `admin_clinica` (`admin@dentalcare-demo.mx` / `Dentia2025!`, debe configurar MFA al entrar), un
 `odontologo` (`odontologo@dentalcare-demo.mx` / `Dentia2025!`), 50 pacientes ficticios, 3
 atenciones de ejemplo (una nota finalizada con alergia/medicamento/antecedente que disparan
-alertas, una nota en borrador y una nota corregida con dos versiones) y un odontograma de muestra
+alertas, una nota en borrador y una nota corregida con dos versiones), un odontograma de muestra
 (caries tratada con resina en la pieza 36 —con su historial—, caries activa en 36 y 46, pieza 18
-ausente). Es idempotente.
+ausente) y una agenda de muestra (1 profesional, 1 gabinete, horario laboral de lunes a viernes,
+una cita reservada y otra confirmada para mañana, una mas en 7 días). Es idempotente.
 
 Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
 del paso 1):
@@ -122,6 +123,9 @@ Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y au
 **Fase 4 — Expediente clínico y atención** (antecedentes/alergias/medicamentos/signos vitales,
 alertas críticas derivadas, nota clínica SOAP versionada con autoguardado, finalizar/corregir/
 cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4))
-y **Fase 5 — Odontograma** (SVG propio por pieza y superficie, historial por eventos que nunca se
+**Fase 5 — Odontograma** (SVG propio por pieza y superficie, historial por eventos que nunca se
 sobrescribe, reconstrucción a una fecha pasada, vistas permanente/temporal/mixta; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#55-odontograma-fase-5)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#55-odontograma-fase-5)) y **Fase 6 — Agenda**
+(citas con máquina de estados, traslapes validados en el backend y respaldados por una restricción
+`EXCLUDE` de Postgres, calendario propio con arrastrar-para-reprogramar, botón "Iniciar atención";
+ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#56-agenda-fase-6)).

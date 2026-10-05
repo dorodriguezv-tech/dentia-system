@@ -1,0 +1,664 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit import service as audit_service
+from app.core.errors import AppError
+from app.modules.agenda import rules
+from app.modules.agenda.models import (
+    Appointment,
+    AppointmentStatusHistory,
+    Provider,
+    ProviderBlock,
+    ProviderWorkingHours,
+    ReminderTask,
+    Resource,
+    WaitlistEntry,
+)
+from app.modules.agenda.schemas import (
+    AppointmentCreateRequest,
+    BlockCreateRequest,
+    ProviderCreateRequest,
+    RescheduleRequest,
+    ResourceCreateRequest,
+    StatusChangeRequest,
+    WaitlistCreateRequest,
+    WorkingHoursCreateRequest,
+)
+from app.modules.encounters import service as encounters_service
+from app.modules.encounters.models import Encounter
+from app.modules.encounters.schemas import EncounterCreateRequest
+from app.modules.iam.models import User
+from app.modules.patients.models import Patient
+
+
+async def _get_patient_in_clinic(
+    db: AsyncSession, *, clinic_id: uuid.UUID, patient_id: uuid.UUID
+) -> Patient:
+    patient = await db.get(Patient, patient_id)
+    if patient is None or patient.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Paciente no encontrado", status_code=404)
+    return patient
+
+
+async def _get_provider_in_clinic(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
+) -> Provider:
+    provider = await db.get(Provider, provider_id)
+    if provider is None or provider.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Profesional no encontrado", status_code=404)
+    return provider
+
+
+async def _get_resource_in_clinic(
+    db: AsyncSession, *, clinic_id: uuid.UUID, resource_id: uuid.UUID
+) -> Resource:
+    resource = await db.get(Resource, resource_id)
+    if resource is None or resource.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Recurso no encontrado", status_code=404)
+    return resource
+
+
+async def _get_appointment_in_clinic(
+    db: AsyncSession, *, clinic_id: uuid.UUID, appointment_id: uuid.UUID
+) -> Appointment:
+    appointment = await db.get(Appointment, appointment_id)
+    if appointment is None or appointment.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Cita no encontrada", status_code=404)
+    return appointment
+
+
+# --------------------------------------------------------------------------- providers
+
+
+async def list_providers(db: AsyncSession, *, clinic_id: uuid.UUID) -> list[tuple[Provider, str]]:
+    stmt = select(Provider).where(Provider.clinic_id == clinic_id)
+    providers = list((await db.execute(stmt)).scalars().all())
+    users = {u.id: u for u in (await db.execute(select(User))).scalars().all()}
+    return [(p, users[p.user_id].full_name if p.user_id in users else "") for p in providers]
+
+
+async def create_provider(
+    db: AsyncSession, *, clinic_id: uuid.UUID, data: ProviderCreateRequest, actor_id: uuid.UUID
+) -> tuple[Provider, str]:
+    user = await db.get(User, data.user_id)
+    if user is None:
+        raise AppError("NOT_FOUND", "Usuario no encontrado", status_code=404)
+    provider = Provider(
+        clinic_id=clinic_id, user_id=data.user_id, color=data.color, created_by=actor_id
+    )
+    db.add(provider)
+    await db.flush()
+    await audit_service.log(
+        db,
+        action="agenda.provider_created",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="provider",
+        entity_id=str(provider.id),
+        details={"user_id": str(data.user_id)},
+    )
+    await db.commit()
+    return provider, user.full_name
+
+
+# --------------------------------------------------------------------------- resources
+
+
+async def list_resources(db: AsyncSession, *, clinic_id: uuid.UUID) -> list[Resource]:
+    stmt = select(Resource).where(Resource.clinic_id == clinic_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def create_resource(
+    db: AsyncSession, *, clinic_id: uuid.UUID, data: ResourceCreateRequest, actor_id: uuid.UUID
+) -> Resource:
+    resource = Resource(clinic_id=clinic_id, name=data.name, created_by=actor_id)
+    db.add(resource)
+    await db.commit()
+    return resource
+
+
+# --------------------------------------------------------------- horarios y bloqueos
+
+
+async def list_working_hours(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
+) -> list[ProviderWorkingHours]:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    stmt = select(ProviderWorkingHours).where(ProviderWorkingHours.provider_id == provider_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def create_working_hours(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    data: WorkingHoursCreateRequest,
+) -> ProviderWorkingHours:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    item = ProviderWorkingHours(
+        provider_id=provider_id,
+        weekday=data.weekday,
+        start_time=data.start_time,
+        end_time=data.end_time,
+    )
+    db.add(item)
+    await db.commit()
+    return item
+
+
+async def delete_working_hours(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID, item_id: uuid.UUID
+) -> None:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    item = await db.get(ProviderWorkingHours, item_id)
+    if item is None or item.provider_id != provider_id:
+        raise AppError("NOT_FOUND", "Horario no encontrado", status_code=404)
+    await db.delete(item)
+    await db.commit()
+
+
+async def list_blocks(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
+) -> list[ProviderBlock]:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    stmt = select(ProviderBlock).where(ProviderBlock.provider_id == provider_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def create_block(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    data: BlockCreateRequest,
+    actor_id: uuid.UUID,
+) -> ProviderBlock:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    item = ProviderBlock(
+        provider_id=provider_id,
+        starts_at=data.starts_at,
+        ends_at=data.ends_at,
+        reason=data.reason,
+        created_by=actor_id,
+    )
+    db.add(item)
+    await db.commit()
+    return item
+
+
+async def delete_block(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID, item_id: uuid.UUID
+) -> None:
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    item = await db.get(ProviderBlock, item_id)
+    if item is None or item.provider_id != provider_id:
+        raise AppError("NOT_FOUND", "Bloqueo no encontrado", status_code=404)
+    await db.delete(item)
+    await db.commit()
+
+
+# ----------------------------------------------------------------------- disponibilidad
+
+
+async def _find_conflicts(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    resource_id: uuid.UUID | None,
+    starts_at: datetime,
+    ends_at: datetime,
+    exclude_appointment_id: uuid.UUID | None = None,
+) -> list[Appointment]:
+    same_provider_or_resource = (
+        or_(Appointment.provider_id == provider_id, Appointment.resource_id == resource_id)
+        if resource_id is not None
+        else (Appointment.provider_id == provider_id)
+    )
+    stmt = select(Appointment).where(
+        Appointment.clinic_id == clinic_id,
+        Appointment.status.in_(rules.ACTIVE_STATUSES),
+        Appointment.starts_at < ends_at,
+        Appointment.ends_at > starts_at,
+        same_provider_or_resource,
+    )
+    if exclude_appointment_id is not None:
+        stmt = stmt.where(Appointment.id != exclude_appointment_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def _warnings_for_slot(
+    db: AsyncSession, *, provider_id: uuid.UUID, starts_at: datetime, ends_at: datetime
+) -> list[str]:
+    """Avisos no bloqueantes: fuera de horario laboral o dentro de un bloqueo. El
+    horario laboral/bloqueos son informativos (ver pendiente en docs/PENDIENTES_CLINICOS.md),
+    a diferencia del traslape de citas, que si se rechaza."""
+    warnings: list[str] = []
+
+    hours_stmt = select(ProviderWorkingHours).where(
+        ProviderWorkingHours.provider_id == provider_id,
+        ProviderWorkingHours.weekday == starts_at.weekday(),
+    )
+    working_hours = list((await db.execute(hours_stmt)).scalars().all())
+    if working_hours:
+        start_t, end_t = starts_at.time(), ends_at.time()
+        within = any(wh.start_time <= start_t and end_t <= wh.end_time for wh in working_hours)
+        if not within:
+            warnings.append("La cita queda fuera del horario laboral del profesional.")
+    blocks_stmt = select(ProviderBlock).where(
+        ProviderBlock.provider_id == provider_id,
+        ProviderBlock.starts_at < ends_at,
+        ProviderBlock.ends_at > starts_at,
+    )
+    if (await db.execute(blocks_stmt)).scalars().first() is not None:
+        warnings.append(
+            "La cita coincide con un bloqueo (vacaciones, permiso, etc.) del profesional."
+        )
+    return warnings
+
+
+def _conflict_error(conflicts: list[Appointment]) -> AppError:
+    return AppError(
+        "APPOINTMENT_CONFLICT",
+        "El profesional o el recurso ya tienen una cita en ese horario",
+        details={"conflicting_appointment_ids": [str(c.id) for c in conflicts]},
+        status_code=409,
+    )
+
+
+# ------------------------------------------------------------------------- citas
+
+
+async def create_appointment(
+    db: AsyncSession, *, clinic_id: uuid.UUID, data: AppointmentCreateRequest, actor_id: uuid.UUID
+) -> tuple[Appointment, list[str]]:
+    await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
+    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
+    if data.resource_id is not None:
+        await _get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=data.resource_id)
+
+    ends_at = data.ends_at or (
+        data.starts_at + timedelta(minutes=rules.default_duration_minutes(data.appointment_type))
+    )
+    if ends_at <= data.starts_at:
+        raise AppError(
+            "INVALID_RANGE", "La hora de termino debe ser posterior al inicio", status_code=422
+        )
+
+    conflicts = await _find_conflicts(
+        db,
+        clinic_id=clinic_id,
+        provider_id=data.provider_id,
+        resource_id=data.resource_id,
+        starts_at=data.starts_at,
+        ends_at=ends_at,
+    )
+    if conflicts:
+        raise _conflict_error(conflicts)
+
+    warnings = await _warnings_for_slot(
+        db, provider_id=data.provider_id, starts_at=data.starts_at, ends_at=ends_at
+    )
+
+    appointment = Appointment(
+        clinic_id=clinic_id,
+        patient_id=data.patient_id,
+        provider_id=data.provider_id,
+        resource_id=data.resource_id,
+        appointment_type=data.appointment_type,
+        starts_at=data.starts_at,
+        ends_at=ends_at,
+        status="RESERVADA",
+        notes=data.notes,
+        created_by=actor_id,
+    )
+    db.add(appointment)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise _conflict_error([]) from exc
+
+    db.add(
+        AppointmentStatusHistory(
+            appointment_id=appointment.id,
+            from_status=None,
+            to_status="RESERVADA",
+            changed_by=actor_id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    db.add(
+        ReminderTask(
+            appointment_id=appointment.id,
+            kind="24h_antes",
+            scheduled_for=data.starts_at - timedelta(hours=24),
+            status="PENDING",
+        )
+    )
+    await audit_service.log(
+        db,
+        action="agenda.appointment_created",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="appointment",
+        entity_id=str(appointment.id),
+        details={"patient_id": str(data.patient_id), "provider_id": str(data.provider_id)},
+    )
+    await db.commit()
+    return appointment, warnings
+
+
+async def list_appointments(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    starts_from: datetime,
+    starts_to: datetime,
+    provider_id: uuid.UUID | None = None,
+    resource_id: uuid.UUID | None = None,
+) -> list[dict[str, object]]:
+    stmt = select(Appointment).where(
+        Appointment.clinic_id == clinic_id,
+        Appointment.starts_at < starts_to,
+        Appointment.ends_at > starts_from,
+    )
+    if provider_id is not None:
+        stmt = stmt.where(Appointment.provider_id == provider_id)
+    if resource_id is not None:
+        stmt = stmt.where(Appointment.resource_id == resource_id)
+    stmt = stmt.order_by(Appointment.starts_at)
+    appointments = list((await db.execute(stmt)).scalars().all())
+
+    patients = {p.id: p for p in (await db.execute(select(Patient))).scalars().all()}
+    providers = {p.id: p for p in (await db.execute(select(Provider))).scalars().all()}
+    users = {u.id: u for u in (await db.execute(select(User))).scalars().all()}
+    resources = {r.id: r for r in (await db.execute(select(Resource))).scalars().all()}
+
+    items = []
+    for appointment in appointments:
+        provider = providers.get(appointment.provider_id)
+        provider_user = users.get(provider.user_id) if provider else None
+        patient = patients.get(appointment.patient_id)
+        resource = resources.get(appointment.resource_id) if appointment.resource_id else None
+        items.append(
+            {
+                "id": appointment.id,
+                "patient_id": appointment.patient_id,
+                "patient_full_name": patient.full_name if patient else "",
+                "provider_id": appointment.provider_id,
+                "provider_full_name": provider_user.full_name if provider_user else "",
+                "provider_color": provider.color if provider else "#2BB3A3",
+                "resource_id": appointment.resource_id,
+                "resource_name": resource.name if resource else None,
+                "appointment_type": appointment.appointment_type,
+                "starts_at": appointment.starts_at,
+                "ends_at": appointment.ends_at,
+                "status": appointment.status,
+                "notes": appointment.notes,
+            }
+        )
+    return items
+
+
+async def change_status(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    appointment_id: uuid.UUID,
+    data: StatusChangeRequest,
+    actor_id: uuid.UUID,
+) -> Appointment:
+    appointment = await _get_appointment_in_clinic(
+        db, clinic_id=clinic_id, appointment_id=appointment_id
+    )
+    if not rules.can_transition(appointment.status, data.status):
+        raise AppError(
+            "INVALID_TRANSITION",
+            f"No se puede pasar de {appointment.status} a {data.status}",
+            status_code=409,
+        )
+    if data.status in rules.REASON_REQUIRED_STATUSES and not data.reason:
+        raise AppError(
+            "REASON_REQUIRED", f"El estado {data.status} exige un motivo", status_code=422
+        )
+
+    from_status = appointment.status
+    appointment.status = data.status
+    if data.status == "CANCELADA":
+        appointment.cancel_reason = data.reason
+
+    db.add(
+        AppointmentStatusHistory(
+            appointment_id=appointment.id,
+            from_status=from_status,
+            to_status=data.status,
+            reason=data.reason,
+            changed_by=actor_id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    await audit_service.log(
+        db,
+        action="agenda.appointment_status_changed",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="appointment",
+        entity_id=str(appointment.id),
+        details={"from": from_status, "to": data.status, "reason": data.reason},
+    )
+    await db.commit()
+    return appointment
+
+
+async def reschedule_appointment(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    appointment_id: uuid.UUID,
+    data: RescheduleRequest,
+    actor_id: uuid.UUID,
+) -> tuple[Appointment, list[str]]:
+    old = await _get_appointment_in_clinic(db, clinic_id=clinic_id, appointment_id=appointment_id)
+    if not rules.is_editable(old.status):
+        raise AppError(
+            "INVALID_TRANSITION",
+            f"No se puede reprogramar una cita en estado {old.status}",
+            status_code=409,
+        )
+
+    new_provider_id = data.provider_id or old.provider_id
+    new_resource_id = data.resource_id if data.resource_id is not None else old.resource_id
+    duration = old.ends_at - old.starts_at
+    new_ends_at = data.ends_at or (data.starts_at + duration)
+    if new_ends_at <= data.starts_at:
+        raise AppError(
+            "INVALID_RANGE", "La hora de termino debe ser posterior al inicio", status_code=422
+        )
+
+    if new_provider_id != old.provider_id:
+        await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=new_provider_id)
+    if new_resource_id is not None and new_resource_id != old.resource_id:
+        await _get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=new_resource_id)
+
+    conflicts = await _find_conflicts(
+        db,
+        clinic_id=clinic_id,
+        provider_id=new_provider_id,
+        resource_id=new_resource_id,
+        starts_at=data.starts_at,
+        ends_at=new_ends_at,
+        exclude_appointment_id=old.id,
+    )
+    if conflicts:
+        raise _conflict_error(conflicts)
+
+    warnings = await _warnings_for_slot(
+        db, provider_id=new_provider_id, starts_at=data.starts_at, ends_at=new_ends_at
+    )
+
+    from_status = old.status
+    old.status = "REPROGRAMADA"
+    db.add(
+        AppointmentStatusHistory(
+            appointment_id=old.id,
+            from_status=from_status,
+            to_status="REPROGRAMADA",
+            reason=data.reason or "Reprogramada",
+            changed_by=actor_id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+
+    new_appointment = Appointment(
+        clinic_id=clinic_id,
+        patient_id=old.patient_id,
+        provider_id=new_provider_id,
+        resource_id=new_resource_id,
+        appointment_type=old.appointment_type,
+        starts_at=data.starts_at,
+        ends_at=new_ends_at,
+        status="RESERVADA",
+        notes=old.notes,
+        rescheduled_from_id=old.id,
+        created_by=actor_id,
+    )
+    db.add(new_appointment)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise _conflict_error([]) from exc
+
+    db.add(
+        AppointmentStatusHistory(
+            appointment_id=new_appointment.id,
+            from_status=None,
+            to_status="RESERVADA",
+            changed_by=actor_id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    db.add(
+        ReminderTask(
+            appointment_id=new_appointment.id,
+            kind="24h_antes",
+            scheduled_for=data.starts_at - timedelta(hours=24),
+            status="PENDING",
+        )
+    )
+    await audit_service.log(
+        db,
+        action="agenda.appointment_rescheduled",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="appointment",
+        entity_id=str(old.id),
+        details={"new_appointment_id": str(new_appointment.id)},
+    )
+    await db.commit()
+    return new_appointment, warnings
+
+
+async def start_encounter_from_appointment(
+    db: AsyncSession, *, clinic_id: uuid.UUID, appointment_id: uuid.UUID, actor_id: uuid.UUID
+) -> Encounter:
+    appointment = await _get_appointment_in_clinic(
+        db, clinic_id=clinic_id, appointment_id=appointment_id
+    )
+    if not rules.can_transition(appointment.status, "EN_ATENCION"):
+        raise AppError(
+            "INVALID_TRANSITION",
+            f"No se puede iniciar la atencion desde el estado {appointment.status}",
+            status_code=409,
+        )
+    provider = await _get_provider_in_clinic(
+        db, clinic_id=clinic_id, provider_id=appointment.provider_id
+    )
+
+    from_status = appointment.status
+    appointment.status = "EN_ATENCION"
+    db.add(
+        AppointmentStatusHistory(
+            appointment_id=appointment.id,
+            from_status=from_status,
+            to_status="EN_ATENCION",
+            changed_by=actor_id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    await audit_service.log(
+        db,
+        action="agenda.appointment_status_changed",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="appointment",
+        entity_id=str(appointment.id),
+        details={"from": from_status, "to": "EN_ATENCION"},
+    )
+    await db.commit()
+
+    return await encounters_service.create_encounter(
+        db,
+        clinic_id=clinic_id,
+        data=EncounterCreateRequest(
+            patient_id=appointment.patient_id, appointment_id=appointment.id
+        ),
+        professional_id=provider.user_id,
+    )
+
+
+async def list_reminder_tasks(
+    db: AsyncSession, *, clinic_id: uuid.UUID, appointment_id: uuid.UUID
+) -> list[ReminderTask]:
+    await _get_appointment_in_clinic(db, clinic_id=clinic_id, appointment_id=appointment_id)
+    stmt = select(ReminderTask).where(ReminderTask.appointment_id == appointment_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
+# --------------------------------------------------------------------- lista de espera
+
+
+async def list_waitlist(db: AsyncSession, *, clinic_id: uuid.UUID) -> list[WaitlistEntry]:
+    stmt = (
+        select(WaitlistEntry)
+        .where(WaitlistEntry.clinic_id == clinic_id, WaitlistEntry.resolved.is_(False))
+        .order_by(WaitlistEntry.created_at)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def create_waitlist_entry(
+    db: AsyncSession, *, clinic_id: uuid.UUID, data: WaitlistCreateRequest, actor_id: uuid.UUID
+) -> WaitlistEntry:
+    await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
+    if data.provider_id is not None:
+        await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
+    item = WaitlistEntry(
+        clinic_id=clinic_id,
+        patient_id=data.patient_id,
+        provider_id=data.provider_id,
+        notes=data.notes,
+        created_by=actor_id,
+    )
+    db.add(item)
+    await db.commit()
+    return item
+
+
+async def resolve_waitlist_entry(
+    db: AsyncSession, *, clinic_id: uuid.UUID, item_id: uuid.UUID
+) -> WaitlistEntry:
+    item = await db.get(WaitlistEntry, item_id)
+    if item is None or item.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Registro de lista de espera no encontrado", status_code=404)
+    item.resolved = True
+    item.resolved_at = datetime.now(UTC)
+    await db.commit()
+    return item

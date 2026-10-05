@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
+import { AgendaPage } from '../modules/agenda/AgendaPage'
 import { AppearancePage } from '../modules/branding/AppearancePage'
 import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
             element: <Layout />,
             children: [
               { index: true, element: <HomePage /> },
+              { path: 'agenda', element: <AgendaPage /> },
               { path: 'pacientes', element: <PatientsListPage /> },
               { path: 'pacientes/:id', element: <PatientDetailPage /> },
               {

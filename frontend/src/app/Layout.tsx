@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { resolveApiAssetUrl } from '../api/client'
-import { canManageBranding, canManageUsers } from '../modules/auth/roles'
+import { canManageBranding, canManageUsers, canReadAgenda } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
 import { GlobalSearch } from '../modules/patients/GlobalSearch'
 import { useGlobalSearchStore } from '../modules/patients/searchStore'
@@ -44,6 +44,13 @@ export function Layout() {
               Pacientes
             </NavLink>
           </li>
+          {canReadAgenda(activeRole) && (
+            <li>
+              <NavLink to="/agenda" className={styles.navLink}>
+                Agenda
+              </NavLink>
+            </li>
+          )}
           {canManageUsers(activeRole) && (
             <li>
               <NavLink to="/usuarios" className={styles.navLink}>

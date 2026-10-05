@@ -86,7 +86,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /patients/{id}/odontogram?at=fecha | Estado vigente o a una fecha (reconstruido) |
 | POST | /tooth-findings | Registrar evento (supersede al vigente de esa pieza/superficie/tipo) |
 | GET | /patients/{id}/teeth/{tooth_fdi}/history | Historial completo de una pieza, con autor |
-| CRUD | /appointments; PATCH /appointments/{id}/status | Agenda |
+| GET/POST | /providers, /resources; /providers/{id}/working-hours, /providers/{id}/blocks | Agenda: catálogos |
+| GET/POST | /appointments; PATCH /appointments/{id}/status; POST /appointments/{id}/reschedule | Citas y su máquina de estados |
+| POST | /appointments/{id}/start-encounter | Crea el `Encounter` desde la cita (permiso `records.write`) |
+| GET/POST | /appointments/{id}/reminders; /waitlist | Recordatorios (solo registro) y lista de espera |
 | POST | /diagnoses, /treatment-plans, /treatment-plans/{id}/accept | Clínico |
 | POST | /ai/transcribe, /ai/interpret, /ai/suggestions/{id}/accept\|reject | Asistente IA |
 | GET | /ai/status | Estado de Ollama y Whisper |
@@ -261,9 +264,62 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   en botones de ≥44 px) y `ToothHistoryPanel` (historial completo de esa pieza, con autor). El
   control de fecha (`<input type="date">`) cambia `at` y pone la vista en solo lectura con un aviso.
 
+### 5.6 Agenda (Fase 6)
+- **`Provider` distinto de `User`:** la identidad agendable (color del calendario, activo/inactivo)
+  es una entidad propia del módulo `agenda`, enlazada 1 a 1 con un `User` de `iam` — así el módulo
+  de agenda no depende del catálogo de roles para saber quién es agendable, y puede traer sus
+  propios datos (color) sin tocar `iam`.
+- **Máquina de estados de la cita (docs/02 sec. 4):** `agenda/rules.py` permite
+  RESERVADA/CONFIRMADA → EN_SALA → EN_ATENCION → TERMINADA, pero también el salto directo
+  RESERVADA/CONFIRMADA → EN_ATENCION (botón "Iniciar atención": EN_SALA es un paso opcional de sala
+  de espera, no obligatorio). CANCELADA y NO_SHOW exigen motivo (422 `REASON_REQUIRED` si falta,
+  mismo patrón que la anulación de registros clínicos). Cada transición queda en
+  `AppointmentStatusHistory` (tabla propia, no solo `AuditEvent`).
+- **Reprogramar nunca edita la cita vieja (regla 5, mismo espíritu que `ToothFinding`):**
+  `POST /appointments/{id}/reschedule` marca la cita original como `REPROGRAMADA` (estado terminal)
+  y crea una fila nueva en `RESERVADA` con `rescheduled_from_id` apuntando a la original — el
+  horario viejo queda libre (ya no cuenta para la validación de traslapes) y el historial completo
+  de reprogramaciones se conserva. El arrastrar-y-soltar del calendario en el frontend llama a este
+  mismo endpoint, nunca a un PATCH directo de horario.
+- **Traslapes en dos capas:** el servicio valida antes de insertar (`APPOINTMENT_CONFLICT`, 409) y,
+  como respaldo ante una condición de carrera, dos restricciones `EXCLUDE` de Postgres
+  (`ux_appointments_no_overlap_provider`/`_resource`) rechazan el `INSERT`/`UPDATE` aunque la
+  validación de Python se saltara. Requieren la extensión `btree_gist` (permite mezclar `provider_id
+  WITH =` con `tstzrange(...) WITH &&` en el mismo índice GiST, algo que Postgres no soporta para
+  tipos no-rango sin ella) y un rango semiabierto `'[)'` para que una cita que termina justo cuando
+  otra empieza no cuente como traslape. No son expresables en el ORM de SQLAlchemy: se agregan por
+  SQL crudo en la migración, con el mismo patrón de comentario que `immutable_unaccent` (Fase 3) y
+  el índice parcial de `tooth_findings` (Fase 5) para que un autogenerate futuro no intente tocarlas.
+- **Horario laboral y bloqueos son informativos, no bloqueantes:** `ProviderWorkingHours` y
+  `ProviderBlock` existen y se usan para avisar (`warnings` no bloqueantes en la respuesta de crear/
+  reprogramar una cita, mismo patrón que los avisos de contraste WCAG de la Fase 2) si la cita cae
+  fuera de horario o sobre un bloqueo, pero no impiden agendarla — decisión operativa pendiente de
+  validar con la clínica (ver `docs/PENDIENTES_CLINICOS.md`).
+- **Catálogo provisional de tipos de cita:** `APPOINTMENT_TYPES` en `agenda/rules.py` solo sirve
+  para sugerir una duración por defecto (consulta 30 min, endodoncia 90 min, etc.); se unificará con
+  el catálogo real de procedimientos y precios de la Fase 7.
+- **Recordatorios idempotentes, sin envío real:** cada cita creada registra un `ReminderTask`
+  (`kind="24h_antes"`) con una restricción única `(appointment_id, kind)`; por ahora solo se
+  registran (`GET /appointments/{id}/reminders`), el envío real queda fuera de alcance de esta fase.
+- **"Iniciar atención" exige `records.write`, no `agenda.write`:** aunque vive en el router de
+  agenda, `POST /appointments/{id}/start-encounter` crea un `Encounter` (dato clínico), así que usa
+  el mismo permiso que `POST /encounters` directo (Fase 4) — una recepcionista con `agenda.write`
+  puede agendar y reprogramar, pero no iniciar la atención clínica.
+- **Frontend — calendario propio sin librerías de terceros:** `CalendarGrid.tsx` dibuja un grid de
+  franjas de 30 min (7:00–21:00) con los bloques de cita posicionados en `position: absolute` según
+  su hora de inicio/duración; el arrastre usa la API nativa de HTML5 Drag and Drop
+  (`draggable`/`onDragStart`/`onDrop`), sin biblioteca de calendario. `MonthGrid.tsx` es una vista
+  mensual de solo resumen (un punto de color por cita) que navega al día al hacer clic. Los colores
+  por estado usan `var(--color-status-*)` (nuevas en `theme/tokens.css`, semánticas y fijas como las
+  de hallazgos del odontograma), nunca un `#hex` fijo en el componente. `AgendaPage.tsx` alterna
+  vista día/semana/mes y agrupación por profesional o por gabinete.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
-- **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Agenda | Cuenta.
+- **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Cuenta.
+  La Agenda (Fase 6) no es una pestaña del paciente: es una pantalla propia en el menú lateral
+  (`/agenda`), porque una cita es de la clínica/profesional, no de un paciente concreto — se llega
+  a un paciente *desde* la cita, no al revés.
 - **Odontograma:** componente SVG propio con `<Arch>`, `<Quadrant>`, `<Tooth>` y `<Surface>` (5 zonas clicables), leyenda configurable y un control deslizante de historial por fecha.
 - **Asistente de voz:** botón flotante del micrófono, presente en todas las pantallas de atención, más un panel lateral de “Propuestas del asistente”.
 - Atajos de teclado: `Alt+N` nueva atención, `Alt+O` odontograma, `Alt+M` micrófono, `Esc` cancelar dictado.
@@ -281,7 +337,8 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 3 | `patients` (alta, edición controlada con motivo, 5 estados, contactos tutor/emergencia, foto permisionada) y expediente autonumérico por sucursal. Búsqueda tolerante (`pg_trgm` + `unaccent`) y detección de duplicados (nombre + nacimiento o teléfono) con confirmación obligatoria. Lectura de ficha auditada. Frontend: búsqueda global (`Ctrl+K`), listado con filtro de estado, alta en 3 pasos (datos → posibles duplicados → contactos), encabezado persistente del paciente (nombre, edad, foto, barra de alertas vacía) y controles de edición ocultos para roles sin `patients.write`. Seed con 50 pacientes ficticios (Faker es_MX) | Hecho |
 | 4 | `records` (antecedentes, alergias, medicamentos, signos vitales; anulación con motivo, no borrado) y `encounters` (atención + nota clínica SOAP versionada: DRAFT→FINAL→CORRECTED\|CANCELLED). Alertas críticas derivadas (no almacenadas) a partir de alergias/medicamentos/antecedentes, exigidas antes de finalizar una nota (regla 8). Dos bugs de raíz corregidos: constraint de paciente ausente del modelo (autogenerate destructivo) y `MissingGreenlet` en columnas `onupdate` (fix global con `eager_defaults`). Frontend: pestañas Resumen (línea de tiempo clínica, "Iniciar atención") y Expediente (secciones colapsables) del paciente, pantalla de Atención con SOAP, autoguardado cada 10 s, modal de alertas antes de finalizar, corregir/cancelar con motivo. Seed con 3 encounters de ejemplo (nota finalizada, nota en borrador, nota corregida) | Hecho |
 | 5 | `odontogram` (`ToothFinding` como eventos con `supersedes_id`/`is_current`, índice único parcial por pieza/superficie/tipo; catálogos de piezas FDI, superficies y hallazgos en `rules.py`/`finding_catalog.py`). Reconstrucción histórica vía `GET .../odontogram?at=`. Frontend: pestaña Odontograma con SVG propio (arcadas superior/inferior, vistas permanente/temporal/mixta, 5 superficies clicables, menú rápido de hallazgos, leyenda, deslizador de fecha de solo lectura, panel de historial por pieza) | Hecho |
-| 6–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 6 | `agenda` (`Provider`, `Resource`, horario laboral y bloqueos informativos, `Appointment` con máquina de estados RESERVADA→CONFIRMADA→EN_SALA→EN_ATENCION→TERMINADA \| CANCELADA/NO_SHOW/REPROGRAMADA, `AppointmentStatusHistory`, `ReminderTask` idempotente, lista de espera). Traslapes validados en el backend y respaldados por restricciones `EXCLUDE` de Postgres (`btree_gist` + `tstzrange`). Reprogramar crea una cita nueva y marca la vieja `REPROGRAMADA` (nunca la edita). Frontend: pantalla Agenda con vistas día/semana/mes, agrupación por profesional o gabinete, calendario propio con arrastrar-para-reprogramar (HTML5 DnD, sin librería), colores por estado desde variables de tema, y botón "Iniciar atención" que crea el `Encounter` y navega a la nota SOAP | Hecho |
+| 7–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
 Los módulos de agenda/diagnosis/treatment/documents/imaging/billing/reports/ai de la sección 2 son
 el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean conforme avanza cada

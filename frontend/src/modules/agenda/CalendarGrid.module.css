@@ -1,0 +1,77 @@
+.grid {
+  display: grid;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+.corner {
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.dayHeader {
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.timeAxis {
+  border-right: 1px solid var(--color-border);
+}
+
+.hourLabel {
+  box-sizing: border-box;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.dayColumn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+}
+
+.slot {
+  box-sizing: border-box;
+  border-bottom: 1px dashed var(--color-border);
+  cursor: pointer;
+}
+
+.slot:hover {
+  background-color: var(--color-primary-soft);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.appointment {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  overflow: hidden;
+  border-radius: 4px;
+  border-left: 4px solid var(--color-primary);
+  padding: 2px 5px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: white;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.appointment strong {
+  margin-right: 0.25rem;
+}

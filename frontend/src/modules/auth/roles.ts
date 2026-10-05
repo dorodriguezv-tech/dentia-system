@@ -60,3 +60,23 @@ const ROLES_THAT_READ_ODONTOGRAM = new Set(['odontologo', 'especialista', 'asist
 export function canReadOdontogram(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_READ_ODONTOGRAM.has(roleCode)
 }
+
+/** Roles con el permiso `agenda.write` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_AGENDA = new Set(['admin_clinica', 'odontologo', 'especialista', 'recepcion'])
+
+export function canWriteAgenda(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_AGENDA.has(roleCode)
+}
+
+/** Roles con el permiso `agenda.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_AGENDA = new Set([
+  'admin_clinica',
+  'odontologo',
+  'especialista',
+  'asistente',
+  'recepcion',
+])
+
+export function canReadAgenda(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_AGENDA.has(roleCode)
+}

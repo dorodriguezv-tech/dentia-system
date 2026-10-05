@@ -20,9 +20,9 @@ class Encounter(AuditedMixin, Base):
     professional_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
     )
-    # Sin FK todavia: la tabla appointments llega en la Fase 6 (agenda). La columna ya
-    # existe para no tener que migrar encounters de nuevo cuando se agregue la relacion.
-    appointment_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("appointments.id", ondelete="SET NULL"), nullable=True
+    )
     chief_complaint: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

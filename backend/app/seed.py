@@ -9,6 +9,7 @@ Es idempotente: si el admin ya existe, no hace nada.
 import asyncio
 import random
 import uuid
+from datetime import datetime, time, timedelta
 
 from faker import Faker
 from sqlalchemy import select
@@ -16,6 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import async_session_factory
 from app.core.security import hash_password
+from app.modules.agenda import service as agenda_service
+from app.modules.agenda.schemas import (
+    AppointmentCreateRequest,
+    ProviderCreateRequest,
+    ResourceCreateRequest,
+    StatusChangeRequest,
+    WorkingHoursCreateRequest,
+)
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.schemas import (
     ClinicalNoteCreateRequest,
@@ -258,6 +267,98 @@ async def _seed_clinical_records(
     )
 
 
+async def _seed_agenda(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    admin_id: uuid.UUID,
+    odontologo_id: uuid.UUID,
+    patients: list[Patient],
+) -> None:
+    """Agenda de muestra (Fase 6): un profesional agendable, un gabinete, horario
+    laboral de lunes a viernes y citas en distintos estados para ver el calendario
+    poblado (reservada, confirmada y una en la semana siguiente)."""
+    provider, _name = await agenda_service.create_provider(
+        db,
+        clinic_id=clinic_id,
+        data=ProviderCreateRequest(user_id=odontologo_id, color="#2BB3A3"),
+        actor_id=admin_id,
+    )
+    resource = await agenda_service.create_resource(
+        db, clinic_id=clinic_id, data=ResourceCreateRequest(name="Gabinete 1"), actor_id=admin_id
+    )
+
+    for weekday in range(5):  # lunes (0) a viernes (4)
+        await agenda_service.create_working_hours(
+            db,
+            clinic_id=clinic_id,
+            provider_id=provider.id,
+            data=WorkingHoursCreateRequest(
+                weekday=weekday, start_time=time(9, 0), end_time=time(14, 0)
+            ),
+        )
+        await agenda_service.create_working_hours(
+            db,
+            clinic_id=clinic_id,
+            provider_id=provider.id,
+            data=WorkingHoursCreateRequest(
+                weekday=weekday, start_time=time(16, 0), end_time=time(20, 0)
+            ),
+        )
+
+    # .astimezone() (no UTC) para que .replace(hour=...) fije la hora de pared local
+    # de la maquina, no 10:00 UTC (que seria la madrugada en America/Mexico_City).
+    now = datetime.now().astimezone()
+    tomorrow_10am = (now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    tomorrow_11am = tomorrow_10am.replace(hour=11)
+    next_week_930am = (now + timedelta(days=7)).replace(hour=9, minute=30, second=0, microsecond=0)
+
+    await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patients[3].id,
+            provider_id=provider.id,
+            resource_id=resource.id,
+            appointment_type="consulta",
+            starts_at=tomorrow_10am,
+        ),
+        actor_id=admin_id,
+    )
+
+    confirmada, _w = await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patients[4].id,
+            provider_id=provider.id,
+            resource_id=resource.id,
+            appointment_type="limpieza",
+            starts_at=tomorrow_11am,
+        ),
+        actor_id=admin_id,
+    )
+    await agenda_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        appointment_id=confirmada.id,
+        data=StatusChangeRequest(status="CONFIRMADA"),
+        actor_id=admin_id,
+    )
+
+    await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patients[5].id,
+            provider_id=provider.id,
+            appointment_type="urgencia",
+            starts_at=next_week_930am,
+        ),
+        actor_id=admin_id,
+    )
+
+
 async def seed() -> None:
     async with async_session_factory() as db:
         existing = (
@@ -312,6 +413,13 @@ async def seed() -> None:
         await _seed_clinical_records(
             db, clinic_id=clinic.id, professional_id=odontologo.id, patients=patients
         )
+        await _seed_agenda(
+            db,
+            clinic_id=clinic.id,
+            admin_id=admin.id,
+            odontologo_id=odontologo.id,
+            patients=patients,
+        )
 
         print(f"Organizacion: {organization.name}")
         print(f"Sucursal: {clinic.name}")
@@ -324,6 +432,10 @@ async def seed() -> None:
         print(
             "Odontograma de muestra (Fase 5): caries tratada con resina en 36-O "
             "(historial), caries activa en 36-D y 46-O, pieza 18 ausente."
+        )
+        print(
+            "Agenda de muestra (Fase 6): 1 profesional, 1 gabinete, horario laboral "
+            "L-V, una cita reservada manana, una confirmada manana y una en 7 dias."
         )
 
 

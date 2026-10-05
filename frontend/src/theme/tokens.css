@@ -38,6 +38,17 @@
   --color-finding-fractura: #b8460e;
   --color-finding-movilidad: #c77d1e;
 
+  /* Colores por estado de cita (Fase 6): semanticos y fijos, independientes de la
+     marca de la clinica, igual que los de --color-finding-*. */
+  --color-status-reservada: #8c8c8c;
+  --color-status-confirmada: #4a90c2;
+  --color-status-en-sala: #e0a100;
+  --color-status-en-atencion: #7b5ea7;
+  --color-status-terminada: #3ba55c;
+  --color-status-cancelada: #b0b0b0;
+  --color-status-no-show: #d64545;
+  --color-status-reprogramada: #2bb3a3;
+
   --radius: 10px;
   --font-family:
     'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
