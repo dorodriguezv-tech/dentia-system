@@ -1,0 +1,25 @@
+/*
+  Variables de tema por defecto (preset base).
+  Los presets configurables y el ThemeProvider llegan en la Fase 2
+  (docs/04_TEMAS_Y_MARCA.md). Ningun componente debe usar colores fijos:
+  siempre var(--color-...).
+*/
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e2e4e9;
+  --color-text: #1f2430;
+  --color-text-muted: #666c7a;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #e8efff;
+
+  --color-danger: #dc2626;
+  --color-danger-soft: #fdecea;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}

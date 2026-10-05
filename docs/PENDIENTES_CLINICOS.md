@@ -1,0 +1,14 @@
+# Pendientes clínicos por validar con el odontólogo
+
+| # | Pregunta | Valor provisional en el sistema | Fase que afecta | Respuesta |
+|---|---|---|---|---|
+| 1 | ¿Qué información debe verse al abrir un paciente? | Nombre, edad, alertas, última atención, tratamientos pendientes, saldo | 3–4 | |
+| 2 | ¿Qué campos son obligatorios en la primera consulta? | Identificación, motivo, alergias, medicamentos, antecedentes relevantes | 4 | |
+| 3 | ¿Qué estados y símbolos maneja el odontograma? | 12 estados base configurables (ver Fase 5) | 5 | |
+| 4 | ¿Cómo documenta hoy una consulta? | Nota SOAP + texto libre | 4 | |
+| 5 | ¿Qué especialidades y procedimientos hay desde el inicio? | Catálogo general editable | 7 | |
+| 6 | ¿Qué tipos de fotografía y radiografía usa? | Intraoral, extraoral, periapical, bitewing, panorámica, cefalometría | 9 | |
+| 7 | ¿Qué consentimientos se necesitan? | General, extracción, endodoncia, anestesia (plantillas editables) | 9 | |
+| 8 | ¿Qué reportes necesita para decidir? | Ver Fase 11 | 11 | |
+| 9 | ¿Qué frases usa al dictar? (10–20 ejemplos reales, sin datos de pacientes) | Corpus ficticio | 8 | |
+| 10 | ¿Dentición mixta: cómo prefiere visualizarla? | Vista mixta con temporales sobre permanentes | 5 | |
