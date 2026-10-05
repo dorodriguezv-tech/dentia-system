@@ -9,7 +9,8 @@ El diseño detallado está en [`docs/`](./docs).
 ## Requisitos
 - Python 3.12+ (se probó también con 3.13)
 - Node.js 20 LTS o superior
-- PostgreSQL 16 (nativo o vía Docker)
+- PostgreSQL 16 (nativo o vía Docker; también se probó contra una instalación nativa de
+  PostgreSQL 18, compatible por protocolo)
 - [Ollama](https://ollama.com) y un modelo descargado (`ollama pull qwen2.5:7b`) — solo
   necesario para el asistente de IA (Fase 8)
 - Opcional: Docker y Docker Compose
@@ -32,8 +33,13 @@ cp backend/.env.example backend/.env   # ajusta los valores si lo necesitas
 docker compose up -d db
 ```
 
-**Sin Docker (PostgreSQL 16 nativo):** crea una base y un usuario que coincidan con
-`DATABASE_URL` en `backend/.env`.
+**Sin Docker (PostgreSQL nativo, 16 o 18):** crea un rol y una base que coincidan con
+`DATABASE_URL` en `backend/.env` (valores por defecto: usuario y base `dentia`), conectándote
+como superusuario (`psql -U postgres`):
+```sql
+CREATE ROLE dentia WITH LOGIN PASSWORD 'dentia';
+CREATE DATABASE dentia OWNER dentia;
+```
 
 ### 2. Backend
 **Windows (PowerShell):**
