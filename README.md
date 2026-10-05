@@ -75,8 +75,10 @@ Verifica: `curl http://localhost:8001/api/v1/health` → `{"status":"ok"}`.
 atenciones de ejemplo (una nota finalizada con alergia/medicamento/antecedente que disparan
 alertas, una nota en borrador y una nota corregida con dos versiones), un odontograma de muestra
 (caries tratada con resina en la pieza 36 —con su historial—, caries activa en 36 y 46, pieza 18
-ausente) y una agenda de muestra (1 profesional, 1 gabinete, horario laboral de lunes a viernes,
-una cita reservada y otra confirmada para mañana, una mas en 7 días). Es idempotente.
+ausente), una agenda de muestra (1 profesional, 1 gabinete, horario laboral de lunes a viernes,
+una cita reservada y otra confirmada para mañana, una mas en 7 días) y un plan de tratamiento de
+muestra (catálogo de 5 procedimientos, 1 diagnóstico, plan de 2 fases en la pieza 46: la primera
+ya aceptada y realizada —con su cargo sugerido—, la segunda solo planificada). Es idempotente.
 
 Pruebas y calidad (las pruebas de integración de `iam`/`audit` necesitan la base `dentia_test`
 del paso 1):
@@ -122,10 +124,14 @@ Completadas: **Fase 0 — Base del proyecto**, **Fase 1 — IAM, sucursales y au
 (búsqueda global `Ctrl+K`, alta con detección de duplicados, expediente, contactos, foto) y
 **Fase 4 — Expediente clínico y atención** (antecedentes/alergias/medicamentos/signos vitales,
 alertas críticas derivadas, nota clínica SOAP versionada con autoguardado, finalizar/corregir/
-cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4))
+cancelar; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#54-expediente-atención-y-notas-fase-4)),
 **Fase 5 — Odontograma** (SVG propio por pieza y superficie, historial por eventos que nunca se
 sobrescribe, reconstrucción a una fecha pasada, vistas permanente/temporal/mixta; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#55-odontograma-fase-5)) y **Fase 6 — Agenda**
-(citas con máquina de estados, traslapes validados en el backend y respaldados por una restricción
-`EXCLUDE` de Postgres, calendario propio con arrastrar-para-reprogramar, botón "Iniciar atención";
-ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#56-agenda-fase-6)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#55-odontograma-fase-5)),
+**Fase 6 — Agenda** (citas con máquina de estados, traslapes validados en el backend y respaldados
+por una restricción `EXCLUDE` de Postgres, calendario propio con arrastrar-para-reprogramar, botón
+"Iniciar atención"; ver [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#56-agenda-fase-6)) y
+**Fase 7 — Diagnóstico y tratamiento** (plan por fases con presupuesto, planificado/realizado como
+entidades separadas que se reflejan en el odontograma, PDF del presupuesto con el logo de la
+clínica, cargo sugerido al registrar un procedimiento realizado; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#57-diagnóstico-y-tratamiento-fase-7)).

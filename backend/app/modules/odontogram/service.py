@@ -170,3 +170,29 @@ async def get_tooth_history(
         authors = {u.id: u.full_name for u in users}
 
     return [(row, authors.get(row.created_by, "") if row.created_by else "") for row in rows]
+
+
+async def retire_planned(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    tooth_fdi: int,
+    surface: str | None,
+) -> None:
+    """Retira (is_current=False) el hallazgo PLANNED vigente de esa pieza/superficie
+    sin crear un evento nuevo (regla 3 de CLAUDE.md: lo planificado ya no aplica
+    porque se realizo; el nuevo PERFORMED/EXISTING es quien ahora refleja el estado
+    real). No hace commit: participa de la transaccion de quien la llama
+    (treatment.service al registrar un ProcedurePerformed)."""
+    stmt = select(ToothFinding).where(
+        ToothFinding.clinic_id == clinic_id,
+        ToothFinding.patient_id == patient_id,
+        ToothFinding.tooth_fdi == tooth_fdi,
+        ToothFinding.kind == "PLANNED",
+        ToothFinding.is_current.is_(True),
+        func.coalesce(ToothFinding.surface, "") == _normalize_surface(surface),
+    )
+    planned = (await db.execute(stmt)).scalar_one_or_none()
+    if planned is not None:
+        planned.is_current = False

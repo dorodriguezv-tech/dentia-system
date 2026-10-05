@@ -6,12 +6,15 @@ from app.core.config import get_settings
 from app.core.db import async_session_factory
 from app.core.errors import register_error_handlers
 from app.modules.agenda.router import router as agenda_router
+from app.modules.billing.router import router as billing_router
 from app.modules.branding.router import router as branding_router
+from app.modules.diagnosis.router import router as diagnosis_router
 from app.modules.encounters.router import router as encounters_router
 from app.modules.iam.router import router as iam_router
 from app.modules.odontogram.router import router as odontogram_router
 from app.modules.patients.router import router as patients_router
 from app.modules.records.router import router as records_router
+from app.modules.treatment.router import router as treatment_router
 
 settings = get_settings()
 
@@ -36,6 +39,9 @@ app.include_router(records_router, prefix=settings.api_prefix)
 app.include_router(encounters_router, prefix=settings.api_prefix)
 app.include_router(odontogram_router, prefix=settings.api_prefix)
 app.include_router(agenda_router, prefix=settings.api_prefix)
+app.include_router(diagnosis_router, prefix=settings.api_prefix)
+app.include_router(treatment_router, prefix=settings.api_prefix)
+app.include_router(billing_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

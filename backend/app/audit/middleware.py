@@ -28,8 +28,12 @@ class AccessDeniedAuditMiddleware(BaseHTTPMiddleware):
                     actor_user_id=user.id if user else None,
                     clinic_id=clinic_id,
                     entity_type="http_request",
-                    entity_id=request.url.path,
-                    details={"method": request.method},
+                    # La ruta va en `details` (JSONB, sin limite de tamano), no en
+                    # entity_id (String(100)): una ruta con varios segmentos UUID
+                    # anidados (p.ej. /treatment-plans/{id}/phases/{id}/items) supera
+                    # 100 caracteres y entity_id de verdad es para el id de una
+                    # entidad, no para una URL arbitraria.
+                    details={"method": request.method, "path": request.url.path},
                     ip_address=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
                 )

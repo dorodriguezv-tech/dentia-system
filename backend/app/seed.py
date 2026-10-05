@@ -10,6 +10,7 @@ import asyncio
 import random
 import uuid
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from faker import Faker
 from sqlalchemy import select
@@ -25,6 +26,8 @@ from app.modules.agenda.schemas import (
     StatusChangeRequest,
     WorkingHoursCreateRequest,
 )
+from app.modules.diagnosis import service as diagnosis_service
+from app.modules.diagnosis.schemas import DiagnosisCreateRequest
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.schemas import (
     ClinicalNoteCreateRequest,
@@ -45,6 +48,16 @@ from app.modules.records.schemas import (
     MedicationCreateRequest,
     VitalSignsCreateRequest,
 )
+from app.modules.treatment import service as treatment_service
+from app.modules.treatment.schemas import (
+    AcceptPlanRequest,
+    ItemCreateRequest,
+    PhaseCreateRequest,
+    PlanCreateRequest,
+    ProcedureCatalogCreateRequest,
+    ProcedurePerformedCreateRequest,
+)
+from app.modules.treatment.schemas import StatusChangeRequest as TreatmentStatusChangeRequest
 
 fake = Faker("es_MX")
 
@@ -359,6 +372,131 @@ async def _seed_agenda(
     )
 
 
+async def _seed_treatment(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    admin_id: uuid.UUID,
+    professional_id: uuid.UUID,
+    patients: list[Patient],
+) -> None:
+    """Catalogo de procedimientos, un diagnostico y un plan de tratamiento de muestra
+    (Fase 7): fase 1 (endodoncia en 46) ya aceptada y realizada -- demuestra que lo
+    planificado no se edita (regla 3) y que se genera un cargo sugerido, nunca un pago
+    (regla 4) -- y fase 2 (corona) todavia solo planificada."""
+    catalog_items = [
+        ("consulta_valoracion", "Consulta de valoracion", "300.00"),
+        ("resina_oclusal", "Resina oclusal", "650.00"),
+        ("limpieza_dental", "Limpieza dental (profilaxis)", "450.00"),
+        ("endodoncia_unirradicular", "Endodoncia unirradicular", "2800.00"),
+        ("corona_metal_porcelana", "Corona metal-porcelana", "4500.00"),
+    ]
+    for code, name, price in catalog_items:
+        await treatment_service.create_procedure_catalog_item(
+            db,
+            clinic_id=clinic_id,
+            data=ProcedureCatalogCreateRequest(code=code, name=name, default_price=Decimal(price)),
+            actor_id=admin_id,
+        )
+
+    patient = patients[0]
+    encounter = await encounters_service.create_encounter(
+        db,
+        clinic_id=clinic_id,
+        data=EncounterCreateRequest(
+            patient_id=patient.id, chief_complaint="Valoracion de plan de tratamiento"
+        ),
+        professional_id=professional_id,
+    )
+
+    await diagnosis_service.create_diagnosis(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=DiagnosisCreateRequest(
+            encounter_id=encounter.id,
+            tooth_fdi=46,
+            surface="O",
+            code="caries",
+            text="Caries oclusal profunda en 46, requiere tratamiento de conductos",
+        ),
+        actor_id=professional_id,
+    )
+
+    plan = await treatment_service.create_plan(
+        db,
+        clinic_id=clinic_id,
+        data=PlanCreateRequest(
+            patient_id=patient.id, encounter_id=encounter.id, title="Rehabilitacion pieza 46"
+        ),
+        actor_id=professional_id,
+    )
+    phase1 = await treatment_service.add_phase(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=PhaseCreateRequest(name="Fase 1: endodoncia", sort_order=1, priority="alta"),
+        actor_id=professional_id,
+    )
+    item1 = await treatment_service.add_item(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        phase_id=phase1.id,
+        data=ItemCreateRequest(
+            encounter_id=encounter.id,
+            tooth_fdi=46,
+            surface="O",
+            procedure_code="endodoncia_unirradicular",
+            finding_code="endodoncia",
+        ),
+        actor_id=professional_id,
+    )
+    phase2 = await treatment_service.add_phase(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=PhaseCreateRequest(name="Fase 2: restauracion final", sort_order=2, priority="media"),
+        actor_id=professional_id,
+    )
+    await treatment_service.add_item(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        phase_id=phase2.id,
+        data=ItemCreateRequest(
+            encounter_id=encounter.id,
+            tooth_fdi=46,
+            procedure_code="corona_metal_porcelana",
+            finding_code="corona",
+        ),
+        actor_id=professional_id,
+    )
+
+    await treatment_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=TreatmentStatusChangeRequest(status="PRESENTADO"),
+        actor_id=professional_id,
+    )
+    await treatment_service.accept_plan(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=AcceptPlanRequest(accepted_item_ids=[item1.id], accepted_by_name=patient.full_name),
+        actor_id=professional_id,
+    )
+    await treatment_service.register_performed(
+        db,
+        clinic_id=clinic_id,
+        data=ProcedurePerformedCreateRequest(
+            patient_id=patient.id, encounter_id=encounter.id, planned_id=item1.id
+        ),
+        actor_id=professional_id,
+    )
+
+
 async def seed() -> None:
     async with async_session_factory() as db:
         existing = (
@@ -420,6 +558,13 @@ async def seed() -> None:
             odontologo_id=odontologo.id,
             patients=patients,
         )
+        await _seed_treatment(
+            db,
+            clinic_id=clinic.id,
+            admin_id=admin.id,
+            professional_id=odontologo.id,
+            patients=patients,
+        )
 
         print(f"Organizacion: {organization.name}")
         print(f"Sucursal: {clinic.name}")
@@ -436,6 +581,11 @@ async def seed() -> None:
         print(
             "Agenda de muestra (Fase 6): 1 profesional, 1 gabinete, horario laboral "
             "L-V, una cita reservada manana, una confirmada manana y una en 7 dias."
+        )
+        print(
+            "Plan de tratamiento de muestra (Fase 7): catalogo de 5 procedimientos, "
+            "1 diagnostico, plan de 2 fases en la pieza 46 (fase 1 aceptada y "
+            "realizada -- con cargo sugerido --, fase 2 solo planificada)."
         )
 
 

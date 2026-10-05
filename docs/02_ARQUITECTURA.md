@@ -90,10 +90,16 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET/POST | /appointments; PATCH /appointments/{id}/status; POST /appointments/{id}/reschedule | Citas y su máquina de estados |
 | POST | /appointments/{id}/start-encounter | Crea el `Encounter` desde la cita (permiso `records.write`) |
 | GET/POST | /appointments/{id}/reminders; /waitlist | Recordatorios (solo registro) y lista de espera |
-| POST | /diagnoses, /treatment-plans, /treatment-plans/{id}/accept | Clínico |
+| GET/POST | /patients/{id}/diagnoses; POST /patients/{id}/diagnoses/{id}/annul | Diagnósticos |
+| GET/POST | /procedure-catalog | Catálogo de procedimientos y precios por sucursal |
+| GET/POST | /patients/{id}/treatment-plans; GET /treatment-plans/{id} | Planes de tratamiento |
+| PATCH/POST | /treatment-plans/{id}/status\|accept; /phases; /phases/{id}/items; /items/{id}/annul\|discount | Fases, ítems, aceptación y descuentos del plan |
+| GET | /treatment-plans/{id}/pdf | PDF del presupuesto con el logo de la clínica |
+| POST/GET | /procedures-performed; /patients/{id}/procedures-performed | Procedimientos realizados (regla 3) |
+| GET | /patients/{id}/charges | Cargos sugeridos (regla 4, módulo `billing` mínimo) |
 | POST | /ai/transcribe, /ai/interpret, /ai/suggestions/{id}/accept\|reject | Asistente IA |
 | GET | /ai/status | Estado de Ollama y Whisper |
-| POST | /payments, /charges | Cobranza |
+| POST | /payments | Cobranza (Fase 10) |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
 
 ### 5.1 Autenticación y autorización (Fase 1)
@@ -314,6 +320,72 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   de hallazgos del odontograma), nunca un `#hex` fijo en el componente. `AgendaPage.tsx` alterna
   vista día/semana/mes y agrupación por profesional o por gabinete.
 
+### 5.7 Diagnóstico y tratamiento (Fase 7)
+- **`diagnosis.read`/`treatment.read` no existían:** la Fase 1 sembró `diagnosis.write`,
+  `treatment.write` y `treatment.accept_budget` anticipando esta fase, pero sin un permiso de solo
+  lectura — un vacío real del catálogo original (`docs/MATRIZ_PERMISOS.md` no tenía filas para
+  verlos). Se agregó con una migración incremental (`e4823992f9d7`) que solo inserta los dos
+  permisos y sus asignaciones de rol, sin recrear el catálogo completo de la Fase 1.
+  `treatment.read` también se le dio a `admin_clinica` (supervisa presupuestos sin poder crearlos).
+- **`Diagnosis` reutiliza las reglas del odontograma para pieza/superficie:** `tooth_fdi`/`surface`
+  son opcionales, pero si se da una pieza se valida con las mismas funciones de
+  `odontogram/rules.py` (import cruzado entre módulos, mismo patrón que `agenda` reutilizando
+  `encounters.service`). El texto siempre es libre; `code` es solo un atajo opcional al catálogo.
+- **`ProcedureCatalog` vive en la BD, no en un catálogo Python:** a diferencia de los catálogos de
+  fases anteriores (diagnósticos, hallazgos del odontograma, tipos de cita), el precio de un
+  procedimiento varía por sucursal y debe poder editarse sin desplegar código — mismo criterio que
+  ya se aplicó a `clinic_branding` en la Fase 2.
+- **`ProcedurePlanned` y `ProcedurePerformed` son tablas separadas (regla 3):** realizar un
+  procedimiento nunca actualiza la fila planificada ni le cambia un "estado" — crea una fila nueva
+  en `procedures_performed`, opcionalmente enlazada por `planned_id`. Lo planificado queda igual
+  para siempre en el historial del presupuesto, se haya realizado o no.
+- **Reflejo en el odontograma, reusando la Fase 5 sin tocarla:** crear un `ProcedurePlanned` con
+  pieza + `finding_code` llama a `odontogram_service.create_finding(kind="PLANNED", ...)`. Al
+  registrar el `ProcedurePerformed` correspondiente, el servicio crea dos eventos más —
+  `PERFORMED` (bitácora de que se hizo) y `EXISTING` (el estado real de la pieza cambió: ahora
+  tiene esa restauración/corona/etc., y por el índice único parcial de la Fase 5 esto reemplaza
+  automáticamente cualquier `EXISTING` previo de esa pieza/superficie) — y retira (`is_current =
+  False`, sin fila nueva) el evento `PLANNED` que lo originó con `odontogram_service.retire_planned`
+  (función nueva en el servicio de la Fase 5, no reescribe nada de ese módulo).
+- **Un hallazgo de "toda la pieza" sigue tapando visualmente a los de superficie (pendiente #15 de
+  Fase 5):** si el plan reflejó una corona `PLANNED` para la pieza completa, el odontograma muestra
+  esa corona en vez de la endodoncia `EXISTING` que ya tiene esa misma pieza en una superficie —
+  ambos hallazgos siguen vigentes en la base y aparecen en el historial de la pieza, solo cambia
+  cuál se dibuja primero.
+- **`Charge` es un modulo `billing` deliberadamente minimo (regla 4):** registrar un
+  `ProcedurePerformed` genera un `Charge` con `status="SUGERIDO"` — nunca un pago, que no existe
+  todavia como concepto. Es el mismo patron que `Encounter.appointment_id` en la Fase 4
+  (declarar ahora lo minimo que una fase futura va a necesitar): la Fase 10 construye `Payment` y
+  el resto de la cobranza sobre esta misma tabla, sin migrarla.
+- **Aceptación total o parcial, por ítem:** `TreatmentPlan.accept` recibe la lista de
+  `ProcedurePlanned.id` que el paciente acepta; cada ítem activo se marca `accepted = True/False` y
+  el plan guarda `acceptance_type` ("TOTAL" si se marcaron todos los ítems activos, "PARCIAL" si
+  no) junto con `accepted_by_name` (quien acepta es el paciente o su tutor, no hay portal ni firma
+  electrónica todavía, así que el nombre se captura tal cual se dicta) y `accepted_at`.
+- **PDF del presupuesto con el logo de la clínica:** `treatment/pdf.py` es una función pura
+  (sin acceso a BD, se prueba sin fixtures) construida con `reportlab` — la única dependencia nueva
+  de esta fase, sin stubs de tipos (`pyproject.toml` la ignora en mypy igual que cualquier librería
+  sin `py.typed`). Reutiliza `branding_service.read_logo`/`get_branding` tal cual (Fase 2); si el
+  logo es SVG (que branding sí acepta), reportlab no puede dibujarlo como raster y el PDF se genera
+  igual, solo sin logo. El PDF exige el mismo token y `X-Clinic-Id` que el resto de la API, así que
+  el frontend lo pide con `apiRequestBlobUrl` (igual que la foto del paciente, Fase 3) y abre la
+  pestaña **antes** de esperar la respuesta (`window.open('', '_blank')` inmediato, luego
+  `location.href` cuando llega el blob) para no perder el gesto del usuario y que el bloqueador de
+  ventanas emergentes no lo descarte.
+- **Bug de raíz corregido en `AccessDeniedAuditMiddleware` (no específico de esta fase):** guardaba
+  la ruta completa de la petición en `AuditEvent.entity_id` (`String(100)`), que revienta en
+  cualquier endpoint con dos segmentos UUID anidados — el primero en pisar el límite fue
+  `POST /treatment-plans/{id}/phases/{id}/items` al probar un 403. `entity_id` es semánticamente el
+  id de una entidad, no una URL; la ruta ahora va dentro de `details` (JSONB, sin límite de
+  tamaño), junto con el método HTTP.
+- **Frontend:** `ExpedienteTab` gana una quinta sección colapsable, "Diagnósticos", con el mismo
+  patrón de catálogo-rápido-más-texto-libre que ya usan antecedentes y alergias. La pestaña nueva
+  "Tratamientos" (no una sección de Expediente: tiene su propio flujo de estados y acciones) lista
+  los planes del paciente y, al abrir uno, muestra fases con sus totales, el formulario de aceptar/
+  rechazar con checkboxes por ítem, descuentos, "marcar como realizado" por ítem aceptado
+  (comparando contra `GET /patients/{id}/procedures-performed` para no duplicar el registro) y el
+  botón de descargar PDF.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Imágenes | Documentos | Cuenta.
@@ -338,9 +410,11 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 4 | `records` (antecedentes, alergias, medicamentos, signos vitales; anulación con motivo, no borrado) y `encounters` (atención + nota clínica SOAP versionada: DRAFT→FINAL→CORRECTED\|CANCELLED). Alertas críticas derivadas (no almacenadas) a partir de alergias/medicamentos/antecedentes, exigidas antes de finalizar una nota (regla 8). Dos bugs de raíz corregidos: constraint de paciente ausente del modelo (autogenerate destructivo) y `MissingGreenlet` en columnas `onupdate` (fix global con `eager_defaults`). Frontend: pestañas Resumen (línea de tiempo clínica, "Iniciar atención") y Expediente (secciones colapsables) del paciente, pantalla de Atención con SOAP, autoguardado cada 10 s, modal de alertas antes de finalizar, corregir/cancelar con motivo. Seed con 3 encounters de ejemplo (nota finalizada, nota en borrador, nota corregida) | Hecho |
 | 5 | `odontogram` (`ToothFinding` como eventos con `supersedes_id`/`is_current`, índice único parcial por pieza/superficie/tipo; catálogos de piezas FDI, superficies y hallazgos en `rules.py`/`finding_catalog.py`). Reconstrucción histórica vía `GET .../odontogram?at=`. Frontend: pestaña Odontograma con SVG propio (arcadas superior/inferior, vistas permanente/temporal/mixta, 5 superficies clicables, menú rápido de hallazgos, leyenda, deslizador de fecha de solo lectura, panel de historial por pieza) | Hecho |
 | 6 | `agenda` (`Provider`, `Resource`, horario laboral y bloqueos informativos, `Appointment` con máquina de estados RESERVADA→CONFIRMADA→EN_SALA→EN_ATENCION→TERMINADA \| CANCELADA/NO_SHOW/REPROGRAMADA, `AppointmentStatusHistory`, `ReminderTask` idempotente, lista de espera). Traslapes validados en el backend y respaldados por restricciones `EXCLUDE` de Postgres (`btree_gist` + `tstzrange`). Reprogramar crea una cita nueva y marca la vieja `REPROGRAMADA` (nunca la edita). Frontend: pantalla Agenda con vistas día/semana/mes, agrupación por profesional o gabinete, calendario propio con arrastrar-para-reprogramar (HTML5 DnD, sin librería), colores por estado desde variables de tema, y botón "Iniciar atención" que crea el `Encounter` y navega a la nota SOAP | Hecho |
-| 7–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 7 | `diagnosis` (texto libre + código opcional del catálogo, pieza/superficie validadas contra `odontogram/rules.py`) y `treatment` (`ProcedureCatalog` por sucursal, `TreatmentPlan` con fases y prioridad, `ProcedurePlanned`/`ProcedurePerformed` como entidades separadas —regla 3—, descuentos autorizados, aceptación total o parcial por ítem con fecha y responsable, PDF del presupuesto con el logo de la clínica). Lo planificado se refleja como `PLANNED` en el odontograma y, al realizarse, genera `PERFORMED` + `EXISTING` y retira el `PLANNED` (reusando la Fase 5 sin modificarla). Registrar un realizado genera un `Charge` "SUGERIDO" (módulo `billing` mínimo, nunca un pago —regla 4—). Dos permisos que faltaban desde la Fase 1 (`diagnosis.read`, `treatment.read`) agregados por migración incremental; bug de raíz corregido en `AccessDeniedAuditMiddleware` (guardaba la ruta completa en una columna de 100 caracteres). Frontend: quinta sección "Diagnósticos" en Expediente, pestaña nueva "Tratamientos" con el plan por fases, aceptación por checkboxes, descuentos, "marcar como realizado" y descarga de PDF | Hecho |
+| 8–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de agenda/diagnosis/treatment/documents/imaging/billing/reports/ai de la sección 2 son
-el diseño objetivo; ninguno tiene modelos ni migraciones todavía — se crean conforme avanza cada
-fase. `patients`, `records`/`encounters` y `odontogram` ya existen pero todavía sin las pestañas de
-Tratamientos, Imágenes, etc. de la sección 6 (llegan con sus respectivas fases).
+Los módulos de documents/imaging/reports/ai de la sección 2 son el diseño objetivo; ninguno tiene
+modelos ni migraciones todavía — se crean conforme avanza cada fase. `billing` ya existe pero solo
+con `Charge` (la Fase 10 agrega `Payment` y el resto de la cobranza). `patients`, `records`/
+`encounters`, `odontogram`, `agenda`, `diagnosis` y `treatment` ya existen pero todavía sin las
+pestañas de Imágenes, Documentos, Cuenta, etc. de la sección 6 (llegan con sus respectivas fases).

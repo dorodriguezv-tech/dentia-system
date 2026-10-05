@@ -22,7 +22,9 @@ por defecto deben validarse con la clinica antes de produccion
 | `odontogram.write` | Editar el odontograma |  |  | X | X |  |  |  |
 | `agenda.read` | Ver la agenda |  | X | X | X | X | X |  |
 | `agenda.write` | Crear y modificar citas |  | X | X | X |  | X |  |
+| `diagnosis.read` | Ver diagnosticos |  |  | X | X |  |  |  |
 | `diagnosis.write` | Registrar diagnosticos |  |  | X | X |  |  |  |
+| `treatment.read` | Ver planes de tratamiento y presupuestos |  | X | X | X |  |  |  |
 | `treatment.write` | Crear planes de tratamiento |  |  | X | X |  |  |  |
 | `treatment.accept_budget` | Aceptar o rechazar presupuestos |  |  | X | X |  |  |  |
 | `documents.read` | Ver documentos y consentimientos |  | X | X | X |  |  |  |

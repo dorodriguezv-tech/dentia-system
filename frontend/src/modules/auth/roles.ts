@@ -80,3 +80,32 @@ const ROLES_THAT_READ_AGENDA = new Set([
 export function canReadAgenda(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_READ_AGENDA.has(roleCode)
 }
+
+/** Roles con los permisos `diagnosis.write`/`diagnosis.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_DIAGNOSIS = new Set(['odontologo', 'especialista'])
+const ROLES_THAT_READ_DIAGNOSIS = new Set(['odontologo', 'especialista'])
+
+export function canWriteDiagnosis(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_DIAGNOSIS.has(roleCode)
+}
+
+export function canReadDiagnosis(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_DIAGNOSIS.has(roleCode)
+}
+
+/** Roles con los permisos `treatment.*` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_WRITE_TREATMENT = new Set(['odontologo', 'especialista'])
+const ROLES_THAT_READ_TREATMENT = new Set(['admin_clinica', 'odontologo', 'especialista'])
+const ROLES_THAT_ACCEPT_BUDGET = new Set(['odontologo', 'especialista'])
+
+export function canWriteTreatment(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_TREATMENT.has(roleCode)
+}
+
+export function canReadTreatment(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_TREATMENT.has(roleCode)
+}
+
+export function canAcceptBudget(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_ACCEPT_BUDGET.has(roleCode)
+}
