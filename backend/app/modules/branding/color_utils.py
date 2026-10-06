@@ -53,8 +53,16 @@ def derive_hover(primary_hex: str) -> str:
 
 
 def derive_soft(primary_hex: str) -> str:
-    """--color-primary-soft: ~12% hacia blanco, para fondos suaves."""
-    return adjust_lightness(primary_hex, 0.38)
+    """--color-primary-soft: aclarado hacia blanco, para fondos suaves.
+
+    0.65, no 0.38 (valor original): varios componentes (p.ej. la insignia de
+    estado del paciente) usan el primario mismo como color de TEXTO sobre este
+    fondo -- con 0.38 el fondo quedaba demasiado cerca del primario y ese par
+    nunca llegaba a 4.5:1 sin importar que tan oscuro fuera el primario (bug
+    real encontrado en la Fase 12 con una auditoria automatica, axe-core).
+    0.65 deja margen (~4.6:1) para cualquier primario que ya pase su propio
+    chequeo de contraste contra blanco."""
+    return adjust_lightness(primary_hex, 0.65)
 
 
 def suggest_contrasting_color(fg_hex: str, bg_hex: str, target: float = 4.5) -> str:

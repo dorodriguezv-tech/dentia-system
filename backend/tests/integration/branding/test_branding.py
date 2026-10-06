@@ -25,7 +25,7 @@ async def test_get_branding_without_data_returns_default_preset(
     assert response.status_code == 200
     body = response.json()
     assert body["preset"] == "menta_clinica"
-    assert body["colors"]["primary"] == "#2BB3A3"
+    assert body["colors"]["primary"] == "#1E7D72"
     assert body["logo_url"] is None
 
 

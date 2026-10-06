@@ -100,9 +100,14 @@ export function deriveHover(primaryHex: string): string {
   return adjustLightness(primaryHex, -0.12)
 }
 
-/** --color-primary-soft: aclarado, para fondos suaves. */
+/**
+ * --color-primary-soft: aclarado hacia blanco, para fondos suaves.
+ * 0.65, no 0.38 (valor original) -- ver backend/app/modules/branding/color_utils.py
+ * (misma formula, mismo motivo: varios componentes usan el primario mismo como
+ * color de texto sobre este fondo).
+ */
 export function deriveSoft(primaryHex: string): string {
-  return adjustLightness(primaryHex, 0.38)
+  return adjustLightness(primaryHex, 0.65)
 }
 
 /** El texto de los botones primarios siempre es blanco (ver tokens.css). */

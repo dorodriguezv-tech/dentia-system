@@ -299,6 +299,47 @@ async def test_register_performed_creates_odontogram_events_and_suggested_charge
     assert charges.json()[0]["amount"] == "500.00"
 
 
+async def test_list_performed_returns_charge_amount_when_a_charge_exists(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Bug de raiz encontrado en la Fase 12 probando el flujo completo en el
+    navegador: list_performed() seguia desempacando billing_service.list_charges()
+    como si devolviera Charge planos, cuando la Fase 10 lo cambio a tuplas
+    (Charge, aplicado, saldo) -- GET /patients/{id}/procedures-performed tronaba
+    con 500 en cuanto el paciente tenia al menos un cargo. Nunca habia una prueba
+    de integracion para este endpoint de listado."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+    plan_id, _phase_id, item_id = await _make_plan_with_item(
+        client, headers, patient_id, encounter_id
+    )
+    await client.patch(
+        f"/api/v1/treatment-plans/{plan_id}/status", headers=headers, json={"status": "PRESENTADO"}
+    )
+    await client.post(
+        f"/api/v1/treatment-plans/{plan_id}/accept",
+        headers=headers,
+        json={"accepted_item_ids": [item_id], "accepted_by_name": "Jose Perez"},
+    )
+    await client.post(
+        "/api/v1/procedures-performed",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "planned_id": item_id,
+            "material": "resina compuesta A2",
+        },
+    )
+
+    performed_list = await client.get(
+        f"/api/v1/patients/{patient_id}/procedures-performed", headers=headers
+    )
+    assert performed_list.status_code == 200, performed_list.text
+    body = performed_list.json()
+    assert len(body) == 1
+    assert body[0]["charge_amount"] == "500.00"
+
+
 async def test_register_performed_ad_hoc_without_plan_uses_catalog_price(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

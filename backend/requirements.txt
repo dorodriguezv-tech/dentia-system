@@ -1,4 +1,4 @@
-fastapi==0.115.6
+fastapi==0.142.2
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
@@ -7,14 +7,18 @@ greenlet==3.1.1
 asyncpg==0.30.0
 alembic==1.14.0
 argon2-cffi==23.1.0
-pyjwt==2.10.1
+# Fase 12 (revision de seguridad, pip-audit): 2.10.1 tenia varias CVE abiertas.
+pyjwt==2.15.0
 pyotp==2.9.0
 email-validator==2.2.0
-python-multipart==0.0.20
+# Fase 12 (pip-audit): 0.0.20 tenia varias CVE abiertas.
+python-multipart==0.0.31
 httpx==0.28.1
-python-dotenv==1.0.1
+# Fase 12 (pip-audit): 1.0.1 tenia una CVE abierta.
+python-dotenv==1.2.2
 faker==33.1.0
-pillow==11.0.0
+# Fase 12 (pip-audit): 11.0.0 tenia varias CVE abiertas.
+pillow==12.3.0
 reportlab==4.5.1
 # xhtml2pdf (Fase 9: plantillas de consentimiento en HTML -> PDF) exige una version mas
 # nueva de reportlab que la que fijaba la Fase 7; las pruebas de treatment/pdf.py pasan
@@ -35,9 +39,13 @@ requests==2.34.2
 pip-system-certs==5.3; sys_platform == "win32"
 
 ruff==0.8.4
-black==24.10.0
+# Fase 12 (pip-audit): 24.10.0 tenia una CVE abierta.
+black==26.3.1
 mypy==1.14.1
+# Fase 12 (revision de seguridad): dependencias vulnerables, ver docs/SEGURIDAD.md.
+pip-audit==2.10.1
 
-pytest==8.3.4
-pytest-asyncio==0.25.0
+# Fase 12 (pip-audit): pytest 8.3.4 tenia una CVE abierta.
+pytest==9.0.3
+pytest-asyncio==1.4.0
 pytest-cov==6.0.0

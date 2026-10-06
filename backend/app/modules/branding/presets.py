@@ -22,7 +22,17 @@ _SHARED_DEFAULTS = {
 PRESETS: dict[str, dict[str, str]] = {
     "menta_clinica": {
         "name": "Menta clinica",
-        "primary": "#2BB3A3",
+        # #2BB3A3 (el teal original) no pasa el propio chequeo de contraste WCAG de
+        # este modulo (sec. 4 de docs/04_TEMAS_Y_MARCA.md, 4.5:1): como texto sobre
+        # blanco/bg daba ~2.5:1, y texto blanco sobre el boton primario tambien
+        # ~2.6:1. Bug real encontrado en la Fase 12 con una auditoria automatica
+        # (axe-core) -- #1E7D72 es el mismo tono oscurecido (con margen, >=4.7:1
+        # contra blanco y contra --color-bg) con la misma logica de
+        # color_utils.suggest_contrasting_color(). Los demas presets no se
+        # tocaron: un preset que un usuario elige y guarda ya pasa por ese mismo
+        # validador en tiempo de ejecucion (avisa y sugiere un ajuste); el preset
+        # por defecto es el unico que nunca pasaba por ahi.
+        "primary": "#1E7D72",
         "secondary": "#4A90C2",
         "accent": "#F2A65A",
         "bg": "#F7FAFA",

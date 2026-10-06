@@ -29,7 +29,7 @@ function EncounterSelect({
   onChange: (encounterId: string) => void
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
+    <select aria-label="Atencion" value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">Selecciona una atencion...</option>
       {encounters.map((encounter) => (
         <option key={encounter.id} value={encounter.id}>
@@ -89,7 +89,8 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
   const [text, setText] = useState('')
 
   const createMutation = useMutation({
-    mutationFn: () => recordsApi.createHistory(patientId, { encounter_id: encounterId, category, text }),
+    mutationFn: () =>
+      recordsApi.createHistory(patientId, { encounter_id: encounterId, category, text }),
     onSuccess: () => {
       setText('')
       queryClient.invalidateQueries({ queryKey: ['patient-history', patientId] })
@@ -116,10 +117,16 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
             <span>
               {HISTORY_CATEGORY_LABELS[item.category]}: {item.text}
             </span>
-            {canWrite && <AnnulButton onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })} />}
+            {canWrite && (
+              <AnnulButton
+                onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })}
+              />
+            )}
           </div>
         ))}
-      {historyQuery.data?.filter((item) => item.is_active).length === 0 && <p>Sin antecedentes registrados.</p>}
+      {historyQuery.data?.filter((item) => item.is_active).length === 0 && (
+        <p>Sin antecedentes registrados.</p>
+      )}
 
       {canWrite && (
         <form
@@ -129,15 +136,29 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
             createMutation.mutate()
           }}
         >
-          <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
-          <select value={category} onChange={(e) => setCategory(e.target.value as HistoryCategory)}>
+          <EncounterSelect
+            encounters={encountersQuery.data ?? []}
+            value={encounterId}
+            onChange={setEncounterId}
+          />
+          <select
+            aria-label="Categoria del antecedente"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as HistoryCategory)}
+          >
             {Object.entries(HISTORY_CATEGORY_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
                 {label}
               </option>
             ))}
           </select>
-          <input type="text" placeholder="Descripcion" required value={text} onChange={(e) => setText(e.target.value)} />
+          <input
+            type="text"
+            placeholder="Descripcion"
+            required
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
           <button
             className={styles.primaryButton}
             type="submit"
@@ -200,12 +221,19 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
         .map((item) => (
           <div key={item.id} className={styles.contactItem}>
             <span>
-              {item.substance} ({SEVERITY_LABELS[item.severity]}){item.reaction && ` — ${item.reaction}`}
+              {item.substance} ({SEVERITY_LABELS[item.severity]})
+              {item.reaction && ` — ${item.reaction}`}
             </span>
-            {canWrite && <AnnulButton onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })} />}
+            {canWrite && (
+              <AnnulButton
+                onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })}
+              />
+            )}
           </div>
         ))}
-      {allergiesQuery.data?.filter((item) => item.is_active).length === 0 && <p>Sin alergias registradas.</p>}
+      {allergiesQuery.data?.filter((item) => item.is_active).length === 0 && (
+        <p>Sin alergias registradas.</p>
+      )}
 
       {canWrite && (
         <form
@@ -215,7 +243,11 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
             createMutation.mutate()
           }}
         >
-          <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
+          <EncounterSelect
+            encounters={encountersQuery.data ?? []}
+            value={encounterId}
+            onChange={setEncounterId}
+          />
           <input
             type="text"
             placeholder="Sustancia"
@@ -229,7 +261,11 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
             value={reaction}
             onChange={(e) => setReaction(e.target.value)}
           />
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
+          <select
+            aria-label="Severidad de la alergia"
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as Severity)}
+          >
             {Object.entries(SEVERITY_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
                 {label}
@@ -303,10 +339,16 @@ function MedicationsSection({ patientId, canWrite }: { patientId: string; canWri
               {item.dose && ` — ${item.dose}`}
               {item.frequency && ` · ${item.frequency}`}
             </span>
-            {canWrite && <AnnulButton onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })} />}
+            {canWrite && (
+              <AnnulButton
+                onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })}
+              />
+            )}
           </div>
         ))}
-      {medicationsQuery.data?.filter((item) => item.is_active).length === 0 && <p>Sin medicamentos registrados.</p>}
+      {medicationsQuery.data?.filter((item) => item.is_active).length === 0 && (
+        <p>Sin medicamentos registrados.</p>
+      )}
 
       {canWrite && (
         <form
@@ -316,9 +358,24 @@ function MedicationsSection({ patientId, canWrite }: { patientId: string; canWri
             createMutation.mutate()
           }}
         >
-          <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
-          <input type="text" placeholder="Nombre" required value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="text" placeholder="Dosis (opcional)" value={dose} onChange={(e) => setDose(e.target.value)} />
+          <EncounterSelect
+            encounters={encountersQuery.data ?? []}
+            value={encounterId}
+            onChange={setEncounterId}
+          />
+          <input
+            type="text"
+            placeholder="Nombre"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Dosis (opcional)"
+            value={dose}
+            onChange={(e) => setDose(e.target.value)}
+          />
           <input
             type="text"
             placeholder="Frecuencia (opcional)"
@@ -380,7 +437,9 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
         <div key={item.id} className={styles.contactItem}>
           <span>
             {new Date(item.recorded_at).toLocaleString('es-MX')} —{' '}
-            {item.bp_systolic && item.bp_diastolic ? `${item.bp_systolic}/${item.bp_diastolic} mmHg` : ''}
+            {item.bp_systolic && item.bp_diastolic
+              ? `${item.bp_systolic}/${item.bp_diastolic} mmHg`
+              : ''}
             {item.heart_rate && ` · ${item.heart_rate} lpm`}
             {item.temperature && ` · ${item.temperature} °C`}
           </span>
@@ -396,7 +455,11 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
             createMutation.mutate()
           }}
         >
-          <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
+          <EncounterSelect
+            encounters={encountersQuery.data ?? []}
+            value={encounterId}
+            onChange={setEncounterId}
+          />
           <input
             type="number"
             placeholder="Presion sistolica"
@@ -422,7 +485,11 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
             value={temperature}
             onChange={(e) => setTemperature(e.target.value)}
           />
-          <button className={styles.primaryButton} type="submit" disabled={!encounterId || createMutation.isPending}>
+          <button
+            className={styles.primaryButton}
+            type="submit"
+            disabled={!encounterId || createMutation.isPending}
+          >
             Agregar signos vitales
           </button>
         </form>
@@ -478,10 +545,13 @@ function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite
             <span>
               {item.code && `${DIAGNOSIS_CATALOG[item.code]}: `}
               {item.text}
-              {item.tooth_fdi && ` (pieza ${item.tooth_fdi}${item.surface ? ` ${item.surface}` : ''})`}
+              {item.tooth_fdi &&
+                ` (pieza ${item.tooth_fdi}${item.surface ? ` ${item.surface}` : ''})`}
             </span>
             {canWrite && (
-              <AnnulButton onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })} />
+              <AnnulButton
+                onAnnul={(reason) => annulMutation.mutate({ itemId: item.id, reason })}
+              />
             )}
           </div>
         ))}
@@ -497,8 +567,16 @@ function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite
             createMutation.mutate()
           }}
         >
-          <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
-          <select value={code} onChange={(e) => setCode(e.target.value as DiagnosisCode | '')}>
+          <EncounterSelect
+            encounters={encountersQuery.data ?? []}
+            value={encounterId}
+            onChange={setEncounterId}
+          />
+          <select
+            aria-label="Codigo del catalogo de diagnosticos"
+            value={code}
+            onChange={(e) => setCode(e.target.value as DiagnosisCode | '')}
+          >
             <option value="">Sin codigo del catalogo...</option>
             {Object.entries(DIAGNOSIS_CATALOG).map(([c, label]) => (
               <option key={c} value={c}>

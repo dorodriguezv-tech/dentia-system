@@ -87,8 +87,15 @@ export function AgendaPage() {
   })
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status, reason }: { id: string; status: AppointmentStatus; reason?: string }) =>
-      api.changeAppointmentStatus(id, { status, reason }),
+    mutationFn: ({
+      id,
+      status,
+      reason,
+    }: {
+      id: string
+      status: AppointmentStatus
+      reason?: string
+    }) => api.changeAppointmentStatus(id, { status, reason }),
     onSuccess: () => {
       invalidateAppointments()
       setPanel(null)
@@ -152,7 +159,11 @@ export function AgendaPage() {
           <button type="button" className={styles.toggle} onClick={() => navigateAnchor(-1)}>
             Anterior
           </button>
-          <button type="button" className={styles.toggle} onClick={() => setAnchorDate(startOfDay(new Date()))}>
+          <button
+            type="button"
+            className={styles.toggle}
+            onClick={() => setAnchorDate(startOfDay(new Date()))}
+          >
             Hoy
           </button>
           <button type="button" className={styles.toggle} onClick={() => navigateAnchor(1)}>
@@ -174,7 +185,11 @@ export function AgendaPage() {
         </div>
 
         {groupBy === 'profesional' ? (
-          <select value={effectiveProviderId} onChange={(e) => setSelectedProviderId(e.target.value)}>
+          <select
+            aria-label="Profesional"
+            value={effectiveProviderId}
+            onChange={(e) => setSelectedProviderId(e.target.value)}
+          >
             {providersQuery.data?.map((provider) => (
               <option key={provider.id} value={provider.id}>
                 {provider.full_name}
@@ -182,7 +197,11 @@ export function AgendaPage() {
             ))}
           </select>
         ) : (
-          <select value={selectedResourceId} onChange={(e) => setSelectedResourceId(e.target.value)}>
+          <select
+            aria-label="Gabinete"
+            value={selectedResourceId}
+            onChange={(e) => setSelectedResourceId(e.target.value)}
+          >
             <option value="">Selecciona un gabinete...</option>
             {resourcesQuery.data?.map((resource) => (
               <option key={resource.id} value={resource.id}>
@@ -243,7 +262,11 @@ export function AgendaPage() {
             appointment={panel.appointment}
             canWrite={canWrite}
             canStartEncounter={canStartEncounter}
-            pending={statusMutation.isPending || startEncounterMutation.isPending || rescheduleMutation.isPending}
+            pending={
+              statusMutation.isPending ||
+              startEncounterMutation.isPending ||
+              rescheduleMutation.isPending
+            }
             onClose={() => setPanel(null)}
             onChangeStatus={(status, reason) =>
               statusMutation.mutate({ id: panel.appointment.id, status, reason })

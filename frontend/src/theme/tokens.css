@@ -5,9 +5,18 @@
   Ningun componente debe usar colores fijos: siempre var(--color-...).
 */
 :root {
-  --color-primary: #2bb3a3;
-  --color-primary-hover: #23998b;
-  --color-primary-soft: #e6f6f4;
+  /* #1E7D72, no el teal original #2BB3A3: ese no pasaba el chequeo de contraste
+     WCAG 4.5:1 del propio sistema (docs/04_TEMAS_Y_MARCA.md sec. 4) como texto
+     sobre blanco/bg ni como texto blanco sobre el boton primario -- encontrado
+     con una auditoria automatica (axe-core) en la Fase 12 (el primer ajuste,
+     #1F8276, llegaba justo a 4.43:1 contra --color-bg, por debajo del minimo;
+     este deja margen: >=4.7:1 contra blanco y contra --color-bg). Hover/soft
+     recalculados con backend/app/modules/branding/color_utils.py
+     (derive_hover/derive_soft) a partir del nuevo primary, igual que hace el
+     servicio con un preset guardado. */
+  --color-primary: #1e7d72;
+  --color-primary-hover: #124c45;
+  --color-primary-soft: #ecfaf9;
   --color-secondary: #4a90c2;
   --color-accent: #f2a65a;
 
@@ -39,15 +48,21 @@
   --color-finding-movilidad: #c77d1e;
 
   /* Colores por estado de cita (Fase 6): semanticos y fijos, independientes de la
-     marca de la clinica, igual que los de --color-finding-*. */
-  --color-status-reservada: #8c8c8c;
-  --color-status-confirmada: #4a90c2;
-  --color-status-en-sala: #e0a100;
+     marca de la clinica, igual que los de --color-finding-*. Oscurecidos en la
+     Fase 12 (auditoria con axe-core): el texto blanco en negritas de la cita en
+     CalendarGrid necesita 4.5:1 contra el fondo (CLAUDE.md sec. "revision de
+     accesibilidad") y 7 de los 8 originales no llegaban (hasta 2.17:1).
+     reservada/cancelada se oscurecieron con distinta intensidad a proposito
+     (antes solo se diferenciaban por tono de gris muy cercano) para seguir
+     distinguiendose entre si una vez que ambas pasan el contraste. */
+  --color-status-reservada: #767676;
+  --color-status-confirmada: #397baa;
+  --color-status-en-sala: #996e00;
   --color-status-en-atencion: #7b5ea7;
-  --color-status-terminada: #3ba55c;
-  --color-status-cancelada: #b0b0b0;
-  --color-status-no-show: #d64545;
-  --color-status-reprogramada: #2bb3a3;
+  --color-status-terminada: #2e7f47;
+  --color-status-cancelada: #595959;
+  --color-status-no-show: #d43d3d;
+  --color-status-reprogramada: #1e7d72;
 
   --radius: 10px;
   --font-family:

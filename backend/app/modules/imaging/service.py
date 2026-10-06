@@ -44,10 +44,10 @@ async def _get_encounter_in_clinic(
 
 def _make_thumbnail(data: bytes) -> bytes:
     with PILImage.open(io.BytesIO(data)) as image:
-        image = image.convert("RGB")
-        image.thumbnail(rules.THUMBNAIL_SIZE)
+        rgb_image = image.convert("RGB")
+        rgb_image.thumbnail(rules.THUMBNAIL_SIZE)
         buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=85)
+        rgb_image.save(buffer, format="JPEG", quality=85)
         return buffer.getvalue()
 
 

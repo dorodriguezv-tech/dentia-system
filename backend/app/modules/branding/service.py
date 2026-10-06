@@ -172,11 +172,14 @@ def _make_favicon(data: bytes, content_type: str) -> tuple[bytes, str]:
         return data, ".svg"
 
     with Image.open(io.BytesIO(data)) as image:
-        image = image.convert("RGBA")
-        image.thumbnail(FAVICON_SIZE)
+        rgba_image = image.convert("RGBA")
+        rgba_image.thumbnail(FAVICON_SIZE)
         canvas = Image.new("RGBA", FAVICON_SIZE, (0, 0, 0, 0))
-        offset = ((FAVICON_SIZE[0] - image.width) // 2, (FAVICON_SIZE[1] - image.height) // 2)
-        canvas.paste(image, offset)
+        offset = (
+            (FAVICON_SIZE[0] - rgba_image.width) // 2,
+            (FAVICON_SIZE[1] - rgba_image.height) // 2,
+        )
+        canvas.paste(rgba_image, offset)
         buffer = io.BytesIO()
         canvas.save(buffer, format="PNG")
         return buffer.getvalue(), ".png"

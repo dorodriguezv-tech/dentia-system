@@ -108,13 +108,21 @@ function SuggestionCard({
         />
       ) : (
         <div className={styles.cardActions}>
-          <button className={styles.primaryButton} type="button" onClick={() => onAccept(suggestion.id)}>
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={() => onAccept(suggestion.id)}
+          >
             Aceptar
           </button>
           <button className={styles.secondaryButton} type="button" onClick={() => setEditing(true)}>
             Editar
           </button>
-          <button className={styles.linkButton} type="button" onClick={() => onReject(suggestion.id)}>
+          <button
+            className={styles.linkButton}
+            type="button"
+            onClick={() => onReject(suggestion.id)}
+          >
             Rechazar
           </button>
         </div>
@@ -173,7 +181,25 @@ export function AiAssistant({
   const acceptMutation = useMutation({
     mutationFn: ({ id, edits }: { id: string; edits?: Record<string, unknown> }) =>
       api.acceptSuggestion(id, edits),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-suggestions', encounterId] }),
+    onSuccess: () => {
+      // Aceptar una sugerencia puede escribir en expediente, odontograma,
+      // diagnosticos o tratamiento segun el action_type (applier.py decide el
+      // destino) -- se invalida todo lo que podria quedar desactualizado en esta
+      // misma pantalla (p.ej. el motivo de consulta del encabezado) en vez de
+      // intentar adivinar el destino exacto aqui.
+      queryClient.invalidateQueries({ queryKey: ['ai-suggestions', encounterId] })
+      queryClient.invalidateQueries({ queryKey: ['encounter', encounterId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-summary', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-vital-signs', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-allergies', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-medications', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-history', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-diagnoses', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['odontogram', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['treatment-plans', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-performed', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-timeline', patientId] })
+    },
   })
 
   const rejectMutation = useMutation({
@@ -229,9 +255,11 @@ export function AiAssistant({
     grouped.set(destination, [...(grouped.get(destination) ?? []), suggestion])
   }
 
-  const micLabel = { inactive: 'Dictar', listening: 'Escuchando... (clic para detener)', processing: 'Procesando...' }[
-    micState
-  ]
+  const micLabel = {
+    inactive: 'Dictar',
+    listening: 'Escuchando... (clic para detener)',
+    processing: 'Procesando...',
+  }[micState]
 
   return (
     <section className={styles.panel}>
@@ -277,8 +305,8 @@ export function AiAssistant({
 
       {unavailable && (
         <p className={styles.errorBox}>
-          El asistente de IA no esta disponible (Ollama no responde). La transcripcion si
-          funciona: puedes insertarla como texto libre en la nota.
+          El asistente de IA no esta disponible (Ollama no responde). La transcripcion si funciona:
+          puedes insertarla como texto libre en la nota.
         </p>
       )}
 

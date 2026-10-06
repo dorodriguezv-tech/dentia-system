@@ -63,6 +63,8 @@ fake = Faker("es_MX")
 
 ADMIN_EMAIL = "admin@dentalcare-demo.mx"
 ODONTOLOGO_EMAIL = "odontologo@dentalcare-demo.mx"
+RECEPCION_EMAIL = "recepcion@dentalcare-demo.mx"
+CAJA_EMAIL = "caja@dentalcare-demo.mx"
 DEMO_PASSWORD = "Dentia2025!"
 PATIENT_COUNT = 50
 
@@ -525,6 +527,10 @@ async def seed() -> None:
         odontologo_role = (
             await db.execute(select(Role).where(Role.code == "odontologo"))
         ).scalar_one()
+        recepcion_role = (
+            await db.execute(select(Role).where(Role.code == "recepcion"))
+        ).scalar_one()
+        caja_role = (await db.execute(select(Role).where(Role.code == "caja"))).scalar_one()
 
         admin = User(
             email=ADMIN_EMAIL,
@@ -536,13 +542,29 @@ async def seed() -> None:
             full_name=fake.name(),
             hashed_password=hash_password(DEMO_PASSWORD),
         )
-        db.add_all([admin, odontologo])
+        # recepcion y caja (Fase 12): sin estos dos no se puede recorrer el flujo
+        # completo paciente->cita->...->pago en el E2E de Playwright, porque
+        # patients.write y billing.write no los tiene el odontologo (RBAC real,
+        # docs/MATRIZ_PERMISOS.md) -- tambien sirven para pruebas manuales.
+        recepcion = User(
+            email=RECEPCION_EMAIL,
+            full_name=fake.name(),
+            hashed_password=hash_password(DEMO_PASSWORD),
+        )
+        caja = User(
+            email=CAJA_EMAIL,
+            full_name=fake.name(),
+            hashed_password=hash_password(DEMO_PASSWORD),
+        )
+        db.add_all([admin, odontologo, recepcion, caja])
         await db.flush()
 
         db.add_all(
             [
                 UserClinic(user_id=admin.id, clinic_id=clinic.id, role_id=admin_role.id),
                 UserClinic(user_id=odontologo.id, clinic_id=clinic.id, role_id=odontologo_role.id),
+                UserClinic(user_id=recepcion.id, clinic_id=clinic.id, role_id=recepcion_role.id),
+                UserClinic(user_id=caja.id, clinic_id=clinic.id, role_id=caja_role.id),
             ]
         )
         await db.commit()
@@ -570,6 +592,8 @@ async def seed() -> None:
         print(f"Sucursal: {clinic.name}")
         print(f"Admin: {ADMIN_EMAIL} / {DEMO_PASSWORD} (debe configurar MFA al entrar)")
         print(f"Odontologo: {ODONTOLOGO_EMAIL} / {DEMO_PASSWORD}")
+        print(f"Recepcion: {RECEPCION_EMAIL} / {DEMO_PASSWORD}")
+        print(f"Caja: {CAJA_EMAIL} / {DEMO_PASSWORD}")
         print(f"Pacientes ficticios creados: {PATIENT_COUNT}")
         print(
             "Expediente de muestra (Fase 4) en 3 de los pacientes sembrados (alertas, nota SOAP)."

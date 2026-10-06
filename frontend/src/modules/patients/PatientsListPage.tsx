@@ -22,7 +22,11 @@ export function PatientsListPage() {
       <div className={styles.toolbar}>
         <h1>Pacientes</h1>
         <div className={styles.filters}>
-          <select value={status} onChange={(e) => setStatus(e.target.value as StatusCode | '')}>
+          <select
+            aria-label="Filtrar por estado"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusCode | '')}
+          >
             <option value="">Todos los estados</option>
             {Object.entries(STATUS_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
@@ -60,8 +64,17 @@ export function PatientsListPage() {
             {patientsQuery.data.map((patient) => (
               <tr
                 key={patient.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir expediente de ${patient.full_name}, exp. ${patient.expediente_number}`}
                 className={styles.row}
                 onClick={() => navigate(`/pacientes/${patient.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/pacientes/${patient.id}`)
+                  }
+                }}
               >
                 <td>{patient.expediente_number}</td>
                 <td>{patient.full_name}</td>

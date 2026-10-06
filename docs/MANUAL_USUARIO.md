@@ -1,0 +1,244 @@
+# Manual de usuario — DentalCare
+
+Guía para el personal de la clínica (no para desarrolladores: la parte técnica está en
+[`docs/MANUAL_TECNICO.md`](./MANUAL_TECNICO.md)). Las capturas son de los datos de
+ejemplo (ficticios) que crea `python -m app.seed` — con datos reales la pantalla se ve
+igual, solo cambia la información.
+
+## 1. Entrar al sistema
+
+Abre la dirección que te dé tu clínica (en una instalación local,
+`http://localhost:5174`). Escribe tu correo y contraseña y presiona **Entrar**.
+
+![Pantalla de login](./manual/01-login.png)
+
+Si tu rol es **Administrador de la clínica**, la primera vez que entras el sistema te
+pide configurar un segundo paso de seguridad (MFA, con una app como Google
+Authenticator) — es obligatorio para ese rol y no se puede omitir.
+
+Si olvidaste tu contraseña, pide a un **Administrador de la clínica** que te cree una
+nueva desde Usuarios — todavía no hay un flujo de "olvidé mi contraseña" por correo.
+
+## 2. El tablero de inicio
+
+Al entrar ves tu **tablero de inicio**, distinto según tu rol: cada tarjeta (Pacientes,
+Agenda de hoy, Tratamientos, Asistente de IA, Cobranza) solo aparece si tu rol puede ver
+esa información. Un odontólogo, por ejemplo, no ve la tarjeta de cobranza.
+
+![Tablero de inicio](./manual/02-tablero.png)
+
+El menú de la izquierda también cambia según tu rol: ahí solo aparecen las secciones a
+las que tienes acceso (Pacientes, Agenda, Usuarios, Caja, Reportes, Configuración...).
+
+## 3. Buscar un paciente
+
+Desde cualquier pantalla, presiona **Ctrl+K** (o haz clic en "Buscar paciente...") para
+abrir la búsqueda rápida. Puedes buscar por nombre, teléfono, correo o número de
+expediente, aunque escribas el nombre con errores o sin acentos.
+
+## 4. Pacientes
+
+### 4.1 Listado y alta de un paciente nuevo
+
+La pantalla "Pacientes" lista a todos con un filtro por estado. Si tu rol puede dar de
+alta pacientes (recepción o administrador de la clínica), verás el botón **Nuevo
+paciente**.
+
+![Listado de pacientes](./manual/04-pacientes.png)
+
+Dar de alta a un paciente tiene 3 pasos:
+1. **Datos** — nombre, apellidos y fecha de nacimiento son obligatorios; el resto
+   (teléfono, correo, dirección, sexo) es opcional.
+2. **Posibles duplicados** — si ya existe un paciente con un nombre parecido y la misma
+   fecha de nacimiento o teléfono, el sistema te muestra la coincidencia antes de seguir,
+   para no duplicar un expediente. Si de verdad es una persona distinta, confirma
+   "Ninguno es el mismo paciente, continuar".
+3. **Contactos** — un tutor o un contacto de emergencia (opcional, se puede agregar
+   después).
+
+### 4.2 La ficha del paciente
+
+Al abrir un paciente ves un encabezado que **siempre está visible** sin importar la
+pestaña en la que estés: nombre, edad, número de expediente y, a la derecha, las
+**alertas críticas** (alergias, medicamentos de riesgo, antecedentes relevantes) en rojo
+— se calculan solas a partir del expediente, no las escribe nadie a mano.
+
+![Resumen del paciente](./manual/05-paciente-resumen.png)
+
+Debajo del encabezado hay pestañas:
+
+- **Resumen** — datos generales, contactos y la línea de tiempo clínica (todas las
+  atenciones del paciente). Desde aquí se abre una atención nueva con **Iniciar
+  atención** (o desde una cita en la Agenda, sección 6).
+- **Expediente** — antecedentes, alergias, medicamentos, signos vitales, diagnósticos y
+  las notas clínicas (ver sección 5).
+- **Odontograma** — el estado de cada pieza dental (sección 5.3).
+- **Tratamientos** — planes de tratamiento, presupuestos y procedimientos (sección 5.4).
+- **Consentimientos** — plantillas y consentimientos firmados (sección 5.5).
+- **Imágenes** — fotografías y radiografías (sección 5.6).
+- **Cuenta** — cargos y pagos (solo si tu rol puede ver cobranza; sección 7).
+
+## 5. Atender a un paciente
+
+### 5.1 Expediente
+
+![Expediente del paciente](./manual/06-paciente-expediente.png)
+
+Cada sección (antecedentes, alergias, medicamentos, signos vitales, diagnósticos) se
+puede abrir o cerrar por separado. Cualquier alergia activa, y ciertas palabras clave en
+medicamentos o antecedentes (por ejemplo "diabetes", "anticoagulantes", "marcapasos"),
+generan una alerta crítica — el sistema **siempre** la muestra antes de dejarte recetar,
+finalizar una nota o registrar un procedimiento, nunca se puede ignorar en silencio.
+
+### 5.2 La nota clínica (SOAP)
+
+Al iniciar una atención se abre una nota clínica con el formato SOAP (Subjetivo,
+Objetivo, Análisis, Plan) y se guarda sola cada 10 segundos mientras escribes, para no
+perder el avance. Una nota pasa por estos estados:
+
+- **Borrador** — se puede seguir editando.
+- **Finalizada** — una vez que presionas **Finalizar nota**, queda congelada: ya no se
+  puede editar ni borrar. Es una regla del sistema, no una limitación de permisos.
+- **Corregida** — si una nota finalizada tenía un error, no se edita: se crea una
+  **versión nueva** con el motivo de la corrección, y las dos versiones quedan
+  guardadas (la original nunca se pierde).
+- **Cancelada** — con motivo, si la atención completa no debía existir (no se borra, se
+  anula).
+
+Si el paciente dicta en voz alta durante la consulta, el asistente de IA (micrófono,
+`Alt+M`) puede proponer datos para la nota, el odontograma o el plan — ver sección 8:
+**nunca** escribe nada él solo, siempre tienes que revisar y aceptar cada propuesta.
+
+### 5.3 Odontograma
+
+![Odontograma](./manual/07-odontograma.png)
+
+Cada pieza dental se identifica con la notación FDI (dos dígitos: cuadrante + posición,
+por ejemplo "36" es el primer molar inferior izquierdo). Haz clic en una superficie de
+la pieza para registrar un hallazgo (caries, restauración, corona, ausente, etc. — la
+leyenda de abajo explica cada color). Tres vistas:
+
+- **Permanente** — solo dientes de adulto.
+- **Temporal** — solo dientes de leche.
+- **Mixta** — ambos a la vez (dentición mixta en niños).
+
+El control "Historial a fecha" reconstruye cómo se veía el odontograma en cualquier
+fecha pasada — nada se sobrescribe, cada hallazgo nuevo queda en el historial.
+
+### 5.4 Diagnóstico y plan de tratamiento
+
+![Planes de tratamiento](./manual/08-tratamientos.png)
+
+Un plan de tratamiento se organiza en **fases**, y cada fase tiene procedimientos
+(pieza, superficie, precio del catálogo de la clínica). El flujo:
+
+1. Crear el plan y agregar procedimientos → queda **planificado**.
+2. **Presentar al paciente** → genera el presupuesto en PDF con el logo de la clínica.
+3. El paciente **acepta** (total o parcialmente) — esto queda registrado con su nombre y
+   la fecha, pero **no es un pago**: aceptar un presupuesto no cobra nada todavía.
+4. Al **realizar** el procedimiento, se marca como tal en el odontograma y genera
+   automáticamente un cargo "sugerido" para cobranza (sección 7).
+
+Importante: lo planificado y lo realizado son cosas separadas en el sistema — un
+procedimiento planificado que todavía no se hizo nunca se confunde con uno ya hecho.
+
+### 5.5 Consentimientos
+
+Antes de un procedimiento que lo requiera (una extracción, una endodoncia...), el
+paciente firma un consentimiento en la pantalla (con el dedo o el mouse, sobre una
+plantilla de texto configurable). Al firmar se genera un PDF con un identificador
+(hash) único — **ese PDF ya no se puede modificar**; si el consentimiento cambia, se
+firma uno nuevo.
+
+### 5.6 Imágenes y radiografías
+
+Puedes subir una o varias fotos/radiografías a la vez (intraoral, extraoral,
+periapical, bitewing, panorámica, cefalometría). El visor permite hacer zoom y ajustar
+brillo/contraste sin modificar el archivo original. Cada vez que alguien abre una
+imagen, queda registrado quién y cuándo (igual que al abrir el expediente completo).
+
+## 6. Agenda
+
+![Agenda](./manual/03-agenda.png)
+
+La Agenda es una pantalla propia del menú lateral (no es parte de la ficha del
+paciente, porque una cita es de la clínica/profesional). Puedes ver el día, la semana o
+el mes, y agrupar por profesional o por gabinete. Para agendar: haz clic en un espacio
+libre, busca al paciente y confirma.
+
+- **Arrastrar una cita** la reprograma — el sistema crea una cita nueva en el horario
+  nuevo y marca la anterior como "Reprogramada" (no se pierde el historial).
+- El sistema avisa si una cita cae fuera del horario laboral o choca con otra del mismo
+  profesional, pero no te impide guardarla si de verdad es necesario.
+- El botón **Iniciar atención** sobre una cita del día de hoy abre directamente la nota
+  clínica de esa atención.
+
+## 7. Caja y cobranza
+
+![Cuenta de un paciente](./manual/09-cuenta.png)
+
+En la pestaña "Cuenta" de un paciente ves sus cargos (generados al realizar un
+procedimiento) y sus pagos. Un pago puede ser en efectivo, tarjeta o transferencia, y
+se puede aplicar completo a un cargo, repartido entre varios, o dejarse como anticipo.
+El saldo y el estado de cada cargo (pendiente/pagado) se calculan siempre contra los
+pagos reales — nunca se guardan "a mano".
+
+La pantalla **Caja** permite abrir y cerrar una sesión de cobro (un turno), con el total
+esperado por cada método de pago contra lo que de verdad se cobró.
+
+> Si tu clínica no cobra directamente (por ejemplo, una clínica universitaria de
+> práctica), un administrador puede desactivar la cobranza desde Configuración → Cobranza
+> sin perder el registro de qué se hizo — solo deja de pedir el pago.
+
+## 8. Asistente de IA por voz
+
+Dentro de la pantalla de Atención, el botón de micrófono (`Alt+M`) grava tu dictado,
+lo transcribe en el propio equipo (no sale de la clínica ni se manda a internet) y
+propone acciones concretas: motivo de consulta, signos vitales, un hallazgo nuevo en el
+odontograma, un procedimiento planificado o realizado, agregar texto a la nota, o
+proponer una cita de control.
+
+**El asistente nunca guarda nada por sí solo.** Cada propuesta aparece en un panel para
+que la revises y decidas, una por una:
+- **Aceptar** — se aplica tal cual al expediente/odontograma/plan.
+- **Editar y aceptar** — corriges el dato antes de guardarlo.
+- **Rechazar** — se descarta.
+
+Todo lo que viene de una propuesta aceptada queda marcado en el sistema como asistido
+por IA, con el modelo y la fecha — se puede distinguir de lo que escribiste a mano
+consultando la bitácora de auditoría de esa atención.
+
+Si el servicio de IA no está disponible (apagado o no instalado), el resto del sistema
+sigue funcionando normal: el dictado se puede insertar igual como texto libre en la
+nota, solo sin las propuestas automáticas.
+
+## 9. Reportes
+
+![Reportes](./manual/10-reportes.png)
+
+Solo visible para quien tenga el permiso correspondiente (normalmente administración y
+caja). Seis reportes de solo lectura con exportación a CSV: pacientes nuevos/activos,
+citas y tasa de inasistencia, producción por profesional, planes de tratamiento, cuentas
+por cobrar y uso del asistente de IA. Cada reporte (salvo "Cuentas por cobrar", que es
+una fotografía del saldo actual) acepta un rango de fechas; por defecto muestra los
+últimos 30 días. Exportar un reporte queda registrado en la bitácora de auditoría.
+
+## 10. Preguntas frecuentes
+
+**¿Por qué no puedo editar una nota que ya finalicé?**
+Es una regla del sistema: una nota finalizada no se modifica, para proteger el historial
+clínico. Usa "Corregir" — crea una versión nueva con el motivo del cambio, sin perder la
+original.
+
+**¿Por qué no veo el botón para dar de alta un paciente / registrar un pago / etc.?**
+Depende de tu rol. Pide a un administrador de la clínica que revise tus permisos si
+crees que deberías tenerlo (ver `docs/MATRIZ_PERMISOS.md` para la lista completa).
+
+**Acepté una propuesta de la IA por error. ¿Puedo deshacerla?**
+No hay un botón "deshacer": corrige el dato manualmente donde haya quedado (la nota, el
+odontograma, el plan) igual que corregirías un error propio.
+
+**El asistente de IA no responde.**
+Revisa con quien administre el sistema si Ollama (el servicio de IA local) está
+encendido — Configuración → Asistente IA muestra su estado. Mientras tanto, puedes
+seguir dictando el texto libre a mano en la nota.

@@ -63,14 +63,18 @@ export function NewAppointmentForm({
         </button>
       </div>
       <p className={styles.when}>
-        {starts.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} a las{' '}
-        {starts.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+        {starts.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })} a
+        las {starts.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
       </p>
 
       {selectedPatient ? (
         <div className={styles.selectedPatient}>
           {selectedPatient.full_name}
-          <button className={styles.closeButton} type="button" onClick={() => setSelectedPatient(null)}>
+          <button
+            className={styles.closeButton}
+            type="button"
+            onClick={() => setSelectedPatient(null)}
+          >
             Cambiar
           </button>
         </div>
@@ -78,6 +82,7 @@ export function NewAppointmentForm({
         <>
           <input
             type="text"
+            aria-label="Buscar paciente por nombre"
             placeholder="Buscar paciente por nombre..."
             value={query}
             onChange={(e) => void handleSearch(e.target.value)}
@@ -96,7 +101,11 @@ export function NewAppointmentForm({
         </>
       )}
 
-      <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+      <select
+        aria-label="Profesional"
+        value={providerId}
+        onChange={(e) => setProviderId(e.target.value)}
+      >
         {providers.map((provider) => (
           <option key={provider.id} value={provider.id}>
             {provider.full_name}
@@ -104,7 +113,11 @@ export function NewAppointmentForm({
         ))}
       </select>
 
-      <select value={resourceId} onChange={(e) => setResourceId(e.target.value)}>
+      <select
+        aria-label="Gabinete"
+        value={resourceId}
+        onChange={(e) => setResourceId(e.target.value)}
+      >
         <option value="">Sin gabinete asignado</option>
         {resources.map((resource) => (
           <option key={resource.id} value={resource.id}>
@@ -114,6 +127,7 @@ export function NewAppointmentForm({
       </select>
 
       <select
+        aria-label="Tipo de cita"
         value={appointmentType}
         onChange={(e) => setAppointmentType(e.target.value as AppointmentType)}
       >

@@ -620,10 +620,16 @@ async def list_performed(
     )
     performed_list = list((await db.execute(stmt)).scalars().all())
 
+    # list_charges() devuelve (Charge, aplicado, saldo) desde la Fase 10 -- antes
+    # era una lista plana de Charge. Bug real encontrado en la Fase 12 probando el
+    # flujo completo en el navegador: esta funcion nunca se actualizo con ese
+    # cambio y tronaba con AttributeError en cuanto habia al menos un cargo.
     charges = await billing_service.list_charges(db, clinic_id=clinic_id, patient_id=patient_id)
-    amount_by_performed_id = {c.procedure_performed_id: c.amount for c in charges}
+    amount_by_performed_id = {
+        charge.procedure_performed_id: charge.amount for charge, _applied, _balance in charges
+    }
 
     return [
-        (performed, amount_by_performed_id.get(performed.id, Decimal("0")))
+        (performed, amount_by_performed_id.get(performed.id, Decimal("0.00")))
         for performed in performed_list
     ]

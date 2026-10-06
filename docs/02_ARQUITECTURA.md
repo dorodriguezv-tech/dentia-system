@@ -714,6 +714,68 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   descrito arriba, con un enlace "Ver reportes completos" visible solo para quien
   tiene `reports.read`.
 
+### 5.12 E2E y endurecimiento (Fase 12)
+- **Playwright (`e2e/`):** `full-flow.spec.ts` recorre el flujo clínico completo
+  contra un backend y frontend reales (levantados por `webServer` en
+  `playwright.config.ts`) — recepción da de alta al paciente y agenda la cita,
+  el odontólogo abre la atención, dicta (con `AI_FAKE_MODE=true`, ver abajo),
+  acepta las propuestas, registra un hallazgo en el odontograma, un diagnóstico,
+  un plan de tratamiento con un procedimiento, lo presenta/acepta/realiza, crea
+  una plantilla de consentimiento y la firma, agenda el seguimiento, y caja
+  registra el pago — tres roles reales con sus permisos propios (RBAC real, no
+  una limitación del test). `accessibility.spec.ts` audita con `@axe-core/playwright`
+  (WCAG 2 A/AA) las pantallas más usadas (login, tablero, pacientes, agenda,
+  ficha del paciente, reportes) y falla si hay una violación `serious`/`critical`.
+  `performance.spec.ts` mide el tiempo de las pantallas habituales (carga del
+  login, tablero, navegación entre pacientes/agenda/inicio, pestañas de la ficha
+  de un paciente) con 5 muestras por pantalla y exige un p95 ≤ 2 s — corre contra
+  `npm run dev` (Vite sin build de producción), así que es una cota pesimista,
+  no el presupuesto exacto de producción.
+- **`AI_FAKE_MODE`** (`backend/app/ai/ollama_client.py`, `app/core/config.py`):
+  con esta bandera (solo para E2E, nunca en desarrollo normal ni en producción —
+  ver `backend/.env.example`), el cliente de Ollama devuelve siempre dos
+  acciones fijas (`set_chief_complaint`, `add_vital_sign`) sin red ni modelo
+  real, para que Playwright ejerza el flujo de "aceptar propuestas de IA" de
+  forma determinista.
+- **Revisión de seguridad (OWASP Top 10):**
+  - `SecurityHeadersMiddleware` (`app/core/security_headers.py`) agrega a toda
+    respuesta `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y
+    `Permissions-Policy`, además de `Content-Security-Policy: default-src 'none'`
+    fuera de `/docs`/`/redoc`/`/openapi.json`, y `Strict-Transport-Security`
+    cuando `ENVIRONMENT=production`.
+  - La documentación interactiva (Swagger/Redoc/`openapi.json`, que carga su
+    bundle de un CDN y expone el esquema completo de la API) se desactiva por
+    completo fuera de desarrollo (`app/core/config.py::docs_urls`).
+  - `Settings` rechaza arrancar con `ENVIRONMENT=production` y el `JWT_SECRET`
+    de ejemplo (`change-me`) — ya no es posible desplegar en producción firmando
+    tokens con un secreto público (este mismo repositorio).
+  - CORS ya era estricto desde la Fase 0 (una sola lista blanca de orígenes,
+    sin comodín) y el login ya tenía *rate limiting* desde la Fase 1; esta fase
+    no les agrega nada nuevo, solo los confirma.
+  - `pip-audit`/`npm audit` (dependencias vulnerables): se corrigieron todas las
+    CVE encontradas subiendo versiones (`fastapi`, `pyjwt`, `python-multipart`,
+    `python-dotenv`, `pillow`, `black`, `pytest`/`pytest-asyncio`), salvo una:
+    `xhtml2pdf==0.2.16` tiene un ReDoS conocido (CVE-2024-25885) en el parseo de
+    colores CSS, sin versión corregida todavía. Riesgo aceptado y documentado en
+    `docs/SEGURIDAD.md`: el HTML que llega a `xhtml2pdf` (plantillas de
+    consentimiento) solo lo escribe personal autenticado con `documents.write`,
+    no un paciente ni un anónimo. `npm audit` (frontend y `e2e/`) no encontró
+    ninguna vulnerabilidad.
+  - Secretos: `.env` sigue fuera de git (`.gitignore`), `.env.example` actualizado
+    (incluye `AI_FAKE_MODE`), y no se encontraron secretos reales en el código
+    (solo `DEMO_PASSWORD` en `app/seed.py`, una contraseña de datos ficticios,
+    documentada como tal).
+- **Accesibilidad y rendimiento:** ver `performance.spec.ts`/`accessibility.spec.ts`
+  arriba. Dos ajustes de contraste WCAG corregidos en esta fase a partir de la
+  auditoría automática (`axe-core`): texto en negritas sobre la cita del día en
+  `tokens.css`/`CalendarGrid` y un color del preset con contraste insuficiente
+  en `branding/presets.py`/`color_utils.py` (ver comentarios "Fase 12" en esos
+  archivos).
+- **Documentación:** `docs/SEGURIDAD.md` (detalle de la revisión de seguridad),
+  `docs/MANUAL_USUARIO.md` (manual por rol, con capturas) y
+  `docs/MANUAL_TECNICO.md` (instalación, variables de entorno, checklist de
+  despliegue, solución de problemas), además de esta sección y el README.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -760,7 +822,7 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 9 | `documents` (`DocumentTemplate` versionada regla 7, `Consent` firmado con `<canvas>` táctil, PDF con xhtml2pdf, hash SHA-256, ligado a lo sumo a un procedimiento o un plan) e `imaging` (`Image` por archivo, carga múltiple con metadatos compartidos, miniatura solo para JPG/PNG, lectura de PDF/imagen completa auditada). `StorageBackend` de la Fase 0 reutilizado tal cual (ya generaba rutas no adivinables). Frontend: `SignaturePad` con eventos de puntero (sin librería), visor de imágenes con zoom (`scale`) y brillo/contraste (`filter`) puramente en el cliente; pestañas nuevas "Consentimientos" e "Imágenes" en el paciente | Hecho |
 | 10 | `billing` completo: `Payment` (efectivo/tarjeta/transferencia), `PaymentAllocation` (aplicación total o parcial a un cargo, o anticipo sin aplicar), saldo y estado de cada `Charge` calculados contra los pagos activos (regla 4, nunca guardados), cancelación de cargos/pagos con motivo (regla 2; un cargo con pagos aplicados no se puede cancelar sin cancelar esos pagos primero), recibo PDF con el logo de la clínica, corte de caja por sesión (`CashSession`, totales por método y diferencia contra lo esperado). `ClinicBillingSettings.billing_enabled` permite desactivar la cobranza por sucursal (p.ej. clínicas universitarias de práctica) sin dejar de generar el cargo sugerido al registrar un procedimiento realizado. Nuevo permiso `billing.configure` (incremental, solo `admin_clinica`). Frontend: pestaña "Cuenta" en el paciente, pantalla "Caja" para abrir/cerrar sesión, Configuración → Cobranza | Hecho |
 | 11 | `reports` (sin tablas propias, seis reportes de solo lectura sobre modelos existentes: pacientes, citas y tasa de no-show, producción por profesional, planes de tratamiento, cuentas por cobrar como fotografía actual, uso del asistente de IA) con exportación CSV auditada (`reports.export`) y `GET /reports/dashboard`, un tablero de inicio por rol que no exige `reports.read` sino el permiso propio de cada sección que arma (`patients.read`, `agenda.read`, `treatment.read`, `billing.read`, `ai.use`/`ai.configure`). `scripts/backup.ps1`/`.sh` (pg_dump + storage/ cifrados con OpenSSL si hay `BACKUP_PASSPHRASE`, retención configurable) y `scripts/restore_test.ps1`/`.sh` (restaura en una base desechable, verifica y limpia) documentados en `docs/OPERACION.md`, con programación en Windows (Programador de tareas) y Linux (cron). Frontend: pantalla "Reportes" con selector de fechas y exportación por pestaña; página de inicio reconstruida como tablero por rol | Hecho |
-| 12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

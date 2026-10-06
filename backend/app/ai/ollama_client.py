@@ -2,11 +2,28 @@
 sin llamadas a internet. Si Ollama no responde, el resto del sistema sigue funcionando
 (la transcripcion funciona siempre; solo /ai/interpret devuelve 503 -- ver interpreter.py)."""
 
+import json
 from typing import Any
 
 import httpx
 
 from app.core.config import get_settings
+
+# Fase 12 (E2E): con AI_FAKE_MODE=true, cada dictado produce estas dos acciones fijas
+# sin importar el texto -- no es un resumen del transcript, es un doble determinista
+# para poder probar "aceptar propuestas" sin depender de un modelo real. Mismo patron
+# que el FakeOllama por monkeypatch de las pruebas de integracion (tests/integration/ai),
+# pero vive en el cliente mismo para que un backend levantado en otro proceso (como el
+# que arranca Playwright) tambien lo use sin tocar interpreter.py ni el router.
+_FAKE_CHAT_CONTENT = json.dumps(
+    {
+        "actions": [
+            {"type": "set_chief_complaint", "text": "Dolor en muela inferior derecha"},
+            {"type": "add_vital_signs", "hr": 72},
+        ],
+        "unrecognized": [],
+    }
+)
 
 
 class OllamaUnavailableError(Exception):
@@ -33,6 +50,8 @@ async def chat(
     acota cuanto se puede generar, para que un bucle que repeat_penalty no alcance a romper
     termine en un error rapido en vez de agotar todo OLLAMA_TIMEOUT_S."""
     settings = get_settings()
+    if settings.ai_fake_mode:
+        return {"message": {"role": "assistant", "content": _FAKE_CHAT_CONTENT}}
     payload = {
         "model": model,
         "messages": [
@@ -56,6 +75,8 @@ async def tags() -> list[dict[str, Any]]:
     """GET /api/tags: modelos instalados en Ollama, para el estado y el selector de
     modelo en Configuracion -> Asistente IA."""
     settings = get_settings()
+    if settings.ai_fake_mode:
+        return [{"name": "fake-e2e-model", "model": "fake-e2e-model", "digest": "fakedigest"}]
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(f"{settings.ollama_url}/api/tags")

@@ -70,6 +70,12 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
         ref={canvasRef}
         width={400}
         height={150}
+        role="img"
+        aria-label={
+          hasStroke
+            ? 'Firma capturada'
+            : 'Area para firmar con el mouse o el dedo -- requiere un dispositivo senalador'
+        }
         className={styles.canvas}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

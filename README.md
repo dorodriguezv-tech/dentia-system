@@ -21,7 +21,7 @@ backend/   API FastAPI (Python)
 frontend/  Interfaz React + TypeScript (Vite)
 docs/      Especificación y arquitectura
 storage/   Archivos locales (ignorado en git)
-e2e/       Pruebas Playwright (se agregan en fases posteriores)
+e2e/       Pruebas Playwright (flujo completo, accesibilidad, rendimiento)
 ```
 
 ## Puesta en marcha
@@ -125,6 +125,21 @@ certificados que ya usa el sistema.
 las pruebas automatizadas (`pytest`), que usan un `FakeOllama` y no necesitan Ollama
 instalado.
 
+### 5. Pruebas E2E (Playwright)
+```bash
+cd e2e
+npm install
+npx playwright install chromium   # solo la primera vez
+npx playwright test               # levanta backend y frontend solos (webServer)
+```
+Tres archivos: `full-flow.spec.ts` (paciente → cita → atención → IA → odontograma →
+diagnóstico → plan → consentimiento → pago → seguimiento, con tres roles reales),
+`accessibility.spec.ts` (WCAG 2 A/AA con `@axe-core/playwright`) y `performance.spec.ts`
+(p95 ≤ 2 s en las pantallas habituales). Corren contra la base de datos de desarrollo, no
+una base aislada de E2E (ver `docs/PENDIENTES_CLINICOS.md`). `manual-capture.spec.ts` no
+es una prueba: regenera las capturas de `docs/manual/` para `docs/MANUAL_USUARIO.md`
+(`CAPTURE_SCREENSHOTS=1 npx playwright test tests/manual-capture.spec.ts`).
+
 ## Decisiones de arquitectura
 Ver [`docs/adr/`](./docs/adr). La primera decisión (ruta de implementación y stack) está en
 [`docs/adr/ADR-001-ruta-b-stack.md`](./docs/adr/ADR-001-ruta-b-stack.md).
@@ -169,4 +184,11 @@ según el permiso propio del usuario en vez de exigir `reports.read`, y `scripts
 `scripts/restore_test.ps1`/`.sh` para respaldar la base de datos y `storage/` cifrados, con prueba
 automática de restauración en una base desechable; ver
 [`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#511-reportes-y-tablero-fase-11) y
-[`docs/OPERACION.md`](./docs/OPERACION.md)).
+[`docs/OPERACION.md`](./docs/OPERACION.md)) y
+**Fase 12 — E2E y endurecimiento** (Playwright: flujo completo, accesibilidad WCAG 2 A/AA
+con `axe-core` y rendimiento con p95 ≤ 2 s; revisión de seguridad OWASP —cabeceras de
+seguridad, documentación interactiva desactivada en producción, `JWT_SECRET` obligatorio,
+`pip-audit`/`npm audit`—; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#512-e2e-y-endurecimiento-fase-12),
+[`docs/SEGURIDAD.md`](./docs/SEGURIDAD.md), [`docs/MANUAL_USUARIO.md`](./docs/MANUAL_USUARIO.md)
+y [`docs/MANUAL_TECNICO.md`](./docs/MANUAL_TECNICO.md)).

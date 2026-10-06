@@ -20,7 +20,8 @@ export const PRESETS: Preset[] = [
   {
     code: 'menta_clinica',
     name: 'Menta clinica',
-    primary: '#2BB3A3',
+    // #1E7D72, no el teal original #2BB3A3 -- ver backend/app/modules/branding/presets.py.
+    primary: '#1E7D72',
     secondary: '#4A90C2',
     accent: '#F2A65A',
     bg: '#F7FAFA',

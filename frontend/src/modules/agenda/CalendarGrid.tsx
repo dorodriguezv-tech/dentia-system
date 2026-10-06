@@ -39,7 +39,10 @@ export function CalendarGrid({
   }
 
   return (
-    <div className={styles.grid} style={{ gridTemplateColumns: `56px repeat(${dates.length}, 1fr)` }}>
+    <div
+      className={styles.grid}
+      style={{ gridTemplateColumns: `56px repeat(${dates.length}, 1fr)` }}
+    >
       <div className={styles.corner} />
       {dates.map((date) => (
         <div key={toDateKey(date)} className={styles.dayHeader}>
@@ -67,12 +70,26 @@ export function CalendarGrid({
               const totalMin = i * SLOT_MINUTES
               const hour = DAY_START_HOUR + Math.floor(totalMin / 60)
               const minute = totalMin % 60
+              const label = `Agendar cita: ${date.toLocaleDateString('es-MX', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
               return (
                 <div
                   key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={label}
                   className={styles.slot}
                   style={{ height: SLOT_PX }}
                   onClick={() => onSlotClick(date, hour, minute)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSlotClick(date, hour, minute)
+                    }
+                  }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault()
@@ -95,10 +112,21 @@ export function CalendarGrid({
                 return (
                   <div
                     key={appointment.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Cita de ${appointment.patient_full_name} a las ${formatTime(start)}, estado ${appointment.status}`}
                     className={styles.appointment}
-                    draggable={appointment.status === 'RESERVADA' || appointment.status === 'CONFIRMADA'}
+                    draggable={
+                      appointment.status === 'RESERVADA' || appointment.status === 'CONFIRMADA'
+                    }
                     onDragStart={(e) => e.dataTransfer.setData('text/plain', appointment.id)}
                     onClick={() => onAppointmentClick(appointment)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onAppointmentClick(appointment)
+                      }
+                    }}
                     style={{
                       top,
                       height,
