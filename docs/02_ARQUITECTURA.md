@@ -171,6 +171,10 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /patients/{id}/billing-summary | Total cargado, pagado, crédito y saldo pendiente |
 | POST | /cash-sessions/open\|{id}/close; GET /cash-sessions/current\|{id} | Corte de caja por sesión |
 | GET/PUT | /billing/settings | Activar/desactivar la cobranza de la sucursal (permiso `billing.configure`) |
+| GET | /reports/patients\|appointments\|production\|treatment-plans\|ai-usage?date_from=&date_to= | Reportes con rango de fechas (permiso `reports.read`) |
+| GET | /reports/accounts-receivable | Cuentas por cobrar (fotografía actual, sin rango de fechas) |
+| GET | /reports/{reporte}/export | Exporta el mismo reporte como CSV (lectura auditada, `reports.export`) |
+| GET | /reports/dashboard | Tablero de inicio por rol (solo autenticación; cada sección se filtra por su propio permiso) |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
 
 ### 5.1 Autenticación y autorización (Fase 1)
@@ -668,6 +672,48 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   diferencia contra lo esperado. Configuración → Cobranza (`admin_clinica`) con el
   interruptor de activar/desactivar.
 
+### 5.11 Reportes y tablero (Fase 11)
+- `reports` no agrega tablas: cada reporte es una consulta (`service.py`) armada
+  sobre modelos de otros módulos ya existentes (`patients`, `agenda`, `treatment`,
+  `billing`, `app/ai`). Seis reportes: pacientes nuevos/activos, citas por estado
+  y tasa de no-show (excluye `REPROGRAMADA` del denominador — una cita
+  reprogramada no es un resultado real, se "convierte" en una nueva), producción
+  por profesional (suma de `Charge.amount` de cargos activos, agrupada por
+  `ProcedurePerformed.professional_id`), planes de tratamiento aceptados y
+  pendientes, cuentas por cobrar y uso del asistente de IA (sugerencias por
+  estado y tipo de acción).
+- Cada reporte con rango de fechas acepta `date_from`/`date_to` opcionales (por
+  defecto, últimos 30 días — catálogo configurable, ver
+  docs/PENDIENTES_CLINICOS.md); **cuentas por cobrar es la excepción
+  deliberada**: no recibe rango porque es una fotografía del momento (un saldo
+  pendiente de hace meses sigue siendo una cuenta por cobrar hoy).
+- Exportación CSV auditada (regla de seguridad, CLAUDE.md sec. 5): cada
+  `GET /reports/{reporte}/export` registra un `AuditEvent` (`reports.export`,
+  `entity_type="report"`) antes de responder, con el rango de fechas usado en
+  `details`.
+- **Tablero de inicio por rol**: `GET /reports/dashboard` es deliberadamente
+  *distinto* de la pantalla "Reportes" completa en cuanto a permisos. La pantalla
+  completa exige `reports.read` (solo superadmin/admin_clinica/caja, según
+  docs/MATRIZ_PERMISOS.md). El tablero, en cambio, solo exige estar autenticado;
+  internamente arma cada sección (pacientes, agenda de hoy, tratamientos,
+  cobranza, uso de IA) únicamente si el usuario ya tiene el permiso de lectura de
+  ese módulo (`patients.read`, `agenda.read`, `treatment.read`, `billing.read`,
+  `ai.use`/`ai.configure`) — así cada rol ve un tablero relevante en su página de
+  inicio sin ampliar el alcance de `reports.read`. La sección de cobranza además
+  se omite por completo si `ClinicBillingSettings.billing_enabled` está en falso
+  (clínica universitaria de práctica sin cobranza activa).
+- Sin dependencia nueva: la exportación usa el módulo `csv` de la librería
+  estándar de Python (filas ya tipadas con Pydantic, se listan sus campos
+  declarados como encabezado) — no hace falta `pandas` ni nada equivalente para
+  un CSV plano.
+- Frontend: pantalla "Reportes" con selector de rango de fechas compartido,
+  pestañas por reporte y botón "Exportar CSV" (descarga directa con un
+  `<a download>` temporal sobre un blob, a diferencia del PDF de recibo de la
+  Fase 10 que se abre en una pestaña nueva — un CSV es una descarga, no una
+  vista). La página de inicio (`HomePage`) se reconstruyó como el tablero por rol
+  descrito arriba, con un enlace "Ver reportes completos" visible solo para quien
+  tiene `reports.read`.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -679,10 +725,25 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   dentro de la pantalla de Atención (`Alt+M`), no flotante en toda la app: el dictado
   pertenece a una atención concreta, igual que la nota SOAP que lo acompaña.
 - Atajos de teclado: `Alt+N` nueva atención, `Alt+O` odontograma, `Alt+M` micrófono, `Esc` cancelar dictado.
+- **Página de inicio (Fase 11):** tablero por rol (ver sección 5.11) en vez del
+  mensaje fijo de versiones anteriores; pantalla "Reportes" propia (`/reportes`)
+  en el menú lateral, visible solo con permiso `reports.read`.
 
 ## 7. Respaldo
-- `pg_dump` diario cifrado, copia de `storage/` y retención configurable.
-- Script `scripts/restore_test.ps1`/`.sh` que restaura en una base temporal y registra el resultado.
+- `scripts/backup.ps1`/`.sh`: `pg_dump --format=custom` del rol de aplicación
+  (`dentia`, sin privilegios de administrador) + copia comprimida de `storage/`,
+  ambos cifrados con OpenSSL (AES-256-CBC + PBKDF2) si hay una frase de paso en
+  `BACKUP_PASSPHRASE` — si no la hay, el respaldo se completa sin cifrar con una
+  advertencia visible en el log, para no romper una corrida desatendida. Retención
+  configurable (30 días por defecto) que borra los respaldos más viejos al final
+  de cada corrida.
+- `scripts/restore_test.ps1`/`.sh`: restaura el respaldo más reciente en una base
+  de datos desechable (requiere credenciales de un superusuario de PostgreSQL,
+  solo por variable de entorno, nunca en un archivo — el rol `dentia` no tiene
+  `CREATEDB` a propósito), verifica con una consulta sobre tablas clave y el
+  `.zip` de `storage/`, limpia todo y registra `PASS`/`FAIL`. Ver
+  `docs/OPERACION.md` para la programación en Windows (Programador de tareas) y
+  Linux (cron), y el detalle de la verificación manual hecha en esta fase.
 
 ## 8. Estado de implementación
 | Fase | Alcance | Estado |
@@ -698,10 +759,11 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 8 | `app/ai/` (`AiSuggestion`, `AiClinicSettings`): transcripción con `faster-whisper` (vocabulario dental en `initial_prompt`, VAD), pre-parser determinista de números FDI hablados (`dental_parser.py`), interpretación con Ollama (unión discriminada de 11 acciones como `format`, `temperature=0`, catálogos reales de la clínica), validación en dos capas (esquema + catálogos de BD), acciones prohibidas descartadas por tipo, aceptar/editar/rechazar por sugerencia (nunca escritura directa — regla 9), `origin=AI_ASSISTED` extendido a expediente/odontograma/diagnóstico/tratamiento (regla 10). `python -m app.ai.eval` + `tests/ai/corpus.jsonl` (50 dictados) miden precisión contra el Ollama real. Dos bugs de raíz corregidos probando con el modelo real: bucle de repetición infinito bajo decodificación forzada (`repeat_penalty`) y una acción con todos los campos opcionales que el modelo usaba como salida de mínimo esfuerzo (validador que exige al menos un valor). Frontend: micrófono + transcripción editable + panel de propuestas por destino dentro de la pantalla de Atención, con reserva de texto libre si Ollama no responde; Configuración → Asistente IA (estado, modelo, prueba de micrófono) | Hecho |
 | 9 | `documents` (`DocumentTemplate` versionada regla 7, `Consent` firmado con `<canvas>` táctil, PDF con xhtml2pdf, hash SHA-256, ligado a lo sumo a un procedimiento o un plan) e `imaging` (`Image` por archivo, carga múltiple con metadatos compartidos, miniatura solo para JPG/PNG, lectura de PDF/imagen completa auditada). `StorageBackend` de la Fase 0 reutilizado tal cual (ya generaba rutas no adivinables). Frontend: `SignaturePad` con eventos de puntero (sin librería), visor de imágenes con zoom (`scale`) y brillo/contraste (`filter`) puramente en el cliente; pestañas nuevas "Consentimientos" e "Imágenes" en el paciente | Hecho |
 | 10 | `billing` completo: `Payment` (efectivo/tarjeta/transferencia), `PaymentAllocation` (aplicación total o parcial a un cargo, o anticipo sin aplicar), saldo y estado de cada `Charge` calculados contra los pagos activos (regla 4, nunca guardados), cancelación de cargos/pagos con motivo (regla 2; un cargo con pagos aplicados no se puede cancelar sin cancelar esos pagos primero), recibo PDF con el logo de la clínica, corte de caja por sesión (`CashSession`, totales por método y diferencia contra lo esperado). `ClinicBillingSettings.billing_enabled` permite desactivar la cobranza por sucursal (p.ej. clínicas universitarias de práctica) sin dejar de generar el cargo sugerido al registrar un procedimiento realizado. Nuevo permiso `billing.configure` (incremental, solo `admin_clinica`). Frontend: pestaña "Cuenta" en el paciente, pantalla "Caja" para abrir/cerrar sesión, Configuración → Cobranza | Hecho |
-| 11–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 11 | `reports` (sin tablas propias, seis reportes de solo lectura sobre modelos existentes: pacientes, citas y tasa de no-show, producción por profesional, planes de tratamiento, cuentas por cobrar como fotografía actual, uso del asistente de IA) con exportación CSV auditada (`reports.export`) y `GET /reports/dashboard`, un tablero de inicio por rol que no exige `reports.read` sino el permiso propio de cada sección que arma (`patients.read`, `agenda.read`, `treatment.read`, `billing.read`, `ai.use`/`ai.configure`). `scripts/backup.ps1`/`.sh` (pg_dump + storage/ cifrados con OpenSSL si hay `BACKUP_PASSPHRASE`, retención configurable) y `scripts/restore_test.ps1`/`.sh` (restaura en una base desechable, verifica y limpia) documentados en `docs/OPERACION.md`, con programación en Windows (Programador de tareas) y Linux (cron). Frontend: pantalla "Reportes" con selector de fechas y exportación por pestaña; página de inicio reconstruida como tablero por rol | Hecho |
+| 12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-El módulo de reports de la sección 2 es el diseño objetivo; no tiene modelos ni migraciones
-todavía — se crea conforme avanza su fase (11–12). `patients`, `records`/`encounters`,
-`odontogram`, `agenda`, `diagnosis`, `treatment`, `ai`, `documents`, `imaging` y `billing` ya
-existen completos, incluida la pestaña "Cuenta" del paciente, la pantalla "Caja" y
-Configuración → Cobranza de la sección 6 (Fase 10).
+El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
+consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,
+`treatment`, `ai`, `documents`, `imaging`, `billing` y `reports` ya existen completos, incluida
+la pestaña "Cuenta" del paciente, la pantalla "Caja", Configuración → Cobranza (Fase 10) y la
+pantalla "Reportes" más el tablero de inicio por rol (Fase 11).

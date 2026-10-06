@@ -89,7 +89,7 @@ async def create_charge(
     return charge
 
 
-async def _applied_amounts_by_charge(
+async def applied_amounts_by_charge(
     db: AsyncSession, *, charge_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, Decimal]:
     if not charge_ids:
@@ -117,7 +117,7 @@ async def list_charges(
         .order_by(Charge.created_at.desc())
     )
     charges = list((await db.execute(stmt)).scalars().all())
-    applied_by_charge = await _applied_amounts_by_charge(db, charge_ids=[c.id for c in charges])
+    applied_by_charge = await applied_amounts_by_charge(db, charge_ids=[c.id for c in charges])
     return [
         (
             charge,
@@ -146,7 +146,7 @@ async def cancel_charge(
     actor_id: uuid.UUID,
 ) -> Charge:
     charge = await _get_charge_in_clinic(db, clinic_id=clinic_id, charge_id=charge_id)
-    applied = (await _applied_amounts_by_charge(db, charge_ids=[charge_id]))[charge_id]
+    applied = (await applied_amounts_by_charge(db, charge_ids=[charge_id]))[charge_id]
     if applied > 0:
         raise AppError(
             "CHARGE_HAS_PAYMENTS",
@@ -197,7 +197,7 @@ async def create_payment(
     charge_ids = [a.charge_id for a in data.allocations]
     charges_by_id: dict[uuid.UUID, Charge] = {}
     if charge_ids:
-        applied_by_charge = await _applied_amounts_by_charge(db, charge_ids=charge_ids)
+        applied_by_charge = await applied_amounts_by_charge(db, charge_ids=charge_ids)
         for allocation in data.allocations:
             charge = await _get_charge_in_clinic(
                 db, clinic_id=clinic_id, charge_id=allocation.charge_id

@@ -6,6 +6,7 @@ import {
   canManageBranding,
   canManageUsers,
   canReadAgenda,
+  canReadReports,
   canWriteBilling,
 } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
@@ -69,6 +70,13 @@ export function Layout() {
             <li>
               <NavLink to="/caja" className={styles.navLink}>
                 Caja
+              </NavLink>
+            </li>
+          )}
+          {canReadReports(activeRole) && (
+            <li>
+              <NavLink to="/reportes" className={styles.navLink}>
+                Reportes
               </NavLink>
             </li>
           )}

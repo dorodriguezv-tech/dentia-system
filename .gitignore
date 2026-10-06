@@ -22,6 +22,9 @@ frontend/.vite/
 storage/*
 !storage/.gitkeep
 
+# Respaldos generados por scripts/backup.ps1 y scripts/backup.sh (nunca en git)
+backups/
+
 # IDE / OS
 .DS_Store
 Thumbs.db

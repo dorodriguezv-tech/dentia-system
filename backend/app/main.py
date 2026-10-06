@@ -17,6 +17,7 @@ from app.modules.imaging.router import router as imaging_router
 from app.modules.odontogram.router import router as odontogram_router
 from app.modules.patients.router import router as patients_router
 from app.modules.records.router import router as records_router
+from app.modules.reports.router import router as reports_router
 from app.modules.treatment.router import router as treatment_router
 
 settings = get_settings()
@@ -48,6 +49,7 @@ app.include_router(billing_router, prefix=settings.api_prefix)
 app.include_router(ai_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(imaging_router, prefix=settings.api_prefix)
+app.include_router(reports_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

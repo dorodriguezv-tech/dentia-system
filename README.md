@@ -161,4 +161,12 @@ uno o varios cargos o como anticipo, saldo y estado de cada cargo calculados con
 activos y nunca guardados —regla 4—, cancelación de cargos/pagos con motivo, recibo en PDF, corte
 de caja por sesión; la cobranza se puede desactivar por sucursal para clínicas universitarias de
 práctica sin dejar de generar el cargo sugerido; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#510-cobranza-fase-10)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#510-cobranza-fase-10)) y
+**Fase 11 — Reportes, respaldos y continuidad** (seis reportes de solo lectura con exportación CSV
+auditada — pacientes, citas y tasa de no-show, producción por profesional, planes de tratamiento,
+cuentas por cobrar, uso del asistente de IA —, tablero de inicio por rol que arma cada sección
+según el permiso propio del usuario en vez de exigir `reports.read`, y `scripts/backup.ps1`/`.sh` +
+`scripts/restore_test.ps1`/`.sh` para respaldar la base de datos y `storage/` cifrados, con prueba
+automática de restauración en una base desechable; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#511-reportes-y-tablero-fase-11) y
+[`docs/OPERACION.md`](./docs/OPERACION.md)).

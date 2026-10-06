@@ -62,7 +62,12 @@ export function canReadOdontogram(roleCode: string | null): boolean {
 }
 
 /** Roles con el permiso `agenda.write` (ver docs/MATRIZ_PERMISOS.md). */
-const ROLES_THAT_WRITE_AGENDA = new Set(['admin_clinica', 'odontologo', 'especialista', 'recepcion'])
+const ROLES_THAT_WRITE_AGENDA = new Set([
+  'admin_clinica',
+  'odontologo',
+  'especialista',
+  'recepcion',
+])
 
 export function canWriteAgenda(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_WRITE_AGENDA.has(roleCode)
@@ -166,4 +171,11 @@ export function canWriteBilling(roleCode: string | null): boolean {
 
 export function canConfigureBilling(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_CONFIGURE_BILLING.has(roleCode)
+}
+
+/** Roles con el permiso `reports.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_REPORTS = new Set(['superadmin', 'admin_clinica', 'caja'])
+
+export function canReadReports(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_REPORTS.has(roleCode)
 }

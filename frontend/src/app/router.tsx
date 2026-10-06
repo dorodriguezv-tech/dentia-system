@@ -12,6 +12,7 @@ import { AtencionPage } from '../modules/encounters/AtencionPage'
 import { NewPatientPage } from '../modules/patients/NewPatientPage'
 import { PatientDetailPage } from '../modules/patients/PatientDetailPage'
 import { PatientsListPage } from '../modules/patients/PatientsListPage'
+import { ReportsPage } from '../modules/reports/ReportsPage'
 import { UsersPage } from '../modules/users/UsersPage'
 import { HomePage } from './HomePage'
 import { Layout } from './Layout'
@@ -61,6 +62,10 @@ export const router = createBrowserRouter([
               {
                 element: <RequireRole roles={['admin_clinica', 'caja']} />,
                 children: [{ path: 'caja', element: <CashSessionPage /> }],
+              },
+              {
+                element: <RequireRole roles={['admin_clinica', 'caja', 'superadmin']} />,
+                children: [{ path: 'reportes', element: <ReportsPage /> }],
               },
             ],
           },
