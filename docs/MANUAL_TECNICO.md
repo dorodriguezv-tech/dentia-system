@@ -192,6 +192,22 @@ presupuesto de 2 s es pesimista a propósito; una falla aislada casi siempre es 
 la máquina donde corres la prueba (otro proceso pesado al mismo tiempo), no una
 regresión real — vuelve a correr esa prueba sola antes de investigar más.
 
+**`ollama serve` falla con `listen tcp 127.0.0.1:11434: bind: Only one usage...`**
+No es una falla: Ollama ya está corriendo. El instalador de Windows deja una app en la
+bandeja del sistema que arranca sola con Windows y ya escucha en ese puerto — confirma
+con `curl http://localhost:11434/api/version` antes de correr `ollama serve` (ver
+`docs/INICIO_RAPIDO.md` sec. 4).
+
+**El log del backend muestra `POST /api/v1/auth/refresh ... 401 Unauthorized`**
+Normal si el refresh token guardado en el navegador ya venció (`REFRESH_TOKEN_EXPIRE_HOURS`,
+8 horas por defecto) o si abres el frontend con una sesión vieja de otra corrida — el
+frontend simplemente manda al usuario de vuelta al login, no hay sesión que recuperar.
+Si en desarrollo veías **dos** 401 idénticos seguidos en cada carga de página, era un bug
+ya corregido: `AppProviders` llamaba `bootstrap()` (que dispara `/auth/refresh`) dentro de
+un `useEffect` sin protección, y `<StrictMode>` (`main.tsx`) lo invoca dos veces en
+desarrollo para detectar efectos sin limpieza — ahora un `useRef` evita la segunda llamada
+(`frontend/src/app/providers.tsx`).
+
 ## 7. Dónde seguir leyendo
 
 | Documento | Para qué |
