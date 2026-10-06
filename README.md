@@ -155,4 +155,10 @@ editadas/rechazadas una por una — la IA nunca escribe directo en el expediente
 **Fase 9 — Consentimientos e imagenología** (plantillas HTML versionadas, firma en pantalla táctil
 con `<canvas>`, PDF generado con hash SHA-256 e inmutable una vez firmado, carga múltiple de
 imágenes/radiografías con miniaturas y visor con zoom/brillo/contraste, lectura auditada; ver
-[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#59-consentimientos-e-imagenología-fase-9)).
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#59-consentimientos-e-imagenología-fase-9)) y
+**Fase 10 — Cobranza** (pagos en efectivo/tarjeta/transferencia con aplicación total o parcial a
+uno o varios cargos o como anticipo, saldo y estado de cada cargo calculados contra los pagos
+activos y nunca guardados —regla 4—, cancelación de cargos/pagos con motivo, recibo en PDF, corte
+de caja por sesión; la cobranza se puede desactivar por sucursal para clínicas universitarias de
+práctica sin dejar de generar el cargo sugerido; ver
+[`docs/02_ARQUITECTURA.md`](./docs/02_ARQUITECTURA.md#510-cobranza-fase-10)).

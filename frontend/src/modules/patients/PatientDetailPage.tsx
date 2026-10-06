@@ -1,8 +1,17 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { canReadDocuments, canReadImaging, canSignDocuments, canWriteDocuments, canWriteImaging } from '../auth/roles'
+import {
+  canReadBilling,
+  canReadDocuments,
+  canReadImaging,
+  canSignDocuments,
+  canWriteBilling,
+  canWriteDocuments,
+  canWriteImaging,
+} from '../auth/roles'
 import { useActiveRole } from '../auth/store'
+import { AccountTab } from '../billing/AccountTab'
 import { ConsentsTab } from '../documents/ConsentsTab'
 import { ImagesTab } from '../imaging/ImagesTab'
 import { OdontogramaTab } from '../odontogram/OdontogramaTab'
@@ -13,7 +22,14 @@ import styles from './PatientDetailPage.module.css'
 import { PatientHeader } from './PatientHeader'
 import { ResumenTab } from './ResumenTab'
 
-type Tab = 'resumen' | 'expediente' | 'odontograma' | 'tratamientos' | 'consentimientos' | 'imagenes'
+type Tab =
+  | 'resumen'
+  | 'expediente'
+  | 'odontograma'
+  | 'tratamientos'
+  | 'consentimientos'
+  | 'imagenes'
+  | 'cuenta'
 
 export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -80,6 +96,15 @@ export function PatientDetailPage() {
             Imágenes
           </button>
         )}
+        {canReadBilling(activeRole) && (
+          <button
+            className={tab === 'cuenta' ? styles.tabActive : styles.tab}
+            type="button"
+            onClick={() => setTab('cuenta')}
+          >
+            Cuenta
+          </button>
+        )}
       </div>
 
       {tab === 'resumen' && <ResumenTab patientId={patientId} />}
@@ -94,6 +119,7 @@ export function PatientDetailPage() {
         />
       )}
       {tab === 'imagenes' && <ImagesTab patientId={patientId} canWrite={canWriteImaging(activeRole)} />}
+      {tab === 'cuenta' && <AccountTab patientId={patientId} canWrite={canWriteBilling(activeRole)} />}
     </section>
   )
 }

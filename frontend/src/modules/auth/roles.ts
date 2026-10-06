@@ -150,3 +150,20 @@ export function canReadImaging(roleCode: string | null): boolean {
 export function canWriteImaging(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_WRITE_IMAGING.has(roleCode)
 }
+
+/** Roles con los permisos `billing.*` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_READ_BILLING = new Set(['admin_clinica', 'recepcion', 'caja'])
+const ROLES_THAT_WRITE_BILLING = new Set(['admin_clinica', 'caja'])
+const ROLES_THAT_CONFIGURE_BILLING = new Set(['admin_clinica'])
+
+export function canReadBilling(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_READ_BILLING.has(roleCode)
+}
+
+export function canWriteBilling(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_WRITE_BILLING.has(roleCode)
+}
+
+export function canConfigureBilling(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_CONFIGURE_BILLING.has(roleCode)
+}

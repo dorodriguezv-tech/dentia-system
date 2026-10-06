@@ -34,6 +34,7 @@ por defecto deben validarse con la clinica antes de produccion
 | `imaging.write` | Cargar imagenes y radiografias |  |  | X | X | X |  |  |
 | `billing.read` | Ver cargos, pagos y saldos |  | X |  |  |  | X | X |
 | `billing.write` | Registrar cargos y pagos |  | X |  |  |  |  | X |
+| `billing.configure` | Activar o desactivar la cobranza de la sucursal |  | X |  |  |  |  |  |
 | `reports.read` | Ver reportes | X | X |  |  |  |  | X |
 | `ai.use` | Usar el asistente de IA por voz |  |  | X | X |  |  |  |
 | `ai.configure` | Configurar el asistente de IA |  | X |  |  |  |  |  |

@@ -3,6 +3,8 @@ import { AgendaPage } from '../modules/agenda/AgendaPage'
 import { AiSettingsPage } from '../modules/ai/AiSettingsPage'
 import { AppearancePage } from '../modules/branding/AppearancePage'
 import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
+import { BillingSettingsPage } from '../modules/billing/BillingSettingsPage'
+import { CashSessionPage } from '../modules/billing/CashSessionPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
@@ -51,7 +53,14 @@ export const router = createBrowserRouter([
               },
               {
                 element: <RequireRole roles={['admin_clinica']} />,
-                children: [{ path: 'configuracion/asistente-ia', element: <AiSettingsPage /> }],
+                children: [
+                  { path: 'configuracion/asistente-ia', element: <AiSettingsPage /> },
+                  { path: 'configuracion/cobranza', element: <BillingSettingsPage /> },
+                ],
+              },
+              {
+                element: <RequireRole roles={['admin_clinica', 'caja']} />,
+                children: [{ path: 'caja', element: <CashSessionPage /> }],
               },
             ],
           },

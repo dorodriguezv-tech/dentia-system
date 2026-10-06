@@ -285,7 +285,8 @@ async def test_register_performed_creates_odontogram_events_and_suggested_charge
     planned_entries = [h for h in history.json() if h["kind"] == "PLANNED"]
     assert planned_entries[0]["is_current"] is False
 
-    # Se genero un cargo SUGERIDO (regla 4: no es un pago). billing.read no lo tiene
+    # Se genero un cargo (regla 4: no es un pago, solo una sugerencia de cobro -- su
+    # estado se calcula contra los pagos aplicados, Fase 10). billing.read no lo tiene
     # el odontologo (separacion clinico/financiero ya establecida en el catalogo de
     # permisos), asi que se consulta con un admin_clinica.
     await make_user(email="admin@example.com", role_code="admin_clinica")
@@ -294,7 +295,7 @@ async def test_register_performed_creates_odontogram_events_and_suggested_charge
         f"/api/v1/patients/{patient_id}/charges", headers=_headers(admin_token, clinic.id)
     )
     assert len(charges.json()) == 1
-    assert charges.json()[0]["status"] == "SUGERIDO"
+    assert charges.json()[0]["computed_status"] == "PENDIENTE"
     assert charges.json()[0]["amount"] == "500.00"
 
 

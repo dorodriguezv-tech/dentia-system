@@ -24,7 +24,7 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `treatment` | ProcedureCatalog, PriceList, TreatmentPlan, TreatmentPhase, ProcedurePlanned, ProcedurePerformed, PlanAcceptance |
 | `documents` | DocumentTemplate (versionada), Consent |
 | `imaging` | Image (metadatos + pieza/procedimiento) |
-| `billing` | Charge, Payment, PaymentAllocation, Receipt, CashSession |
+| `billing` | Charge, Payment, PaymentAllocation, CashSession, ClinicBillingSettings |
 | `reports` | Vistas/consultas de solo lectura |
 | `audit` | AuditEvent |
 
@@ -87,6 +87,29 @@ notes?, is_active, annul_reason?`
 -- una fila por archivo: "carga múltiple" es el endpoint aceptando varios archivos en una
 peticion con los mismos metadatos, no una entidad "estudio" separada.
 
+### Charge, Payment y PaymentAllocation (Fase 10)
+`Charge` (desde la Fase 7) gana columnas de cancelacion (`is_active, cancel_reason,
+cancelled_by, cancel_authorized_by, cancelled_at`, regla 2) pero su `status` original
+("SUGERIDO") ya no se usa para mostrar el estado de cobro: se calcula en caliente a
+partir de `PaymentAllocation` (`rules.charge_computed_status`), nunca se guarda.
+
+`Payment`: `id, clinic_id, patient_id, cash_session_id?, method (efectivo/tarjeta/
+transferencia), amount, received_at, reference?, notes?, is_active, cancel_reason?` --
+puede no tener ninguna aplicacion (anticipo: credito del paciente). `PaymentAllocation`:
+`id, clinic_id, payment_id, charge_id, amount_applied` -- aplica (total o parcialmente)
+un pago a un cargo; si el pago se cancela, sus aplicaciones no se borran (regla 2), se
+excluyen del saldo calculado porque `Payment.is_active` pasa a `False`.
+
+`CashSession`: `id, clinic_id, opened_by, opened_at, opening_amount, status (ABIERTA/
+CERRADA), closed_by?, closed_at?, closing_amount?, notes?` -- corte de caja por sesion;
+la diferencia contra lo esperado (apertura + cobros en efectivo de la sesion) se calcula
+en el servicio, no se guarda.
+
+`ClinicBillingSettings`: `clinic_id (PK), billing_enabled, updated_at, updated_by` --
+una fila por sucursal (mismo patron que `ClinicBranding`/`AiClinicSettings`): la
+cobranza se puede desactivar por sucursal (p.ej. clinicas universitarias de practica
+que no cobran de verdad) sin tocar el resto del flujo clinico.
+
 ### AuditEvent
 `event_id, timestamp, actor_user_id, clinic_id, action (CREATE/READ/UPDATE/CLOSE/EXPORT/SIGN/DENY/AI_SUGGEST/AI_APPLY), resource_type, resource_id, patient_id, result, ip, user_agent, before_hash, after_hash, reason, metadata jsonb`
 
@@ -129,7 +152,7 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | PATCH/POST | /treatment-plans/{id}/status\|accept; /phases; /phases/{id}/items; /items/{id}/annul\|discount | Fases, ítems, aceptación y descuentos del plan |
 | GET | /treatment-plans/{id}/pdf | PDF del presupuesto con el logo de la clínica |
 | POST/GET | /procedures-performed; /patients/{id}/procedures-performed | Procedimientos realizados (regla 3) |
-| GET | /patients/{id}/charges | Cargos sugeridos (regla 4, módulo `billing` mínimo) |
+| GET | /patients/{id}/charges | Cargos, con saldo y estado calculados contra los pagos aplicados (regla 4) |
 | POST | /ai/transcribe, /ai/interpret | Voz a texto y texto a propuestas de acción |
 | GET | /ai/suggestions?encounter_id= | Propuestas pendientes de una atención |
 | POST | /ai/suggestions/{id}/accept\|reject | Aplica (regla 9) o descarta una propuesta |
@@ -141,7 +164,13 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | POST/GET | /patients/{id}/images | Subir (uno o varios archivos) y listar imágenes/radiografías |
 | GET | /images/{id}; /images/{id}/thumbnail | Archivo completo (lectura auditada) y miniatura |
 | POST | /images/{id}/annul | Anula una imagen con motivo (regla 2) |
-| POST | /payments | Cobranza (Fase 10) |
+| POST | /charges/{id}/cancel | Cancela un cargo sin pagos aplicados, con motivo (regla 2) |
+| GET/POST | /patients/{id}/payments | Pagos del paciente (con o sin aplicación a un cargo = anticipo) |
+| GET | /payments/{id}/receipt | Recibo PDF con el logo de la clínica |
+| POST | /payments/{id}/cancel | Cancela un pago con motivo; restaura el saldo del cargo (regla 2) |
+| GET | /patients/{id}/billing-summary | Total cargado, pagado, crédito y saldo pendiente |
+| POST | /cash-sessions/open\|{id}/close; GET /cash-sessions/current\|{id} | Corte de caja por sesión |
+| GET/PUT | /billing/settings | Activar/desactivar la cobranza de la sucursal (permiso `billing.configure`) |
 | GET | /audit?patient_id=&user_id=&from=&to= | Auditoría |
 
 ### 5.1 Autenticación y autorización (Fase 1)
@@ -589,6 +618,56 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   frontend, sin reprocesar el archivo en el servidor. Dos pestañas nuevas en el paciente,
   "Consentimientos" e "Imágenes", junto a Tratamientos.
 
+### 5.10 Cobranza (Fase 10)
+- **El saldo y el estado de un cargo se calculan, nunca se guardan (regla 4):**
+  `Charge.status` ("SUGERIDO", de la Fase 7) queda como una etiqueta histórica de origen;
+  lo que el frontend muestra (`PENDIENTE`/`PARCIAL`/`PAGADO`/`CANCELADO`) sale de sumar
+  las `PaymentAllocation` activas aplicadas a ese cargo en el momento de la consulta
+  (`rules.charge_computed_status`). Igual que el odontograma reconstruye el estado de una
+  pieza a partir de sus eventos en vez de guardar un campo "estado actual" editable, aquí
+  la "verdad" del saldo vive en los pagos de verdad, no en una bandera que alguien podría
+  olvidar actualizar.
+- **Un pago puede no aplicarse a ningún cargo (anticipo):** `PaymentCreateRequest.allocations`
+  es opcional; lo que no se asigna a un cargo queda como crédito del paciente
+  (`unallocated_amount`), visible en el resumen de cuenta y usable para aplicarlo despues.
+  La suma de aplicaciones de un pago no puede superar su monto (validado con un
+  `model_validator`), ni la suma de aplicaciones de un cargo puede superar su saldo
+  pendiente (validado contra `PaymentAllocation` reales, no contra el monto original).
+- **Cancelar, no borrar (regla 2), con una restricción adicional para los cargos:** un
+  `Charge` con pagos aplicados no se puede cancelar directamente (`CHARGE_HAS_PAYMENTS`) --
+  hay que cancelar esos pagos primero, para que el saldo que un cargo cancelado implica
+  ("nada que cobrar") nunca contradiga pagos todavía activos. Cancelar un `Payment` no
+  borra sus `PaymentAllocation`: quedan en la base para el historial, pero se excluyen del
+  cálculo de saldo porque la consulta solo suma aplicaciones de pagos con `is_active=True`
+  -- el cargo recupera su saldo automáticamente, sin tocar sus propias filas.
+- **Corte de caja agrupa pagos por sesión, no solo efectivo:** al crear un `Payment`, si hay
+  una `CashSession` en estado `ABIERTA` para la sucursal, el pago se liga a ella
+  automáticamente (`cash_session_id`), sin importar el método -- el resumen de cierre
+  reporta totales por método, pero el "efectivo esperado" (para contar físicamente) solo
+  suma el monto inicial más los cobros en efectivo de la sesión.
+- **Cobranza opcional por sucursal (`ClinicBillingSettings.billing_enabled`):** pensado
+  para instalaciones donde no se cobra de verdad (p.ej. una clínica universitaria de
+  práctica). Desactivarla bloquea `POST /patients/{id}/payments` (`403 BILLING_DISABLED`)
+  y oculta la pestaña "Cuenta" en el frontend, pero **no** impide que
+  `treatment.register_performed` siga generando su `Charge` sugerido: ese cargo es un
+  registro clínico de lo que costaría el procedimiento, no un cobro real, así que no hay
+  razón clínica para suprimirlo solo porque la sucursal no cobra (ver
+  `docs/PENDIENTES_CLINICOS.md`). `GET /billing/settings` solo exige `billing.read` (no
+  `billing.configure`) porque cualquiera que vea cargos/pagos también necesita saber si la
+  cobranza está activa para decidir si mostrar esa pestaña; solo cambiarla (`PUT`) exige
+  `billing.configure`, un permiso nuevo (incremental, mismo patrón que
+  `diagnosis.read`/`treatment.read` en la Fase 7) asignado solo a `admin_clinica`.
+- **Recibo con reportlab, no xhtml2pdf:** a diferencia del consentimiento (Fase 9, que
+  renderiza una plantilla HTML real), un recibo es un documento estructurado fijo -- se
+  arma con `reportlab`/`platypus` igual que el presupuesto de la Fase 7, reutilizando el
+  logo de la clínica (`branding_service.read_logo`).
+- **Frontend:** pestaña "Cuenta" nueva en el paciente (resumen, cargos, pagos, formulario
+  de nuevo pago con aplicación opcional a cargos pendientes), oculta si `billing_enabled`
+  es falso. Pantalla "Caja" (`/caja`, fuera del paciente: una sesión de caja es de la
+  sucursal, no de un paciente) para abrir/cerrar sesión con los totales por método y la
+  diferencia contra lo esperado. Configuración → Cobranza (`admin_clinica`) con el
+  interruptor de activar/desactivar.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -618,10 +697,11 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 7 | `diagnosis` (texto libre + código opcional del catálogo, pieza/superficie validadas contra `odontogram/rules.py`) y `treatment` (`ProcedureCatalog` por sucursal, `TreatmentPlan` con fases y prioridad, `ProcedurePlanned`/`ProcedurePerformed` como entidades separadas —regla 3—, descuentos autorizados, aceptación total o parcial por ítem con fecha y responsable, PDF del presupuesto con el logo de la clínica). Lo planificado se refleja como `PLANNED` en el odontograma y, al realizarse, genera `PERFORMED` + `EXISTING` y retira el `PLANNED` (reusando la Fase 5 sin modificarla). Registrar un realizado genera un `Charge` "SUGERIDO" (módulo `billing` mínimo, nunca un pago —regla 4—). Dos permisos que faltaban desde la Fase 1 (`diagnosis.read`, `treatment.read`) agregados por migración incremental; bug de raíz corregido en `AccessDeniedAuditMiddleware` (guardaba la ruta completa en una columna de 100 caracteres). Frontend: quinta sección "Diagnósticos" en Expediente, pestaña nueva "Tratamientos" con el plan por fases, aceptación por checkboxes, descuentos, "marcar como realizado" y descarga de PDF | Hecho |
 | 8 | `app/ai/` (`AiSuggestion`, `AiClinicSettings`): transcripción con `faster-whisper` (vocabulario dental en `initial_prompt`, VAD), pre-parser determinista de números FDI hablados (`dental_parser.py`), interpretación con Ollama (unión discriminada de 11 acciones como `format`, `temperature=0`, catálogos reales de la clínica), validación en dos capas (esquema + catálogos de BD), acciones prohibidas descartadas por tipo, aceptar/editar/rechazar por sugerencia (nunca escritura directa — regla 9), `origin=AI_ASSISTED` extendido a expediente/odontograma/diagnóstico/tratamiento (regla 10). `python -m app.ai.eval` + `tests/ai/corpus.jsonl` (50 dictados) miden precisión contra el Ollama real. Dos bugs de raíz corregidos probando con el modelo real: bucle de repetición infinito bajo decodificación forzada (`repeat_penalty`) y una acción con todos los campos opcionales que el modelo usaba como salida de mínimo esfuerzo (validador que exige al menos un valor). Frontend: micrófono + transcripción editable + panel de propuestas por destino dentro de la pantalla de Atención, con reserva de texto libre si Ollama no responde; Configuración → Asistente IA (estado, modelo, prueba de micrófono) | Hecho |
 | 9 | `documents` (`DocumentTemplate` versionada regla 7, `Consent` firmado con `<canvas>` táctil, PDF con xhtml2pdf, hash SHA-256, ligado a lo sumo a un procedimiento o un plan) e `imaging` (`Image` por archivo, carga múltiple con metadatos compartidos, miniatura solo para JPG/PNG, lectura de PDF/imagen completa auditada). `StorageBackend` de la Fase 0 reutilizado tal cual (ya generaba rutas no adivinables). Frontend: `SignaturePad` con eventos de puntero (sin librería), visor de imágenes con zoom (`scale`) y brillo/contraste (`filter`) puramente en el cliente; pestañas nuevas "Consentimientos" e "Imágenes" en el paciente | Hecho |
-| 10–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
+| 10 | `billing` completo: `Payment` (efectivo/tarjeta/transferencia), `PaymentAllocation` (aplicación total o parcial a un cargo, o anticipo sin aplicar), saldo y estado de cada `Charge` calculados contra los pagos activos (regla 4, nunca guardados), cancelación de cargos/pagos con motivo (regla 2; un cargo con pagos aplicados no se puede cancelar sin cancelar esos pagos primero), recibo PDF con el logo de la clínica, corte de caja por sesión (`CashSession`, totales por método y diferencia contra lo esperado). `ClinicBillingSettings.billing_enabled` permite desactivar la cobranza por sucursal (p.ej. clínicas universitarias de práctica) sin dejar de generar el cargo sugerido al registrar un procedimiento realizado. Nuevo permiso `billing.configure` (incremental, solo `admin_clinica`). Frontend: pestaña "Cuenta" en el paciente, pantalla "Caja" para abrir/cerrar sesión, Configuración → Cobranza | Hecho |
+| 11–12 | Ver `prompts/PROMPTS_CLAUDE_CODE.md` | Pendiente |
 
-Los módulos de reports de la sección 2 son el diseño objetivo; no tiene modelos ni migraciones
-todavía — se crea conforme avanza su fase. `billing` ya existe pero solo con `Charge` (la Fase 10
-agrega `Payment` y el resto de la cobranza). `patients`, `records`/`encounters`, `odontogram`,
-`agenda`, `diagnosis`, `treatment`, `ai`, `documents` e `imaging` ya existen pero todavía sin la
-pestaña Cuenta de la sección 6 (llega con la Fase 10).
+El módulo de reports de la sección 2 es el diseño objetivo; no tiene modelos ni migraciones
+todavía — se crea conforme avanza su fase (11–12). `patients`, `records`/`encounters`,
+`odontogram`, `agenda`, `diagnosis`, `treatment`, `ai`, `documents`, `imaging` y `billing` ya
+existen completos, incluida la pestaña "Cuenta" del paciente, la pantalla "Caja" y
+Configuración → Cobranza de la sección 6 (Fase 10).
