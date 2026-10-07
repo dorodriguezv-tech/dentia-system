@@ -34,6 +34,12 @@ class Provider(AuditedMixin, Base):
     )
     color: Mapped[str] = mapped_column(String(7), default="#2BB3A3")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # B2 (Parte B, Fase 12.2): gabinete que la agenda preselecciona al agendar con
+    # este profesional en esta sucursal. Opcional -- un profesional sin gabinete
+    # fijo simplemente no preselecciona nada, como hasta ahora.
+    default_resource_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class Resource(AuditedMixin, Base):

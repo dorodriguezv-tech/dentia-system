@@ -4,13 +4,14 @@ import uuid
 from datetime import date
 
 from PIL import Image
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.audit import service as audit_service
 from app.core.errors import AppError
 from app.core.storage import StorageBackend
+from app.modules.agenda import service as agenda_service
 from app.modules.iam.models import Clinic
 from app.modules.patients import rules
 from app.modules.patients.models import Patient, PatientContact
@@ -33,6 +34,40 @@ def _unaccent_lower(
     return func.immutable_unaccent(func.lower(value))
 
 
+def _digits_only(
+    value: ColumnElement[str | None] | InstrumentedAttribute[str | None] | str,
+) -> ColumnElement[str]:
+    return func.regexp_replace(value, r"\D", "", "g")
+
+
+def _word_matches_any_name_word(
+    full_name: InstrumentedAttribute[str], word: str
+) -> ColumnElement[bool]:
+    """True si `word` es prefijo de alguna palabra de `full_name`, o muy parecido a
+    alguna (tolera un error de captura) -- ambos sin acentos y en minusculas.
+
+    A2: antes se comparaba el texto completo de la busqueda contra el nombre completo
+    con `similarity()`, que para un nombre largo ("Juan Carlos Perez Lopez") contra una
+    busqueda corta ("perez") da un puntaje bajo aunque "perez" sea una coincidencia
+    perfecta de una palabra -- `similarity()` mide que tan parecidas son dos cadenas
+    completas, no si una esta contenida en la otra. Comparar palabra por palabra
+    resuelve "perez", "PEREZ LOPEZ", "lopez perez" (apellidos en cualquier orden) y
+    "jua per" (prefijo de cada palabra); el `OR` con `similarity()` por palabra cubre
+    ademas un error de una letra ("Peres").
+    """
+    name_words = func.string_to_array(_unaccent_lower(full_name), " ")
+    name_word = func.unnest(name_words).column_valued("w")
+    word_norm = _unaccent_lower(word)
+    return (
+        select(name_word)
+        .where(
+            func.starts_with(name_word, word_norm)
+            | (func.similarity(name_word, word_norm) > rules.SEARCH_WORD_FUZZY_THRESHOLD)
+        )
+        .exists()
+    )
+
+
 async def _next_expediente_number(db: AsyncSession, clinic_id: uuid.UUID) -> str:
     stmt = select(Clinic).where(Clinic.id == clinic_id).with_for_update()
     clinic = (await db.execute(stmt)).scalar_one()
@@ -41,12 +76,37 @@ async def _next_expediente_number(db: AsyncSession, clinic_id: uuid.UUID) -> str
     return f"{number:06d}"
 
 
+async def _validate_care_assignment(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    default_resource_id: uuid.UUID | None,
+    primary_provider_id: uuid.UUID | None,
+) -> None:
+    """B3 (Parte B, Fase 12.2): el gabinete y el profesional tratante por defecto
+    deben pertenecer a la misma sucursal del paciente."""
+    if default_resource_id is not None:
+        await agenda_service.get_resource_in_clinic(
+            db, clinic_id=clinic_id, resource_id=default_resource_id
+        )
+    if primary_provider_id is not None:
+        await agenda_service.get_provider_in_clinic(
+            db, clinic_id=clinic_id, provider_id=primary_provider_id
+        )
+
+
 async def create_patient(
     db: AsyncSession, *, clinic_id: uuid.UUID, data: PatientCreateRequest, actor_id: uuid.UUID
 ) -> Patient:
     expediente_number = await _next_expediente_number(db, clinic_id)
     full_name = rules.build_full_name(
         data.first_name, data.last_name_paternal, data.last_name_maternal
+    )
+    await _validate_care_assignment(
+        db,
+        clinic_id=clinic_id,
+        default_resource_id=data.default_resource_id,
+        primary_provider_id=data.primary_provider_id,
     )
 
     patient = Patient(
@@ -61,6 +121,8 @@ async def create_patient(
         phone=data.phone,
         email=data.email,
         address=data.address,
+        default_resource_id=data.default_resource_id,
+        primary_provider_id=data.primary_provider_id,
         created_by=actor_id,
     )
     db.add(patient)
@@ -112,11 +174,21 @@ async def _get_patient_or_404(
 
 
 async def list_patients(
-    db: AsyncSession, *, clinic_id: uuid.UUID, status: str | None, limit: int, offset: int
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    status: str | None,
+    limit: int,
+    offset: int,
+    primary_provider_id: uuid.UUID | None = None,
 ) -> list[Patient]:
     stmt = select(Patient).where(Patient.clinic_id == clinic_id)
     if status:
         stmt = stmt.where(Patient.status == status)
+    if primary_provider_id is not None:
+        # B3 (Parte B, Fase 12.2): filtro "Mis pacientes" -- los que tienen a este
+        # profesional como tratante por defecto en esta sucursal.
+        stmt = stmt.where(Patient.primary_provider_id == primary_provider_id)
     stmt = stmt.order_by(Patient.full_name).limit(limit).offset(offset)
     return list((await db.execute(stmt)).scalars().all())
 
@@ -124,6 +196,12 @@ async def list_patients(
 async def search_patients(
     db: AsyncSession, *, clinic_id: uuid.UUID, query: str, limit: int = 20
 ) -> list[Patient]:
+    """Busqueda tolerante del listado global (A2), distinta de `check_duplicates`:
+    aqui el usuario ya sabe a quien busca y escribe poco ("perez", "jua per"), asi que
+    no sirve el mismo umbral calibrado para decidir si dos registros son la misma
+    persona (`rules.DUPLICATE_NAME_SIMILARITY_THRESHOLD`, Fase 3) -- ese umbral se
+    queda sin tocar, exclusivo de `check_duplicates`.
+    """
     q = query.strip()
     if not q:
         return []
@@ -134,15 +212,24 @@ async def search_patients(
         stmt = base.where(Patient.date_of_birth == date.fromisoformat(q))
         return list((await db.execute(stmt)).scalars().all())
 
-    similarity = func.similarity(_unaccent_lower(Patient.full_name), _unaccent_lower(q))
+    words = q.split()
+    name_match = or_(*(_word_matches_any_name_word(Patient.full_name, w) for w in words))
+
+    identifier_match: ColumnElement[bool] = Patient.expediente_number.ilike(
+        f"%{q}%"
+    ) | Patient.email.ilike(f"%{q}%")
+    query_digits = re.sub(r"\D", "", q)
+    if query_digits:
+        identifier_match = identifier_match | _digits_only(Patient.phone).ilike(f"%{query_digits}%")
+
+    # Prioridad: expediente/telefono/correo exactos primero (identidad inequivoca),
+    # luego coincidencias de nombre ordenadas de la mas parecida a la menos.
+    overall_similarity = func.similarity(_unaccent_lower(Patient.full_name), _unaccent_lower(q))
+    rank = case((identifier_match, 0), else_=1)
+
     stmt = (
-        base.where(
-            (similarity > rules.DUPLICATE_NAME_SIMILARITY_THRESHOLD)
-            | Patient.phone.ilike(f"%{q}%")
-            | Patient.email.ilike(f"%{q}%")
-            | Patient.expediente_number.ilike(f"%{q}%")
-        )
-        .order_by(similarity.desc())
+        base.where(identifier_match | name_match)
+        .order_by(rank, overall_similarity.desc())
         .limit(limit)
     )
     return list((await db.execute(stmt)).scalars().all())
@@ -219,6 +306,22 @@ async def update_patient(
             "reason": data.status_reason,
         }
         patient.status = data.status
+
+    if data.default_resource_id is not None or data.primary_provider_id is not None:
+        await _validate_care_assignment(
+            db,
+            clinic_id=clinic_id,
+            default_resource_id=data.default_resource_id,
+            primary_provider_id=data.primary_provider_id,
+        )
+        care_change: dict[str, object] = {"reason": data.care_assignment_reason}
+        if data.default_resource_id is not None:
+            care_change["default_resource_id"] = str(data.default_resource_id)
+            patient.default_resource_id = data.default_resource_id
+        if data.primary_provider_id is not None:
+            care_change["primary_provider_id"] = str(data.primary_provider_id)
+            patient.primary_provider_id = data.primary_provider_id
+        changes["care_assignment"] = care_change
 
     await audit_service.log(
         db,

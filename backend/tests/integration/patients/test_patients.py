@@ -324,3 +324,196 @@ async def test_list_patients_filters_by_status(client: AsyncClient, make_user, c
 
     assert active.json() == []
     assert len(inactive.json()) == 1
+
+
+async def _create_provider_and_resource(
+    client: AsyncClient, make_user, clinic, admin_token: str
+) -> tuple[str, str]:
+    headers = _headers(admin_token, clinic.id)
+    odonto = await make_user(email="tratante@example.com", role_code="odontologo")
+    provider_resp = await client.post(
+        "/api/v1/providers", headers=headers, json={"user_id": str(odonto.id)}
+    )
+    resource_resp = await client.post(
+        "/api/v1/resources", headers=headers, json={"name": "Gabinete tratante"}
+    )
+    return provider_resp.json()["id"], resource_resp.json()["id"]
+
+
+async def test_create_patient_with_default_resource_and_primary_provider(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    """B3 (Parte B, Fase 12.2): la agenda los preselecciona despues al agendar."""
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    provider_id, resource_id = await _create_provider_and_resource(
+        client, make_user, clinic, admin_token
+    )
+
+    response = await client.post(
+        "/api/v1/patients",
+        headers=_headers(admin_token, clinic.id),
+        json={
+            **BASIC_PATIENT,
+            "default_resource_id": resource_id,
+            "primary_provider_id": provider_id,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["default_resource_id"] == resource_id
+    assert body["primary_provider_id"] == provider_id
+
+
+async def test_create_patient_rejects_a_provider_from_another_clinic(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    from app.modules.iam.models import Clinic, Role, UserClinic
+
+    other_clinic = Clinic(organization_id=clinic.organization_id, name="Otra sucursal")
+    db_session.add(other_clinic)
+    await db_session.flush()
+    admin = await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_role = (
+        await db_session.execute(select(Role).where(Role.code == "admin_clinica"))
+    ).scalar_one()
+    db_session.add(UserClinic(user_id=admin.id, clinic_id=other_clinic.id, role_id=admin_role.id))
+    await db_session.commit()
+
+    admin_token = await _login(client, "admin@example.com")
+    other_odonto = await make_user(email="ajeno@example.com", role_code="odontologo")
+    foreign_provider_resp = await client.post(
+        "/api/v1/providers",
+        headers=_headers(admin_token, other_clinic.id),
+        json={"user_id": str(other_odonto.id)},
+    )
+    foreign_provider_id = foreign_provider_resp.json()["id"]
+
+    response = await client.post(
+        "/api/v1/patients",
+        headers=_headers(admin_token, clinic.id),
+        json={**BASIC_PATIENT, "primary_provider_id": foreign_provider_id},
+    )
+    assert response.status_code == 404
+
+
+async def test_update_patient_care_assignment_without_reason_is_rejected(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    _provider_id, resource_id = await _create_provider_and_resource(
+        client, make_user, clinic, admin_token
+    )
+    created = await client.post(
+        "/api/v1/patients", headers=_headers(admin_token, clinic.id), json=BASIC_PATIENT
+    )
+    patient_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/patients/{patient_id}",
+        headers=_headers(admin_token, clinic.id),
+        json={"default_resource_id": resource_id},
+    )
+    assert response.status_code == 422
+
+
+async def test_update_patient_care_assignment_with_reason_is_applied_and_audited(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    provider_id, resource_id = await _create_provider_and_resource(
+        client, make_user, clinic, admin_token
+    )
+    created = await client.post(
+        "/api/v1/patients", headers=_headers(admin_token, clinic.id), json=BASIC_PATIENT
+    )
+    patient_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/patients/{patient_id}",
+        headers=_headers(admin_token, clinic.id),
+        json={
+            "default_resource_id": resource_id,
+            "primary_provider_id": provider_id,
+            "care_assignment_reason": "Primera asignacion con el especialista",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["default_resource_id"] == resource_id
+    assert body["primary_provider_id"] == provider_id
+
+    events = (
+        (
+            await db_session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.action == "patients.updated", AuditEvent.entity_id == patient_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert events[0].details["care_assignment"]["reason"] == (
+        "Primera asignacion con el especialista"
+    )
+
+
+async def test_list_patients_mine_only_filters_by_primary_provider(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    """B3: filtro "Mis pacientes" para el rol odontologo."""
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    provider_id, _resource_id = await _create_provider_and_resource(
+        client, make_user, clinic, admin_token
+    )
+
+    mine = await client.post(
+        "/api/v1/patients",
+        headers=_headers(admin_token, clinic.id),
+        json={**BASIC_PATIENT, "primary_provider_id": provider_id},
+    )
+    assert mine.status_code == 201
+    await client.post(
+        "/api/v1/patients",
+        headers=_headers(admin_token, clinic.id),
+        json={
+            "first_name": "Ana",
+            "last_name_paternal": "Lopez",
+            "date_of_birth": "1985-01-01",
+        },
+    )
+
+    tratante_token = await _login(client, "tratante@example.com")
+    mine_only = await client.get(
+        "/api/v1/patients",
+        params={"mine_only": "true"},
+        headers=_headers(tratante_token, clinic.id),
+    )
+    assert mine_only.status_code == 200
+    names = [p["full_name"] for p in mine_only.json()]
+    assert names == ["Jose Perez Gomez"]
+
+    all_patients = await client.get("/api/v1/patients", headers=_headers(admin_token, clinic.id))
+    assert len(all_patients.json()) == 2
+
+
+async def test_list_patients_mine_only_is_empty_for_a_role_without_a_provider(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    await client.post(
+        "/api/v1/patients", headers=_headers(admin_token, clinic.id), json=BASIC_PATIENT
+    )
+
+    response = await client.get(
+        "/api/v1/patients",
+        params={"mine_only": "true"},
+        headers=_headers(admin_token, clinic.id),
+    )
+    assert response.status_code == 200
+    assert response.json() == []

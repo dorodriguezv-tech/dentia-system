@@ -7,14 +7,20 @@ import * as api from './api'
 import styles from './PatientsListPage.module.css'
 import { STATUS_LABELS, type StatusCode } from './types'
 
+// B3 (Parte B, Fase 12.2): copia minima de agenda/rules.py::PROVIDER_ROLES --
+// solo estos roles pueden tener pacientes propios (via primary_provider_id).
+const PROVIDER_ROLE_CODES = new Set(['odontologo', 'especialista'])
+
 export function PatientsListPage() {
   const navigate = useNavigate()
   const activeRole = useActiveRole()
   const [status, setStatus] = useState<StatusCode | ''>('')
+  const [mineOnly, setMineOnly] = useState(false)
+  const canFilterMine = activeRole !== null && PROVIDER_ROLE_CODES.has(activeRole)
 
   const patientsQuery = useQuery({
-    queryKey: ['patients', status],
-    queryFn: () => api.listPatients(status || undefined),
+    queryKey: ['patients', status, canFilterMine && mineOnly],
+    queryFn: () => api.listPatients(status || undefined, canFilterMine && mineOnly),
   })
 
   return (
@@ -34,6 +40,16 @@ export function PatientsListPage() {
               </option>
             ))}
           </select>
+          {canFilterMine && (
+            <label className={styles.mineOnlyToggle}>
+              <input
+                type="checkbox"
+                checked={mineOnly}
+                onChange={(e) => setMineOnly(e.target.checked)}
+              />
+              Mis pacientes
+            </label>
+          )}
           {canWritePatients(activeRole) && (
             <button
               className={styles.addButton}

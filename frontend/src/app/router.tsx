@@ -5,6 +5,7 @@ import { AppearancePage } from '../modules/branding/AppearancePage'
 import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { BillingSettingsPage } from '../modules/billing/BillingSettingsPage'
 import { CashSessionPage } from '../modules/billing/CashSessionPage'
+import { CatalogsPage } from '../modules/catalogs/CatalogsPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
                 children: [
                   { path: 'configuracion/asistente-ia', element: <AiSettingsPage /> },
                   { path: 'configuracion/cobranza', element: <BillingSettingsPage /> },
+                  { path: 'configuracion/catalogos', element: <CatalogsPage /> },
                 ],
               },
               {

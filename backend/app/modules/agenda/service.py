@@ -24,10 +24,12 @@ from app.modules.agenda.schemas import (
     ProviderCreateRequest,
     RescheduleRequest,
     ResourceCreateRequest,
+    ResourceUpdateRequest,
     StatusChangeRequest,
     WaitlistCreateRequest,
     WorkingHoursCreateRequest,
 )
+from app.modules.catalogs import service as catalogs_service
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.models import Encounter
 from app.modules.encounters.schemas import EncounterCreateRequest
@@ -44,7 +46,7 @@ async def _get_patient_in_clinic(
     return patient
 
 
-async def _get_provider_in_clinic(
+async def get_provider_in_clinic(
     db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
 ) -> Provider:
     provider = await db.get(Provider, provider_id)
@@ -53,7 +55,7 @@ async def _get_provider_in_clinic(
     return provider
 
 
-async def _get_resource_in_clinic(
+async def get_resource_in_clinic(
     db: AsyncSession, *, clinic_id: uuid.UUID, resource_id: uuid.UUID
 ) -> Resource:
     resource = await db.get(Resource, resource_id)
@@ -75,10 +77,75 @@ async def _get_appointment_in_clinic(
 
 
 async def list_providers(db: AsyncSession, *, clinic_id: uuid.UUID) -> list[tuple[Provider, str]]:
-    stmt = select(Provider).where(Provider.clinic_id == clinic_id)
+    # Fase 12.1 (correccion A1): solo los activos -- al desactivar a un profesional
+    # (o quitarle el rol clinico) su Provider se desactiva, no se borra (tiene citas),
+    # pero ya no debe ofrecerse para agendar citas nuevas.
+    stmt = select(Provider).where(Provider.clinic_id == clinic_id, Provider.is_active.is_(True))
     providers = list((await db.execute(stmt)).scalars().all())
     users = {u.id: u for u in (await db.execute(select(User))).scalars().all()}
     return [(p, users[p.user_id].full_name if p.user_id in users else "") for p in providers]
+
+
+async def get_provider_for_user(
+    db: AsyncSession, *, clinic_id: uuid.UUID, user_id: uuid.UUID
+) -> Provider | None:
+    stmt = select(Provider).where(Provider.clinic_id == clinic_id, Provider.user_id == user_id)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def ensure_provider_for_user(
+    db: AsyncSession, *, clinic_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID
+) -> Provider:
+    """Crea (o reactiva) el Provider de un usuario con rol clinico (A1).
+
+    Idempotente: se llama cada vez que un usuario se crea o se le asigna un rol de
+    `rules.PROVIDER_ROLES`, sin que el llamador tenga que saber si ya tenia uno.
+    """
+    stmt = select(Provider).where(Provider.clinic_id == clinic_id, Provider.user_id == user_id)
+    provider = (await db.execute(stmt)).scalar_one_or_none()
+    if provider is not None:
+        if not provider.is_active:
+            provider.is_active = True
+        return provider
+
+    existing_providers = (
+        (await db.execute(select(Provider).where(Provider.clinic_id == clinic_id))).scalars().all()
+    )
+    color = rules.next_provider_color(len(existing_providers))
+
+    provider = Provider(clinic_id=clinic_id, user_id=user_id, color=color, created_by=actor_id)
+    db.add(provider)
+    await db.flush()
+    await audit_service.log(
+        db,
+        action="agenda.provider_created",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="provider",
+        entity_id=str(provider.id),
+        details={"user_id": str(user_id), "auto": True},
+    )
+    return provider
+
+
+async def set_provider_active_for_user(
+    db: AsyncSession, *, clinic_id: uuid.UUID, user_id: uuid.UUID, is_active: bool
+) -> None:
+    """Desactiva (o reactiva) el Provider de un usuario sin borrarlo (A1)."""
+    stmt = select(Provider).where(Provider.clinic_id == clinic_id, Provider.user_id == user_id)
+    provider = (await db.execute(stmt)).scalar_one_or_none()
+    if provider is not None and provider.is_active != is_active:
+        provider.is_active = is_active
+
+
+async def set_provider_default_resource(
+    db: AsyncSession, *, clinic_id: uuid.UUID, provider: Provider, resource_id: uuid.UUID | None
+) -> None:
+    """B2 (Parte B, Fase 12.2): gabinete por defecto de un profesional en esta
+    sucursal -- la agenda lo preselecciona al agendar con el (NewAppointmentForm.tsx)."""
+    if resource_id is not None:
+        await get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=resource_id)
+    provider.default_resource_id = resource_id
 
 
 async def create_provider(
@@ -92,6 +159,9 @@ async def create_provider(
     )
     db.add(provider)
     await db.flush()
+    await set_provider_default_resource(
+        db, clinic_id=clinic_id, provider=provider, resource_id=data.default_resource_id
+    )
     await audit_service.log(
         db,
         action="agenda.provider_created",
@@ -108,8 +178,16 @@ async def create_provider(
 # --------------------------------------------------------------------------- resources
 
 
-async def list_resources(db: AsyncSession, *, clinic_id: uuid.UUID) -> list[Resource]:
+async def list_resources(
+    db: AsyncSession, *, clinic_id: uuid.UUID, include_inactive: bool = False
+) -> list[Resource]:
     stmt = select(Resource).where(Resource.clinic_id == clinic_id)
+    if not include_inactive:
+        # Pendiente de B1 (Parte B, Fase 12.2): antes ningun Resource se podia
+        # desactivar, asi que esto nunca filtraba nada -- ahora que si se puede
+        # (ver update_resource), un gabinete desactivado ya no debe ofrecerse al
+        # agendar, igual que un Provider desactivado (A1, Fase 12.1).
+        stmt = stmt.where(Resource.is_active.is_(True))
     return list((await db.execute(stmt)).scalars().all())
 
 
@@ -122,13 +200,40 @@ async def create_resource(
     return resource
 
 
+async def update_resource(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    resource_id: uuid.UUID,
+    data: ResourceUpdateRequest,
+    actor_id: uuid.UUID,
+) -> Resource:
+    """Pendiente de B1 (Parte B, Fase 12.2): renombrar o desactivar un gabinete
+    desde la pantalla de Catalogos."""
+    resource = await get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=resource_id)
+    if data.name is not None:
+        resource.name = data.name
+    if data.is_active is not None:
+        resource.is_active = data.is_active
+    await audit_service.log(
+        db,
+        action="agenda.resource_updated",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="resource",
+        entity_id=str(resource.id),
+    )
+    await db.commit()
+    return resource
+
+
 # --------------------------------------------------------------- horarios y bloqueos
 
 
 async def list_working_hours(
     db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
 ) -> list[ProviderWorkingHours]:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     stmt = select(ProviderWorkingHours).where(ProviderWorkingHours.provider_id == provider_id)
     return list((await db.execute(stmt)).scalars().all())
 
@@ -140,7 +245,7 @@ async def create_working_hours(
     provider_id: uuid.UUID,
     data: WorkingHoursCreateRequest,
 ) -> ProviderWorkingHours:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     item = ProviderWorkingHours(
         provider_id=provider_id,
         weekday=data.weekday,
@@ -155,7 +260,7 @@ async def create_working_hours(
 async def delete_working_hours(
     db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID, item_id: uuid.UUID
 ) -> None:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     item = await db.get(ProviderWorkingHours, item_id)
     if item is None or item.provider_id != provider_id:
         raise AppError("NOT_FOUND", "Horario no encontrado", status_code=404)
@@ -166,7 +271,7 @@ async def delete_working_hours(
 async def list_blocks(
     db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID
 ) -> list[ProviderBlock]:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     stmt = select(ProviderBlock).where(ProviderBlock.provider_id == provider_id)
     return list((await db.execute(stmt)).scalars().all())
 
@@ -179,7 +284,7 @@ async def create_block(
     data: BlockCreateRequest,
     actor_id: uuid.UUID,
 ) -> ProviderBlock:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     item = ProviderBlock(
         provider_id=provider_id,
         starts_at=data.starts_at,
@@ -195,7 +300,7 @@ async def create_block(
 async def delete_block(
     db: AsyncSession, *, clinic_id: uuid.UUID, provider_id: uuid.UUID, item_id: uuid.UUID
 ) -> None:
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
     item = await db.get(ProviderBlock, item_id)
     if item is None or item.provider_id != provider_id:
         raise AppError("NOT_FOUND", "Bloqueo no encontrado", status_code=404)
@@ -272,6 +377,28 @@ def _conflict_error(conflicts: list[Appointment]) -> AppError:
     )
 
 
+async def _validate_appointment_type(
+    db: AsyncSession, *, clinic_id: uuid.UUID, appointment_type: str
+) -> int:
+    """B1 (Parte B, Fase 12.2): "Tipos de consulta/cita" ya no es un diccionario fijo
+    en codigo (ver agenda/rules.py) -- valida contra el catalogo administrable de la
+    sucursal y falla claro si el codigo no existe o esta desactivado, en vez de
+    guardar cualquier texto sin verificar. Regresa la duracion por defecto (para
+    cuando la peticion no trae `ends_at` explicito)."""
+    items = await catalogs_service.list_items(
+        db, clinic_id=clinic_id, catalog_type="appointment_type"
+    )
+    item = next((i for i in items if i.code == appointment_type), None)
+    if item is None:
+        raise AppError(
+            "INVALID_APPOINTMENT_TYPE",
+            "El tipo de cita no existe o esta desactivado en esta sucursal",
+            status_code=400,
+        )
+    minutes = item.extra.get("default_minutes")
+    return minutes if isinstance(minutes, int) else rules.DEFAULT_APPOINTMENT_DURATION_MINUTES
+
+
 # ------------------------------------------------------------------------- citas
 
 
@@ -279,13 +406,14 @@ async def create_appointment(
     db: AsyncSession, *, clinic_id: uuid.UUID, data: AppointmentCreateRequest, actor_id: uuid.UUID
 ) -> tuple[Appointment, list[str]]:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
-    await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
+    await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
     if data.resource_id is not None:
-        await _get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=data.resource_id)
+        await get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=data.resource_id)
 
-    ends_at = data.ends_at or (
-        data.starts_at + timedelta(minutes=rules.default_duration_minutes(data.appointment_type))
+    default_minutes = await _validate_appointment_type(
+        db, clinic_id=clinic_id, appointment_type=data.appointment_type
     )
+    ends_at = data.ends_at or (data.starts_at + timedelta(minutes=default_minutes))
     if ends_at <= data.starts_at:
         raise AppError(
             "INVALID_RANGE", "La hora de termino debe ser posterior al inicio", status_code=422
@@ -483,9 +611,9 @@ async def reschedule_appointment(
         )
 
     if new_provider_id != old.provider_id:
-        await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=new_provider_id)
+        await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=new_provider_id)
     if new_resource_id is not None and new_resource_id != old.resource_id:
-        await _get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=new_resource_id)
+        await get_resource_in_clinic(db, clinic_id=clinic_id, resource_id=new_resource_id)
 
     conflicts = await _find_conflicts(
         db,
@@ -578,7 +706,7 @@ async def start_encounter_from_appointment(
             f"No se puede iniciar la atencion desde el estado {appointment.status}",
             status_code=409,
         )
-    provider = await _get_provider_in_clinic(
+    provider = await get_provider_in_clinic(
         db, clinic_id=clinic_id, provider_id=appointment.provider_id
     )
 
@@ -639,7 +767,7 @@ async def create_waitlist_entry(
 ) -> WaitlistEntry:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
     if data.provider_id is not None:
-        await _get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
+        await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
     item = WaitlistEntry(
         clinic_id=clinic_id,
         patient_id=data.patient_id,

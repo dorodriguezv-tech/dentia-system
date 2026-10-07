@@ -10,6 +10,7 @@ import type {
   ProviderOut,
   RescheduleInput,
   ResourceOut,
+  ResourceUpdateInput,
   StatusChangeInput,
   WaitlistCreateInput,
   WaitlistOut,
@@ -25,12 +26,21 @@ export function createProvider(input: ProviderCreateInput): Promise<ProviderOut>
   return apiRequest<ProviderOut>('/providers', { method: 'POST', body: input })
 }
 
-export function listResources(): Promise<ResourceOut[]> {
-  return apiRequest<ResourceOut[]>('/resources')
+export function listResources(clinicId?: string, includeInactive?: boolean): Promise<ResourceOut[]> {
+  const query = includeInactive ? '?include_inactive=true' : ''
+  return apiRequest<ResourceOut[]>(`/resources${query}`, { clinicId })
 }
 
 export function createResource(name: string): Promise<ResourceOut> {
   return apiRequest<ResourceOut>('/resources', { method: 'POST', body: { name } })
+}
+
+// Pendiente de B1 (Parte B, Fase 12.2): administrar Gabinetes desde Catalogos.
+export function updateResource(
+  resourceId: string,
+  input: ResourceUpdateInput,
+): Promise<ResourceOut> {
+  return apiRequest<ResourceOut>(`/resources/${resourceId}`, { method: 'PATCH', body: input })
 }
 
 export function listWorkingHours(providerId: string): Promise<WorkingHoursOut[]> {

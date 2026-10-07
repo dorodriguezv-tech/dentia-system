@@ -14,7 +14,9 @@ from app.core.db import get_db
 from app.core.security import hash_password
 from app.core.storage import LocalStorageBackend, get_storage_backend
 from app.main import app
+from app.modules.catalogs.models import ClinicCatalogItem
 from app.modules.iam.models import Clinic, Organization, Role, User, UserClinic
+from app.seed import CATALOG_SEEDS
 
 TEST_DATABASE_URL = "postgresql+asyncpg://dentia:dentia@localhost:5432/dentia_test"
 
@@ -32,6 +34,7 @@ TRANSACTIONAL_TABLES = (
     "consents",
     "document_templates",
     "clinic_branding",
+    "clinic_catalog_items",
     "medical_history",
     "allergies",
     "medications",
@@ -124,6 +127,24 @@ async def clinic(db_session: AsyncSession) -> Clinic:
 
     clinic_row = Clinic(organization_id=organization.id, name="Sucursal Centro")
     db_session.add(clinic_row)
+    await db_session.flush()
+
+    # B1 (Parte B): agenda/odontogram/diagnosis/records ya no validan contra
+    # constantes fijas, sino contra este catalogo -- toda prueba que agende una
+    # cita, registre un hallazgo o un diagnostico necesita uno real. Insertado
+    # directo por ORM (no via catalogs_service, que hace un commit por item) para
+    # no sumarle ~39 commits a cada prueba que use este fixture.
+    db_session.add_all(
+        ClinicCatalogItem(
+            clinic_id=clinic_row.id,
+            catalog_type=catalog_type,
+            code=code,
+            name=name,
+            sort_order=sort_order,
+            extra=extra,
+        )
+        for catalog_type, code, name, sort_order, extra in CATALOG_SEEDS
+    )
     await db_session.commit()
     return clinic_row
 

@@ -8,7 +8,9 @@ import { AgendaPage } from './AgendaPage'
 import type { AppointmentListItemOut, ProviderOut, ResourceOut } from './types'
 
 vi.mock('./api')
+vi.mock('../catalogs/api')
 import * as api from './api'
+import * as catalogsApi from '../catalogs/api'
 
 const provider: ProviderOut = {
   id: 'prov-1',
@@ -16,6 +18,7 @@ const provider: ProviderOut = {
   full_name: 'Dra. Gomez',
   color: '#2bb3a3',
   is_active: true,
+  default_resource_id: 'res-1',
 }
 
 const resource: ResourceOut = { id: 'res-1', name: 'Gabinete 1', is_active: true }
@@ -70,6 +73,18 @@ describe('AgendaPage', () => {
     vi.mocked(api.changeAppointmentStatus).mockReset()
     vi.mocked(api.createAppointment).mockReset()
     vi.mocked(api.rescheduleAppointment).mockReset()
+    vi.mocked(catalogsApi.listCatalogItems).mockReset().mockResolvedValue([
+      {
+        id: 'cat-1',
+        catalog_type: 'appointment_type',
+        code: 'consulta',
+        name: 'Consulta / valoracion',
+        is_active: true,
+        sort_order: 0,
+        extra: { default_minutes: 30 },
+        updated_at: '2026-10-01T00:00:00Z',
+      },
+    ])
   })
 
   it('muestra la cita sembrada en la vista de semana', async () => {
@@ -126,5 +141,26 @@ describe('AgendaPage', () => {
         reason: 'Paciente aviso',
       }),
     )
+  })
+
+  it('nueva cita muestra el tipo de cita del catalogo y preselecciona el gabinete del profesional', async () => {
+    useAuthStore.setState({
+      clinics: [
+        {
+          clinic: { id: 'clinic-1', name: 'Sucursal Centro' },
+          role: { code: 'admin_clinica', name: 'Administrador' },
+        },
+      ],
+      activeClinicId: 'clinic-1',
+    })
+    renderPage()
+    await screen.findByText(/Jose Perez/)
+
+    const slots = await screen.findAllByRole('button', { name: /Agendar cita/ })
+    await userEvent.click(slots[0])
+
+    expect(await screen.findByText(/Consulta \/ valoracion/)).toBeInTheDocument()
+    const resourceSelect = screen.getByLabelText('Gabinete') as HTMLSelectElement
+    expect(resourceSelect.value).toBe('res-1')
   })
 })

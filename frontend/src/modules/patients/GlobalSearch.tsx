@@ -6,6 +6,7 @@ import { useGlobalSearchStore } from './searchStore'
 import { STATUS_LABELS, type PatientListItemOut } from './types'
 
 const DEBOUNCE_MS = 250
+const MIN_QUERY_LENGTH = 2
 
 /** Mantiene el atajo Ctrl+K activo en toda la app autenticada; el panel solo se monta
  * mientras esta abierto, para que su estado (query, resultados) siempre arranque limpio. */
@@ -38,7 +39,11 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const trimmed = query.trim()
-    if (trimmed.length === 0) return
+    // A2: con menos de 2 caracteres la busqueda por palabra (tolerante a errores)
+    // es puro ruido -- casi cualquier nombre tiene una palabra que empieza o se
+    // parece a una sola letra. No hace falta limpiar `results` aqui: `visibleResults`
+    // ya lo ignora mientras el texto sea mas corto que el minimo.
+    if (trimmed.length < MIN_QUERY_LENGTH) return
 
     const controller = new AbortController()
     const timeout = setTimeout(() => {
@@ -58,7 +63,8 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
     navigate(`/pacientes/${patientId}`)
   }
 
-  const visibleResults = query.trim().length > 0 ? results : []
+  const trimmedQuery = query.trim()
+  const visibleResults = trimmedQuery.length >= MIN_QUERY_LENGTH ? results : []
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -71,7 +77,12 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {query.trim().length > 0 && (
+        {trimmedQuery.length > 0 && trimmedQuery.length < MIN_QUERY_LENGTH && (
+          <ul className={styles.results}>
+            <li className={styles.empty}>Escribe al menos 2 caracteres.</li>
+          </ul>
+        )}
+        {trimmedQuery.length >= MIN_QUERY_LENGTH && (
           <ul className={styles.results}>
             {visibleResults.map((patient) => (
               <li key={patient.id} className={styles.resultItem}>

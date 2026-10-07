@@ -4,6 +4,7 @@ import {
   canConfigureAi,
   canConfigureBilling,
   canManageBranding,
+  canManageCatalogs,
   canManageUsers,
   canReadAgenda,
   canReadReports,
@@ -35,12 +36,15 @@ export function Layout() {
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          {branding?.logo_url && (
+        {/* A7: logo (o nombre de la clinica, sin logo) arriba a la izquierda, visible
+            en toda la app, que lleve a la pagina de inicio al hacer clic. */}
+        <NavLink to="/" className={styles.brand}>
+          {branding?.logo_url ? (
             <img className={styles.brandLogo} src={resolveApiAssetUrl(branding.logo_url)} alt="" />
+          ) : (
+            <span>{branding?.display_name ?? 'DentalCare'}</span>
           )}
-          {branding?.display_name ?? 'DentalCare'}
-        </div>
+        </NavLink>
         <ul className={styles.nav}>
           <li>
             <NavLink to="/" className={styles.navLink}>
@@ -98,6 +102,13 @@ export function Layout() {
             <li>
               <NavLink to="/configuracion/cobranza" className={styles.navLink}>
                 Cobranza
+              </NavLink>
+            </li>
+          )}
+          {canManageCatalogs(activeRole) && (
+            <li>
+              <NavLink to="/configuracion/catalogos" className={styles.navLink}>
+                Catalogos
               </NavLink>
             </li>
           )}

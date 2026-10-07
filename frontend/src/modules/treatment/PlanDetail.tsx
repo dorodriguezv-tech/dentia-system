@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { canAcceptBudget, canWriteTreatment } from '../auth/roles'
 import { useActiveRole } from '../auth/store'
-import * as encountersApi from '../encounters/api'
+import { EncounterPickerField } from '../encounters/EncounterPicker'
+import { useEncounterPicker } from '../encounters/useEncounterPicker'
 import { FINDING_CATALOG, FINDING_CODES } from '../odontogram/findingCatalog'
 import type { FindingCode, Surface } from '../odontogram/types'
 import styles from '../patients/PatientDetailPage.module.css'
@@ -62,16 +63,14 @@ function AddItemForm({
   onAdded: () => void
 }) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
+  // A3/A4: AddItemForm solo se muestra cuando el que llama ya confirmo canWrite
+  // (ver mas abajo), asi que iniciar una atencion aqui mismo siempre es valido.
+  const encounterPicker = useEncounterPicker(patientId, true)
   const catalogQuery = useQuery({
     queryKey: ['procedure-catalog'],
     queryFn: api.listProcedureCatalog,
   })
 
-  const [encounterId, setEncounterId] = useState('')
   const [procedureCode, setProcedureCode] = useState('')
   const [toothFdi, setToothFdi] = useState('')
   const [surface, setSurface] = useState<Surface | ''>('')
@@ -80,7 +79,7 @@ function AddItemForm({
   const mutation = useMutation({
     mutationFn: () =>
       api.addItem(planId, phaseId, {
-        encounter_id: encounterId,
+        encounter_id: encounterPicker.encounterId,
         procedure_code: procedureCode,
         tooth_fdi: toothFdi ? Number(toothFdi) : null,
         surface: toothFdi && surface ? surface : null,
@@ -104,15 +103,7 @@ function AddItemForm({
         mutation.mutate()
       }}
     >
-      <select value={encounterId} onChange={(e) => setEncounterId(e.target.value)}>
-        <option value="">Selecciona una atencion...</option>
-        {encountersQuery.data?.map((encounter) => (
-          <option key={encounter.id} value={encounter.id}>
-            {new Date(encounter.started_at).toLocaleDateString('es-MX')} —{' '}
-            {encounter.chief_complaint ?? 'Sin motivo'}
-          </option>
-        ))}
-      </select>
+      <EncounterPickerField encounterPicker={encounterPicker} />
       <select value={procedureCode} onChange={(e) => setProcedureCode(e.target.value)}>
         <option value="">Selecciona un procedimiento...</option>
         {catalogQuery.data?.map((proc) => (
@@ -153,7 +144,8 @@ function AddItemForm({
       <button
         className={styles.primaryButton}
         type="submit"
-        disabled={!encounterId || !procedureCode || mutation.isPending}
+        disabled={!encounterPicker.encounterId || !procedureCode || mutation.isPending}
+        title={!encounterPicker.encounterId ? 'Selecciona o inicia una atencion' : undefined}
       >
         Agregar procedimiento
       </button>

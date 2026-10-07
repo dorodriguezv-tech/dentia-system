@@ -12,9 +12,10 @@ Abre la dirección que te dé tu clínica (en una instalación local,
 
 ![Pantalla de login](./manual/01-login.png)
 
-Si tu rol es **Administrador de la clínica**, la primera vez que entras el sistema te
-pide configurar un segundo paso de seguridad (MFA, con una app como Google
-Authenticator) — es obligatorio para ese rol y no se puede omitir.
+Si tu rol es **Administrador de la clínica**, el sistema puede pedirte configurar un
+segundo paso de seguridad (MFA, con una app como Google Authenticator) la primera vez
+que entras — por el momento está desactivado temporalmente, así que no debería
+aparecer (ver `docs/SEGURIDAD.md`).
 
 Si olvidaste tu contraseña, pide a un **Administrador de la clínica** que te cree una
 nueva desde Usuarios — todavía no hay un flujo de "olvidé mi contraseña" por correo.
@@ -28,7 +29,9 @@ esa información. Un odontólogo, por ejemplo, no ve la tarjeta de cobranza.
 ![Tablero de inicio](./manual/02-tablero.png)
 
 El menú de la izquierda también cambia según tu rol: ahí solo aparecen las secciones a
-las que tienes acceso (Pacientes, Agenda, Usuarios, Caja, Reportes, Configuración...).
+las que tienes acceso (Pacientes, Agenda, Usuarios, Caja, Reportes, Configuración...). El
+logo de la clínica (o su nombre, si no tiene logo configurado) arriba a la izquierda es
+un enlace: haz clic ahí para volver al tablero de inicio desde cualquier pantalla.
 
 ## 3. Buscar un paciente
 
@@ -42,13 +45,16 @@ expediente, aunque escribas el nombre con errores o sin acentos.
 
 La pantalla "Pacientes" lista a todos con un filtro por estado. Si tu rol puede dar de
 alta pacientes (recepción o administrador de la clínica), verás el botón **Nuevo
-paciente**.
+paciente**. Si tu rol es odontólogo o especialista, además verás la casilla **Mis
+pacientes**: muestra solo los que te tienen asignado como profesional tratante.
 
 ![Listado de pacientes](./manual/04-pacientes.png)
 
 Dar de alta a un paciente tiene 3 pasos:
 1. **Datos** — nombre, apellidos y fecha de nacimiento son obligatorios; el resto
-   (teléfono, correo, dirección, sexo) es opcional.
+   (teléfono, correo, dirección, sexo, profesional tratante y gabinete por defecto) es
+   opcional. Elegir aquí un profesional y un gabinete hace que la Agenda los proponga
+   solos la próxima vez que se agende una cita para este paciente (sección 6).
 2. **Posibles duplicados** — si ya existe un paciente con un nombre parecido y la misma
    fecha de nacimiento o teléfono, el sistema te muestra la coincidencia antes de seguir,
    para no duplicar un expediente. Si de verdad es una persona distinta, confirma
@@ -69,7 +75,9 @@ Debajo del encabezado hay pestañas:
 
 - **Resumen** — datos generales, contactos y la línea de tiempo clínica (todas las
   atenciones del paciente). Desde aquí se abre una atención nueva con **Iniciar
-  atención** (o desde una cita en la Agenda, sección 6).
+  atención** (o desde una cita en la Agenda, sección 6). Si tu rol puede editar al
+  paciente, también puedes cambiar su profesional tratante o su gabinete por defecto —
+  como cualquier cambio de este tipo, el sistema te pide un motivo antes de guardarlo.
 - **Expediente** — antecedentes, alergias, medicamentos, signos vitales, diagnósticos y
   las notas clínicas (ver sección 5).
 - **Odontograma** — el estado de cada pieza dental (sección 5.3).
@@ -84,8 +92,15 @@ Debajo del encabezado hay pestañas:
 
 ![Expediente del paciente](./manual/06-paciente-expediente.png)
 
-Cada sección (antecedentes, alergias, medicamentos, signos vitales, diagnósticos) se
-puede abrir o cerrar por separado. Cualquier alergia activa, y ciertas palabras clave en
+Cada sección (antecedentes, alergias, medicamentos, signos vitales, diagnósticos) tiene
+su propio selector **"Atención"** — todo lo que registras queda ligado a una atención
+concreta, nunca "suelto". Si el paciente ya tiene una atención de hoy, se preselecciona
+sola; si no tiene ninguna, el selector ofrece **"+ Iniciar atención nueva"**, que la crea
+ahí mismo sin salir de la pantalla (el mismo selector se comparte con Tratamientos y
+Consentimientos, así que una vez elegida o creada, aplica en toda la ficha del paciente).
+
+Cada sección se puede abrir o cerrar por separado. Cualquier alergia activa, y ciertas
+palabras clave en
 medicamentos o antecedentes (por ejemplo "diabetes", "anticoagulantes", "marcapasos"),
 generan una alerta crítica — el sistema **siempre** la muestra antes de dejarte recetar,
 finalizar una nota o registrar un procedimiento, nunca se puede ignorar en silencio.
@@ -223,7 +238,45 @@ por cobrar y uso del asistente de IA. Cada reporte (salvo "Cuentas por cobrar", 
 una fotografía del saldo actual) acepta un rango de fechas; por defecto muestra los
 últimos 30 días. Exportar un reporte queda registrado en la bitácora de auditoría.
 
-## 10. Preguntas frecuentes
+## 10. Configuración → Catálogos
+
+Solo visible para un administrador de la clínica (Configuración → Catálogos). Aquí se
+administran, por sucursal, las listas que antes solo podía cambiar quien programó el
+sistema: tipos de consulta/cita, hallazgos del odontograma, diagnósticos, categorías de
+antecedentes, palabras clave de alerta (de antecedentes y de medicamentos),
+procedimientos y precios, gabinetes y los datos básicos de la propia sucursal.
+
+Cada catálogo tiene su propia pestaña con una tabla y un formulario para agregar un
+elemento nuevo (código interno en minúsculas sin espacios, nombre visible y, según el
+catálogo, algún dato adicional — por ejemplo la duración por defecto y el color de un
+tipo de cita, o si un hallazgo exige indicar una superficie del diente).
+
+- **Un elemento nuevo queda disponible de inmediato.** Por ejemplo, si agregas el tipo
+  de cita "Valoración ortodoncia" con 45 minutos de duración, ya aparece en el selector
+  al agendar una cita — no hace falta reiniciar nada ni esperar.
+- **Desactivar no borra.** Un hallazgo o tipo de cita desactivado deja de aparecer en los
+  menús para elegir uno nuevo, pero los registros que ya lo usaron (una nota, una cita
+  pasada, un hallazgo en el odontograma) lo siguen mostrando tal cual — el historial
+  clínico no cambia nunca por una desactivación (regla 2 de uso del sistema: nada se
+  borra de verdad).
+- El código interno de un elemento no se puede cambiar una vez creado (evita que una
+  cita o un hallazgo antiguo apunten, sin darse cuenta, a otra cosa); si lo necesitas,
+  desactiva el elemento y crea uno nuevo con el código correcto.
+- **Exportar e importar por CSV** (botones arriba de cada tabla): exportar descarga
+  el catálogo completo, incluidos los desactivados. Al reimportar, cada fila con el
+  mismo código actualiza ese elemento (nunca lo borra) y una fila con un código nuevo
+  lo crea; si una fila tiene un error (código inválido, nombre vacío), se te avisa
+  cuál fue y el resto del archivo se importa igual — no hace falta corregir el CSV
+  entero por un solo error.
+- **Pestaña "Gabinetes":** agregar, renombrar y activar/desactivar los gabinetes de
+  la sucursal — igual que con los demás catálogos, uno desactivado deja de ofrecerse
+  al agendar pero las citas que ya lo usaron lo siguen mostrando.
+- **Pestaña "Sucursal":** editar el nombre, dirección y teléfono de tu propia
+  sucursal. No sirve para dar de alta una sucursal nueva ni para editar otra
+  distinta a la que tienes seleccionada — eso lo sigue administrando quien opera el
+  sistema completo.
+
+## 11. Preguntas frecuentes
 
 **¿Por qué no puedo editar una nota que ya finalicé?**
 Es una regla del sistema: una nota finalizada no se modifica, para proteger el historial

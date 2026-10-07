@@ -8,6 +8,7 @@ from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
 from app.core.errors import AppError
 from app.core.storage import StorageBackend, get_storage_backend
+from app.modules.agenda import service as agenda_service
 from app.modules.iam.models import User
 from app.modules.patients import service
 from app.modules.patients.models import Patient
@@ -45,6 +46,8 @@ def _patient_out(patient: Patient) -> PatientOut:
         address=patient.address,
         status=patient.status,
         has_photo=patient.photo_path is not None,
+        default_resource_id=patient.default_resource_id,
+        primary_provider_id=patient.primary_provider_id,
     )
 
 
@@ -56,6 +59,8 @@ def _patient_list_item(patient: Patient) -> PatientListItemOut:
         date_of_birth=patient.date_of_birth,
         status=patient.status,
         phone=patient.phone,
+        default_resource_id=patient.default_resource_id,
+        primary_provider_id=patient.primary_provider_id,
     )
 
 
@@ -77,14 +82,32 @@ async def _summary_out(db: AsyncSession, patient: Patient) -> PatientSummaryOut:
 @router.get("/patients", response_model=list[PatientListItemOut])
 async def list_patients(
     status_filter: StatusCode | None = Query(default=None, alias="status"),
+    mine_only: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     clinic_id: uuid.UUID = Depends(get_clinic_id),
-    _actor: User = Depends(require_permission("patients.read")),
+    actor: User = Depends(require_permission("patients.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[PatientListItemOut]:
+    primary_provider_id: uuid.UUID | None = None
+    if mine_only:
+        # B3 (Parte B, Fase 12.2): "Mis pacientes" -- un odontologo/especialista sin
+        # Provider en esta sucursal simplemente no tiene pacientes propios, no es un
+        # error.
+        provider = await agenda_service.get_provider_for_user(
+            db, clinic_id=clinic_id, user_id=actor.id
+        )
+        if provider is None:
+            return []
+        primary_provider_id = provider.id
+
     patients = await service.list_patients(
-        db, clinic_id=clinic_id, status=status_filter, limit=limit, offset=offset
+        db,
+        clinic_id=clinic_id,
+        status=status_filter,
+        limit=limit,
+        offset=offset,
+        primary_provider_id=primary_provider_id,
     )
     return [_patient_list_item(p) for p in patients]
 

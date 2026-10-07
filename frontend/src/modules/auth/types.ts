@@ -15,6 +15,16 @@ export interface RoleOut {
 export interface ClinicOut {
   id: string
   name: string
+  // Opcionales en el tipo (el backend siempre los manda, aunque sea null) para no
+  // obligar a cada fixture de prueba que ya construye un MyClinicOut a incluirlos.
+  address?: string | null
+  phone?: string | null
+}
+
+export interface ClinicUpdateInput {
+  name?: string
+  address?: string
+  phone?: string
 }
 
 export interface MyClinicOut {

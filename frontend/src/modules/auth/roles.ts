@@ -179,3 +179,12 @@ const ROLES_THAT_READ_REPORTS = new Set(['superadmin', 'admin_clinica', 'caja'])
 export function canReadReports(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_READ_REPORTS.has(roleCode)
 }
+
+/** Roles con el permiso `catalogs.manage` (ver docs/MATRIZ_PERMISOS.md). Solo
+ * admin_clinica a proposito: superadmin no tiene acceso a datos clinicos (CLAUDE.md
+ * sec. 5) y varios de estos catalogos lo son (hallazgos, diagnosticos...). */
+const ROLES_THAT_MANAGE_CATALOGS = new Set(['admin_clinica'])
+
+export function canManageCatalogs(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_MANAGE_CATALOGS.has(roleCode)
+}

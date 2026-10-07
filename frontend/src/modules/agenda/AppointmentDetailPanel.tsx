@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { APPOINTMENT_TYPES, STATUS_LABELS } from './catalog'
+import { useQuery } from '@tanstack/react-query'
+import * as catalogsApi from '../catalogs/api'
+import { STATUS_LABELS } from './catalog'
 import { formatTime } from './dateUtils'
 import styles from './NewAppointmentForm.module.css'
 import type { AppointmentListItemOut, AppointmentStatus } from './types'
@@ -72,6 +74,17 @@ export function AppointmentDetailPanel({
 
   const status = appointment.status
 
+  // B1 (Parte B, Fase 12.2): el nombre del tipo de cita vive en el catalogo
+  // administrable -- si se desactivo despues de agendar esta cita, igual se
+  // sigue mostrando (comparte el cache con NewAppointmentForm.tsx, mismo query key).
+  const appointmentTypesQuery = useQuery({
+    queryKey: ['catalog-items', 'appointment_type'],
+    queryFn: () => catalogsApi.listCatalogItems('appointment_type', false),
+  })
+  const appointmentTypeName =
+    appointmentTypesQuery.data?.find((item) => item.code === appointment.appointment_type)
+      ?.name ?? appointment.appointment_type
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -85,7 +98,7 @@ export function AppointmentDetailPanel({
         {formatTime(start)}–{formatTime(end)}
       </p>
       <p>
-        {APPOINTMENT_TYPES[appointment.appointment_type].label} con {appointment.provider_full_name}
+        {appointmentTypeName} con {appointment.provider_full_name}
         {appointment.resource_name && ` · ${appointment.resource_name}`}
       </p>
       <p>

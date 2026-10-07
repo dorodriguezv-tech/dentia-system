@@ -9,9 +9,24 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.modules.diagnosis.schemas import DiagnosisCode
-from app.modules.odontogram.schemas import FindingCode, Surface
-from app.modules.records.schemas import HistoryCategory, Severity
+from app.modules.diagnosis.rules import DIAGNOSIS_CODES
+from app.modules.odontogram.finding_catalog import FINDING_CODES
+from app.modules.odontogram.schemas import Surface
+from app.modules.records.rules import HISTORY_CATEGORIES
+from app.modules.records.schemas import Severity
+
+# B1 (Parte B, Fase 12.2) volvio "Hallazgos del odontograma", "Diagnosticos" y
+# "Categorias de antecedentes" catalogos administrables por sucursal (ya no un
+# Literal fijo en odontogram/diagnosis/records `schemas.py`) -- pero Ollama necesita
+# un enum real y cerrado para forzar la decodificacion estructurada (ver
+# interpreter.py), y la IA todavia no valida contra el catalogo de cada sucursal
+# (eso es trabajo pendiente de Dentia, Fase 13/Parte C: "el prompt... y los
+# catalogos de validacion de la IA deben leer de estas tablas"). Mientras tanto,
+# estos tres Literal se quedan fijos a los MISMOS valores de siempre (las
+# constantes no se tocaron), para no regresar la seguridad del esquema forzado.
+FindingCode = Literal[*FINDING_CODES]  # type: ignore[valid-type]
+DiagnosisCode = Literal[*DIAGNOSIS_CODES]  # type: ignore[valid-type]
+HistoryCategory = Literal[*HISTORY_CATEGORIES]  # type: ignore[valid-type]
 
 
 class SetChiefComplaintAction(BaseModel):

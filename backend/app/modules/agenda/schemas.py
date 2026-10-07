@@ -4,18 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.agenda.rules import APPOINTMENT_STATUSES, APPOINTMENT_TYPE_CODES
+from app.modules.agenda.rules import APPOINTMENT_STATUSES
 
-AppointmentType = Literal[
-    "consulta",
-    "limpieza",
-    "restauracion",
-    "endodoncia",
-    "extraccion",
-    "ortodoncia_control",
-    "protesis",
-    "urgencia",
-]
+# B1 (Parte B, Fase 12.2): ya no es un Literal fijo -- "Tipos de consulta/cita" ahora
+# vive en el catalogo administrable (app/modules/catalogs), validado contra la BD en
+# el service, no por Pydantic. Sigue siendo un string acotado al mismo formato de
+# codigo que el resto de los catalogos (minusculas, numeros y guion bajo).
+AppointmentType = str
 AppointmentStatus = Literal[
     "RESERVADA",
     "CONFIRMADA",
@@ -31,6 +26,9 @@ AppointmentStatus = Literal[
 class ProviderCreateRequest(BaseModel):
     user_id: uuid.UUID
     color: str = Field(default="#2BB3A3", min_length=4, max_length=7)
+    # B2 (Parte B, Fase 12.2): gabinete que la agenda preselecciona al agendar con
+    # este profesional en esta sucursal (opcional).
+    default_resource_id: uuid.UUID | None = None
 
 
 class ProviderOut(BaseModel):
@@ -39,10 +37,19 @@ class ProviderOut(BaseModel):
     full_name: str
     color: str
     is_active: bool
+    default_resource_id: uuid.UUID | None = None
 
 
 class ResourceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+
+class ResourceUpdateRequest(BaseModel):
+    """Pendiente de B1 (Parte B, Fase 12.2): administrar Gabinetes desde la
+    pantalla de Catalogos -- antes no habia forma de renombrar ni desactivar uno."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    is_active: bool | None = None
 
 
 class ResourceOut(BaseModel):
@@ -89,7 +96,7 @@ class AppointmentCreateRequest(BaseModel):
     patient_id: uuid.UUID
     provider_id: uuid.UUID
     resource_id: uuid.UUID | None = None
-    appointment_type: AppointmentType
+    appointment_type: AppointmentType = Field(min_length=1, max_length=60, pattern=r"^[a-z0-9_]+$")
     starts_at: datetime
     ends_at: datetime | None = None
     notes: str | None = Field(default=None, max_length=1000)
@@ -169,7 +176,6 @@ class ReminderTaskOut(BaseModel):
 
 
 def _validate_catalogs() -> None:
-    assert set(APPOINTMENT_TYPE_CODES) == set(AppointmentType.__args__)  # type: ignore[attr-defined]
     assert set(APPOINTMENT_STATUSES) == set(AppointmentStatus.__args__)  # type: ignore[attr-defined]
 
 

@@ -42,6 +42,16 @@ class Patient(AuditedMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default=DEFAULT_STATUS)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # B3 (Parte B, Fase 12.2): gabinete y profesional tratante por defecto -- la
+    # agenda los preselecciona al agendar una cita para este paciente (opcionales,
+    # un paciente nuevo no tiene por que tener ya un profesional asignado).
+    default_resource_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True
+    )
+    primary_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
+
 
 class PatientContact(AuditedMixin, Base):
     __tablename__ = "patient_contacts"

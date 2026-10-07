@@ -126,3 +126,41 @@ async def test_create_diagnosis_denied_without_permission(
         json={"encounter_id": encounter_id, "text": "No deberia poder"},
     )
     assert response.status_code == 403
+
+
+async def test_create_diagnosis_rejects_a_code_not_in_the_clinic_catalog(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """B1 (Parte B, Fase 12.2): 'Diagnosticos' ya no es un Literal fijo, sino el
+    catalogo administrable de la sucursal (el codigo sigue siendo opcional)."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        f"/api/v1/patients/{patient_id}/diagnoses",
+        headers=headers,
+        json={
+            "encounter_id": encounter_id,
+            "code": "no_existe",
+            "text": "Diagnostico con codigo invalido",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_DIAGNOSIS_CODE"
+
+
+async def test_create_diagnosis_without_a_code_still_works(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """El texto del diagnostico siempre es libre: el codigo del catalogo es solo un
+    atajo opcional, nunca obligatorio."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        f"/api/v1/patients/{patient_id}/diagnoses",
+        headers=headers,
+        json={"encounter_id": encounter_id, "text": "Diagnostico sin codigo del catalogo"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["code"] is None

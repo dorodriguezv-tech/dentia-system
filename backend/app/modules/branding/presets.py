@@ -39,28 +39,41 @@ PRESETS: dict[str, dict[str, str]] = {
     },
     "azul_sereno": {
         "name": "Azul sereno",
-        "primary": "#3A7FC1",
+        # #3A7FC1 (el azul original) no pasaba el contraste WCAG 4.5:1 (sec. 4 de
+        # docs/04_TEMAS_Y_MARCA.md): 4.21:1 contra blanco/bg y contra texto blanco
+        # sobre el boton primario -- la misma clase de bug que menta_clinica (Fase 12),
+        # encontrada aqui hasta que una sucursal real eligio este preset y
+        # accessibility.spec.ts (axe-core) la agarro. #3575B1 es el mismo tono
+        # oscurecido con color_utils.suggest_contrasting_color(), >=4.5:1 contra
+        # blanco y contra --color-bg.
+        "primary": "#3575B1",
         "secondary": "#5BBFD6",
         "accent": "#F4B860",
         "bg": "#F5F8FC",
     },
     "aqua_suave": {
         "name": "Aqua suave",
-        "primary": "#1FA2B8",
+        # Mismo bug y misma correccion que azul_sereno (ver arriba): #1FA2B8 original
+        # daba ~3.0:1, #167484 pasa >=4.5:1.
+        "primary": "#167484",
         "secondary": "#7CC6A6",
         "accent": "#FF9F80",
         "bg": "#F4FAFB",
     },
     "lavanda_suave": {
         "name": "Lavanda suave",
-        "primary": "#7B7FD4",
+        # Mismo bug y misma correccion que azul_sereno (ver arriba): #7B7FD4 original
+        # daba ~3.6:1, #5C61CA pasa >=4.5:1.
+        "primary": "#5C61CA",
         "secondary": "#5FB3C9",
         "accent": "#F2B5A0",
         "bg": "#F8F8FD",
     },
     "verde_salvia": {
         "name": "Verde salvia",
-        "primary": "#6A9E7F",
+        # Mismo bug y misma correccion que azul_sereno (ver arriba): #6A9E7F original
+        # daba ~3.1:1, #507B61 pasa >=4.5:1.
+        "primary": "#507B61",
         "secondary": "#4F8FA8",
         "accent": "#E8B04B",
         "bg": "#F6F9F6",

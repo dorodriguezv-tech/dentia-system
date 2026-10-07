@@ -33,13 +33,18 @@ Los cambios se ven en vista previa y se aplican a todos los usuarios de la clín
 `ThemeProvider` lee `GET /api/v1/branding` al iniciar y escribe las variables en `document.documentElement.style`. Ningún componente usa colores fijos.
 
 ## 3. Presets amigables para clínica dental
+Los colores primarios de esta tabla ya son los corregidos para pasar WCAG AA (ver
+sección 4 y `docs/02_ARQUITECTURA.md` sec. 5.12/5.13) — no los originales con los que
+se diseñó cada preset, que no llegaban a 4.5:1 de contraste. Fuente de verdad real:
+`backend/app/modules/branding/presets.py`.
+
 | Preset | Primario | Secundario | Acento | Fondo | Sensación |
 |---|---|---|---|---|---|
-| Menta clínica (predeterminado) | #2BB3A3 | #4A90C2 | #F2A65A | #F7FAFA | Limpio, fresco |
-| Azul sereno | #3A7FC1 | #5BBFD6 | #F4B860 | #F5F8FC | Confianza, calma |
-| Aqua suave | #1FA2B8 | #7CC6A6 | #FF9F80 | #F4FAFB | Moderno, amable |
-| Lavanda suave | #7B7FD4 | #5FB3C9 | #F2B5A0 | #F8F8FD | Cálido, infantil/estético |
-| Verde salvia | #6A9E7F | #4F8FA8 | #E8B04B | #F6F9F6 | Natural, relajante |
+| Menta clínica (predeterminado) | #1E7D72 | #4A90C2 | #F2A65A | #F7FAFA | Limpio, fresco |
+| Azul sereno | #3575B1 | #5BBFD6 | #F4B860 | #F5F8FC | Confianza, calma |
+| Aqua suave | #167484 | #7CC6A6 | #FF9F80 | #F4FAFB | Moderno, amable |
+| Lavanda suave | #5C61CA | #5FB3C9 | #F2B5A0 | #F8F8FD | Cálido, infantil/estético |
+| Verde salvia | #507B61 | #4F8FA8 | #E8B04B | #F6F9F6 | Natural, relajante |
 | Grafito profesional | #37515F | #2BB3A3 | #F2A65A | #F6F7F8 | Sobrio, especialidades |
 
 ## 4. Reglas de accesibilidad

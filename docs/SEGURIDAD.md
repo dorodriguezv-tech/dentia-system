@@ -14,10 +14,17 @@ de manejar datos reales de pacientes — ver "Alcance y límites" al final.
 | A04 Diseño inseguro | Reglas clínicas inviolables (CLAUDE.md sec. 4) con pruebas unitarias por módulo (estados de nota, no-borrado-físico, planificado≠realizado, etc.). |
 | A05 Configuración de seguridad incorrecta | Fase 12: nuevas cabeceras de seguridad (sección 2) y documentación interactiva de la API (Swagger/Redoc) deshabilitada fuera de desarrollo (sección 3). |
 | A06 Componentes vulnerables | Fase 12: `pip-audit` (backend) y `npm audit` (frontend, `e2e/`) — ver sección 4. |
-| A07 Identificación y autenticación | MFA TOTP para `admin_clinica`, *rate limiting* en el login desde la Fase 1 (`app/modules/iam/service.py`/`rules.py`). |
+| A07 Identificación y autenticación | MFA TOTP para `admin_clinica` (**deshabilitada temporalmente**, ver nota abajo), *rate limiting* en el login desde la Fase 1 (`app/modules/iam/service.py`/`rules.py`). |
 | A08 Integridad de software y datos | Documentos firmados con hash SHA-256 inmutable (regla 7); notas clínicas `FINAL` no se modifican (regla 1). |
 | A09 Fallas de registro y monitoreo | `AuditEvent` append-only: lecturas de expediente, exportaciones, firmas, cambios clínicos, accesos denegados (`AccessDeniedAuditMiddleware`) y uso de IA (CLAUDE.md sec. 5). |
 | A10 SSRF | Sin llamadas salientes a servicios externos controlables por el usuario; Ollama/Whisper corren en local y sus URLs vienen de configuración del servidor, no de la petición. |
+
+> **MFA deshabilitada temporalmente (2026-10-06):** a petición del dueño del proyecto,
+> `rules.MFA_REQUIRED_ROLES` (`backend/app/modules/iam/rules.py`) está vacío por ahora —
+> ningún rol, incluido `admin_clinica`, exige configurar ni verificar MFA al entrar.
+> CLAUDE.md sec. 5 sigue pidiendo MFA para `admin_clinica`; para reactivarla solo hay
+> que regresar esa constante a `frozenset({"admin_clinica"})` y reiniciar el backend
+> (no toca la base de datos).
 
 ## 2. Cabeceras de seguridad (`app/core/security_headers.py`)
 

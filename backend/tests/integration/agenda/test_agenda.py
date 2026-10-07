@@ -74,6 +74,128 @@ async def test_create_provider_and_resource(
     assert resource_resp.json()["name"] == "Gabinete 1"
 
 
+async def test_rename_and_deactivate_resource(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Pendiente de B1 (Parte B, Fase 12.2): administrar Gabinetes desde Catalogos."""
+    admin_headers, _provider_id, _patient_id, _odonto = await _setup(
+        client, make_user, clinic, db_session
+    )
+    resource_resp = await client.post(
+        "/api/v1/resources", headers=admin_headers, json={"name": "Gabinete viejo"}
+    )
+    resource_id = resource_resp.json()["id"]
+
+    rename_resp = await client.patch(
+        f"/api/v1/resources/{resource_id}", headers=admin_headers, json={"name": "Gabinete 2"}
+    )
+    assert rename_resp.status_code == 200
+    assert rename_resp.json()["name"] == "Gabinete 2"
+
+    deactivate_resp = await client.patch(
+        f"/api/v1/resources/{resource_id}", headers=admin_headers, json={"is_active": False}
+    )
+    assert deactivate_resp.status_code == 200
+    assert deactivate_resp.json()["is_active"] is False
+
+    default_listing = await client.get("/api/v1/resources", headers=admin_headers)
+    assert resource_id not in [r["id"] for r in default_listing.json()]
+
+    with_inactive = await client.get(
+        "/api/v1/resources", params={"include_inactive": "true"}, headers=admin_headers
+    )
+    assert resource_id in [r["id"] for r in with_inactive.json()]
+
+
+async def test_a_role_without_agenda_write_requesting_inactive_resources_only_sees_active_ones(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """`asistente` tiene agenda.read pero no agenda.write (ve la agenda, no la
+    administra) -- igual que un rol sin `catalogs.manage` con los catalogos."""
+    admin_headers, _provider_id, _patient_id, _odonto = await _setup(
+        client, make_user, clinic, db_session
+    )
+    resource_resp = await client.post(
+        "/api/v1/resources", headers=admin_headers, json={"name": "Gabinete 3"}
+    )
+    resource_id = resource_resp.json()["id"]
+    await client.patch(
+        f"/api/v1/resources/{resource_id}", headers=admin_headers, json={"is_active": False}
+    )
+
+    await make_user(email="asistente@example.com", role_code="asistente")
+    asistente_token = await _login(client, "asistente@example.com")
+    asistente_headers = _headers(asistente_token, clinic.id)
+    response = await client.get(
+        "/api/v1/resources", params={"include_inactive": "true"}, headers=asistente_headers
+    )
+
+    assert response.status_code == 200
+    assert resource_id not in [r["id"] for r in response.json()]
+
+
+async def test_create_provider_with_a_default_resource(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    """B2 (Parte B, Fase 12.2): la agenda preselecciona este gabinete al agendar
+    con el profesional (ver NewAppointmentForm.tsx)."""
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    headers = _headers(await _login(client, "admin@example.com"), clinic.id)
+    odonto = await make_user(email="odonto2@example.com", role_code="odontologo")
+
+    resource_resp = await client.post(
+        "/api/v1/resources", headers=headers, json={"name": "Gabinete 2"}
+    )
+    resource_id = resource_resp.json()["id"]
+
+    provider_resp = await client.post(
+        "/api/v1/providers",
+        headers=headers,
+        json={"user_id": str(odonto.id), "default_resource_id": resource_id},
+    )
+    assert provider_resp.status_code == 201, provider_resp.text
+    assert provider_resp.json()["default_resource_id"] == resource_id
+
+    listed = await client.get("/api/v1/providers", headers=headers)
+    by_id = {p["id"]: p for p in listed.json()}
+    assert by_id[provider_resp.json()["id"]]["default_resource_id"] == resource_id
+
+
+async def test_create_provider_rejects_a_default_resource_from_another_clinic(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    from sqlalchemy import select
+
+    from app.modules.iam.models import Clinic, Role, UserClinic
+
+    other_clinic = Clinic(organization_id=clinic.organization_id, name="Otra sucursal")
+    db_session.add(other_clinic)
+    await db_session.flush()
+
+    admin = await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_role = (
+        await db_session.execute(select(Role).where(Role.code == "admin_clinica"))
+    ).scalar_one()
+    db_session.add(UserClinic(user_id=admin.id, clinic_id=other_clinic.id, role_id=admin_role.id))
+    await db_session.commit()
+
+    headers = _headers(await _login(client, "admin@example.com"), clinic.id)
+    odonto = await make_user(email="odonto3@example.com", role_code="odontologo")
+
+    other_headers = _headers(await _login(client, "admin@example.com"), other_clinic.id)
+    foreign_resource_resp = await client.post(
+        "/api/v1/resources", headers=other_headers, json={"name": "Gabinete ajeno"}
+    )
+    foreign_resource_id = foreign_resource_resp.json()["id"]
+
+    response = await client.post(
+        "/api/v1/providers",
+        headers=headers,
+        json={"user_id": str(odonto.id), "default_resource_id": foreign_resource_id},
+    )
+    assert response.status_code == 404
+
+
 async def test_create_appointment_computes_default_duration(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:
@@ -93,6 +215,62 @@ async def test_create_appointment_computes_default_duration(
     body = response.json()
     assert body["status"] == "RESERVADA"
     assert _parse(body["ends_at"]) == MONDAY_9AM + timedelta(minutes=30)
+
+
+async def test_create_appointment_rejects_a_type_not_in_the_clinic_catalog(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """B1 (Parte B, Fase 12.2): 'Tipos de consulta/cita' ya no es un Literal fijo,
+    sino el catalogo administrable de la sucursal -- un codigo que no esta ahi (o
+    que un administrador desactivo) se rechaza desde el service, no desde Pydantic."""
+    headers, provider_id, patient_id, _odonto = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "no_existe",
+            "starts_at": _iso(MONDAY_9AM),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_APPOINTMENT_TYPE"
+
+
+async def test_a_new_appointment_type_from_the_catalog_works_immediately_when_scheduling(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Criterio de aceptacion de B1: 'el administrador crea el tipo de consulta
+    Valoracion ortodoncia - 45 min y aparece de inmediato al agendar'."""
+    headers, provider_id, patient_id, _odonto = await _setup(client, make_user, clinic, db_session)
+
+    create_type_response = await client.post(
+        "/api/v1/catalogs/appointment_type",
+        headers=headers,
+        json={
+            "code": "valoracion_ortodoncia",
+            "name": "Valoracion ortodoncia",
+            "extra": {"default_minutes": 45},
+        },
+    )
+    assert create_type_response.status_code == 201, create_type_response.text
+
+    response = await client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "valoracion_ortodoncia",
+            "starts_at": _iso(MONDAY_9AM),
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert _parse(response.json()["ends_at"]) == MONDAY_9AM + timedelta(minutes=45)
 
 
 async def test_create_appointment_rejects_invalid_range(

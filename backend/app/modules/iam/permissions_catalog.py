@@ -47,6 +47,9 @@ PERMISSIONS: dict[str, str] = {
     "reports.read": "Ver reportes",
     "ai.use": "Usar el asistente de IA por voz",
     "ai.configure": "Configurar el asistente de IA",
+    "catalogs.manage": (
+        "Administrar catalogos de la clinica (tipos de cita, hallazgos, diagnosticos...)"
+    ),
 }
 
 ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -75,6 +78,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "treatment.read",
         "reports.read",
         "ai.configure",
+        "catalogs.manage",
     ),
     "odontologo": (
         "patients.read",

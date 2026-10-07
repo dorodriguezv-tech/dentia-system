@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
+import * as agendaApi from '../agenda/api'
 import * as api from './api'
 import styles from './NewPatientPage.module.css'
 import {
@@ -23,12 +25,21 @@ const EMPTY_PATIENT: PatientCreateInput = {
   phone: '',
   email: '',
   address: '',
+  default_resource_id: null,
+  primary_provider_id: null,
 }
 
 export function NewPatientPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('datos')
   const [patient, setPatient] = useState<PatientCreateInput>(EMPTY_PATIENT)
+  // B3 (Parte B, Fase 12.2): gabinete y profesional tratante por defecto, opcionales
+  // desde el alta -- la agenda los preselecciona despues al agendar.
+  const providersQuery = useQuery({ queryKey: ['providers'], queryFn: agendaApi.listProviders })
+  const resourcesQuery = useQuery({
+    queryKey: ['resources'],
+    queryFn: () => agendaApi.listResources(),
+  })
   const [duplicates, setDuplicates] = useState<DuplicateCandidateOut[]>([])
   const [contacts, setContacts] = useState<ContactCreateInput[]>([])
   const [checking, setChecking] = useState(false)
@@ -178,6 +189,36 @@ export function NewPatientPage() {
                   value={patient.address ?? ''}
                   onChange={(e) => updateField('address', e.target.value)}
                 />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="primary_provider_id">Profesional tratante (opcional)</label>
+                <select
+                  id="primary_provider_id"
+                  value={patient.primary_provider_id ?? ''}
+                  onChange={(e) => updateField('primary_provider_id', e.target.value || null)}
+                >
+                  <option value="">Sin asignar</option>
+                  {providersQuery.data?.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="default_resource_id">Gabinete por defecto (opcional)</label>
+                <select
+                  id="default_resource_id"
+                  value={patient.default_resource_id ?? ''}
+                  onChange={(e) => updateField('default_resource_id', e.target.value || null)}
+                >
+                  <option value="">Sin asignar</option>
+                  {resourcesQuery.data?.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className={styles.actions}>

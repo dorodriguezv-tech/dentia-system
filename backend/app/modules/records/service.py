@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
 from app.core.errors import AppError
+from app.modules.catalogs import service as catalogs_service
 from app.modules.patients.models import Patient
 from app.modules.records import rules
 from app.modules.records.models import Allergy, MedicalHistory, Medication, VitalSigns
@@ -49,6 +50,18 @@ async def create_history(
     origin: str = "MANUAL",
 ) -> MedicalHistory:
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
+    # B1 (Parte B, Fase 12.2): "Categorias de antecedentes" ya no es un Literal fijo --
+    # valida contra el catalogo administrable de la sucursal.
+    categories = await catalogs_service.get_active_codes(
+        db, clinic_id=clinic_id, catalog_type="history_category"
+    )
+    if data.category not in categories:
+        raise AppError(
+            "INVALID_HISTORY_CATEGORY",
+            "La categoria de antecedente no existe o esta desactivada en esta sucursal",
+            status_code=400,
+        )
+
     item = MedicalHistory(
         clinic_id=clinic_id,
         patient_id=patient_id,
@@ -293,6 +306,16 @@ def _annul(
     item.annulled_at = datetime.now(UTC)
 
 
+async def _alert_keyword_catalog(
+    db: AsyncSession, *, clinic_id: uuid.UUID, catalog_type: str
+) -> dict[str, str]:
+    """B1 (Parte B, Fase 12.2): "Palabras clave de alerta" ya no son los diccionarios
+    fijos `CONDITION_ALERT_KEYWORDS`/`MEDICATION_ALERT_KEYWORDS` -- viven en el
+    catalogo administrable de la sucursal (campo `extra.alert_label`)."""
+    items = await catalogs_service.list_items(db, clinic_id=clinic_id, catalog_type=catalog_type)
+    return {item.code: str(item.extra.get("alert_label", item.name)) for item in items}
+
+
 async def get_patient_alerts(
     db: AsyncSession, *, clinic_id: uuid.UUID, patient_id: uuid.UUID
 ) -> list[str]:
@@ -307,21 +330,27 @@ async def get_patient_alerts(
     for allergy in (await db.execute(allergy_stmt)).scalars().all():
         alerts.append(rules.allergy_alert(allergy.substance, allergy.severity))
 
+    medication_keywords = await _alert_keyword_catalog(
+        db, clinic_id=clinic_id, catalog_type="medication_alert_keyword"
+    )
     medication_stmt = select(Medication).where(
         Medication.clinic_id == clinic_id,
         Medication.patient_id == patient_id,
         Medication.is_active.is_(True),
     )
     for medication in (await db.execute(medication_stmt)).scalars().all():
-        alerts.extend(rules.match_alert_keywords(medication.name, rules.MEDICATION_ALERT_KEYWORDS))
+        alerts.extend(rules.match_alert_keywords(medication.name, medication_keywords))
 
+    condition_keywords = await _alert_keyword_catalog(
+        db, clinic_id=clinic_id, catalog_type="condition_alert_keyword"
+    )
     history_stmt = select(MedicalHistory).where(
         MedicalHistory.clinic_id == clinic_id,
         MedicalHistory.patient_id == patient_id,
         MedicalHistory.is_active.is_(True),
     )
     for history in (await db.execute(history_stmt)).scalars().all():
-        alerts.extend(rules.match_alert_keywords(history.text, rules.CONDITION_ALERT_KEYWORDS))
+        alerts.extend(rules.match_alert_keywords(history.text, condition_keywords))
 
     seen: set[str] = set()
     unique_alerts = []

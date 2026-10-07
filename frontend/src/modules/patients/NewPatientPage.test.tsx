@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
@@ -5,9 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewPatientPage } from './NewPatientPage'
 
 vi.mock('./api')
+vi.mock('../agenda/api')
+import * as agendaApi from '../agenda/api'
 import * as api from './api'
 
 function renderWizard() {
+  const queryClient = new QueryClient()
   const router = createMemoryRouter(
     [
       { path: '/pacientes/nuevo', element: <NewPatientPage /> },
@@ -16,7 +20,11 @@ function renderWizard() {
     ],
     { initialEntries: ['/pacientes/nuevo'] },
   )
-  render(<RouterProvider router={router} />)
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
 }
 
 async function fillRequiredFields() {
@@ -31,6 +39,8 @@ describe('NewPatientPage', () => {
     vi.mocked(api.checkDuplicates).mockReset()
     vi.mocked(api.createPatient).mockReset()
     vi.mocked(api.createContact).mockReset()
+    vi.mocked(agendaApi.listProviders).mockReset().mockResolvedValue([])
+    vi.mocked(agendaApi.listResources).mockReset().mockResolvedValue([])
   })
 
   it('exige confirmar cuando hay posibles duplicados antes de poder crear', async () => {
@@ -86,6 +96,8 @@ describe('NewPatientPage', () => {
       address: null,
       status: 'activo',
       has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
     })
 
     renderWizard()
@@ -96,6 +108,52 @@ describe('NewPatientPage', () => {
     await waitFor(() => expect(screen.getByText('Ficha del paciente')).toBeInTheDocument())
     expect(api.createPatient).toHaveBeenCalledWith(
       expect.objectContaining({ first_name: 'Jose', last_name_paternal: 'Perez' }),
+    )
+  })
+
+  it('permite elegir un gabinete y un profesional tratante por defecto desde el alta (B3)', async () => {
+    vi.mocked(agendaApi.listProviders).mockResolvedValue([
+      { id: 'prov-1', user_id: 'u1', full_name: 'Dra. Gomez', color: '#2bb3a3', is_active: true, default_resource_id: null },
+    ])
+    vi.mocked(agendaApi.listResources).mockResolvedValue([
+      { id: 'res-1', name: 'Gabinete 1', is_active: true },
+    ])
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000002',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '1990-05-20',
+      sex: null,
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: 'res-1',
+      primary_provider_id: 'prov-1',
+    })
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Profesional tratante (opcional)'),
+      'prov-1',
+    )
+    await userEvent.selectOptions(screen.getByLabelText('Gabinete por defecto (opcional)'), 'res-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() =>
+      expect(api.createPatient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          primary_provider_id: 'prov-1',
+          default_resource_id: 'res-1',
+        }),
+      ),
     )
   })
 })

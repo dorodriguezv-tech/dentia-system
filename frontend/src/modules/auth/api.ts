@@ -1,5 +1,13 @@
 import { apiRequest } from '../../api/client'
-import type { LoginResult, MfaSetupResponse, MyClinicOut, TokenResponse, UserOut } from './types'
+import type {
+  ClinicOut,
+  ClinicUpdateInput,
+  LoginResult,
+  MfaSetupResponse,
+  MyClinicOut,
+  TokenResponse,
+  UserOut,
+} from './types'
 
 export function login(email: string, password: string): Promise<LoginResult> {
   return apiRequest<LoginResult>('/auth/login', {
@@ -39,6 +47,12 @@ export function getMe(): Promise<UserOut> {
 
 export function getMyClinics(): Promise<MyClinicOut[]> {
   return apiRequest<MyClinicOut[]>('/me/clinics')
+}
+
+// Pendiente de B1 (Parte B, Fase 12.2): editar los datos basicos de la propia
+// sucursal desde Catalogos (nunca otra, no recibe un id en la URL).
+export function updateCurrentClinic(input: ClinicUpdateInput): Promise<ClinicOut> {
+  return apiRequest<ClinicOut>('/clinics/current', { method: 'PATCH', body: input })
 }
 
 export function setupMfa(): Promise<MfaSetupResponse> {

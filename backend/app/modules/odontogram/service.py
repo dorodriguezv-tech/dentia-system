@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
 from app.core.errors import AppError
+from app.modules.catalogs import service as catalogs_service
 from app.modules.encounters.models import Encounter
 from app.modules.iam.models import User
 from app.modules.odontogram import rules
@@ -61,6 +62,27 @@ async def create_finding(
         raise AppError(
             "INVALID_SURFACE",
             f"La superficie {data.surface} no es valida para la pieza {data.tooth_fdi}",
+            status_code=422,
+        )
+
+    # B1 (Parte B, Fase 12.2): "Hallazgos del odontograma" ya no es un diccionario fijo
+    # en codigo -- valida contra el catalogo administrable de la sucursal y, si ese
+    # hallazgo esta marcado como "requiere superficie" (nuevo: antes la superficie
+    # siempre era opcional sin importar el hallazgo), exige que la peticion traiga una.
+    findings = await catalogs_service.list_items(
+        db, clinic_id=clinic_id, catalog_type="odontogram_finding"
+    )
+    finding_item = next((f for f in findings if f.code == data.finding_code), None)
+    if finding_item is None:
+        raise AppError(
+            "INVALID_FINDING_CODE",
+            "El hallazgo no existe o esta desactivado en esta sucursal",
+            status_code=400,
+        )
+    if finding_item.extra.get("requires_surface") and data.surface is None:
+        raise AppError(
+            "SURFACE_REQUIRED",
+            f"El hallazgo '{finding_item.name}' exige indicar una superficie",
             status_code=422,
         )
 

@@ -1,12 +1,7 @@
-export type AppointmentType =
-  | 'consulta'
-  | 'limpieza'
-  | 'restauracion'
-  | 'endodoncia'
-  | 'extraccion'
-  | 'ortodoncia_control'
-  | 'protesis'
-  | 'urgencia'
+// B1 (Parte B, Fase 12.2): ya no es un literal fijo -- "Tipos de consulta/cita"
+// vive en el catalogo administrable (Configuracion -> Catalogos), ver
+// modules/catalogs/api.ts.
+export type AppointmentType = string
 
 export type AppointmentStatus =
   | 'RESERVADA'
@@ -24,17 +19,24 @@ export interface ProviderOut {
   full_name: string
   color: string
   is_active: boolean
+  default_resource_id: string | null
 }
 
 export interface ProviderCreateInput {
   user_id: string
   color?: string
+  default_resource_id?: string | null
 }
 
 export interface ResourceOut {
   id: string
   name: string
   is_active: boolean
+}
+
+export interface ResourceUpdateInput {
+  name?: string
+  is_active?: boolean
 }
 
 export interface WorkingHoursOut {

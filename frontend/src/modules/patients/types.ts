@@ -16,6 +16,8 @@ export interface PatientOut {
   address: string | null
   status: StatusCode
   has_photo: boolean
+  default_resource_id: string | null
+  primary_provider_id: string | null
 }
 
 export interface PatientListItemOut {
@@ -25,6 +27,8 @@ export interface PatientListItemOut {
   date_of_birth: string
   status: StatusCode
   phone: string | null
+  default_resource_id: string | null
+  primary_provider_id: string | null
 }
 
 export interface PatientSummaryOut {
@@ -46,6 +50,8 @@ export interface PatientCreateInput {
   phone?: string | null
   email?: string | null
   address?: string | null
+  default_resource_id?: string | null
+  primary_provider_id?: string | null
 }
 
 export interface PatientUpdateInput {
@@ -58,6 +64,9 @@ export interface PatientUpdateInput {
   address?: string | null
   status?: StatusCode
   status_reason?: string
+  default_resource_id?: string | null
+  primary_provider_id?: string | null
+  care_assignment_reason?: string
 }
 
 export interface DuplicateCheckInput {

@@ -4,23 +4,19 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.records.rules import HISTORY_CATEGORIES, ORIGINS, SEVERITY_LEVELS
+from app.modules.records.rules import ORIGINS, SEVERITY_LEVELS
 
-HistoryCategory = Literal[
-    "heredofamiliar",
-    "personal_patologico",
-    "personal_no_patologico",
-    "odontologico",
-    "habito",
-    "factor_riesgo",
-]
+# B1 (Parte B, Fase 12.2): ya no es un Literal fijo -- "Categorias de antecedentes"
+# ahora vive en el catalogo administrable (app/modules/catalogs), validado contra la
+# BD en el service, no por Pydantic.
+HistoryCategory = str
 Severity = Literal["leve", "moderada", "severa"]
 Origin = Literal["MANUAL", "AI_ASSISTED"]
 
 
 class MedicalHistoryCreateRequest(BaseModel):
     encounter_id: uuid.UUID
-    category: HistoryCategory
+    category: HistoryCategory = Field(min_length=1, max_length=60, pattern=r"^[a-z0-9_]+$")
     text: str = Field(min_length=1, max_length=2000)
 
 
@@ -102,7 +98,6 @@ class AnnulRequest(BaseModel):
 
 
 def _validate_catalogs() -> None:
-    assert set(HISTORY_CATEGORIES) == set(HistoryCategory.__args__)  # type: ignore[attr-defined]
     assert set(SEVERITY_LEVELS) == set(Severity.__args__)  # type: ignore[attr-defined]
     assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
 

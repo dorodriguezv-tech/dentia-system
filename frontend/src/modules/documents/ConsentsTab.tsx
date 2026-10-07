@@ -1,34 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import * as encountersApi from '../encounters/api'
+import { EncounterPickerField } from '../encounters/EncounterPicker'
+import { useEncounterPicker } from '../encounters/useEncounterPicker'
 import * as treatmentApi from '../treatment/api'
 import * as api from './api'
 import { SIGNER_RELATIONSHIP_LABELS, TEMPLATE_CODE_LABELS, TEMPLATE_CODES } from './catalog'
 import styles from './ConsentsTab.module.css'
 import { SignaturePad } from './SignaturePad'
 import type { ConsentOut, SignerRelationship, TemplateCode } from './types'
-
-function EncounterSelect({
-  encounters,
-  value,
-  onChange,
-}: {
-  encounters: { id: string; started_at: string; chief_complaint: string | null }[]
-  value: string
-  onChange: (encounterId: string) => void
-}) {
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Selecciona una atencion...</option>
-      {encounters.map((encounter) => (
-        <option key={encounter.id} value={encounter.id}>
-          {new Date(encounter.started_at).toLocaleDateString('es-MX')} —{' '}
-          {encounter.chief_complaint ?? 'Sin motivo'}
-        </option>
-      ))}
-    </select>
-  )
-}
 
 function TemplatesSection({ canWrite }: { canWrite: boolean }) {
   const queryClient = useQueryClient()
@@ -103,17 +82,17 @@ function TemplatesSection({ canWrite }: { canWrite: boolean }) {
 
 function NewConsentForm({ patientId }: { patientId: string }) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
+  // A3/A4/A5: "Firmar y generar PDF" se quedaba deshabilitado para siempre en un
+  // paciente sin atenciones (el mismo selector roto de A3, copiado aqui tambien) --
+  // NewConsentForm solo se muestra con canSign (ver ConsentsTab), que exige el mismo
+  // permiso que crear una atencion (records.write), asi que iniciar una aqui es valido.
+  const encounterPicker = useEncounterPicker(patientId, true)
   const templatesQuery = useQuery({ queryKey: ['document-templates'], queryFn: api.listTemplates })
   const plansQuery = useQuery({
     queryKey: ['treatment-plans', patientId],
     queryFn: () => treatmentApi.listPlans(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
   const [templateCode, setTemplateCode] = useState<TemplateCode | ''>('')
   const [treatmentPlanId, setTreatmentPlanId] = useState('')
   const [signerName, setSignerName] = useState('')
@@ -123,7 +102,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
   const createMutation = useMutation({
     mutationFn: () =>
       api.createConsent(patientId, {
-        encounter_id: encounterId,
+        encounter_id: encounterPicker.encounterId,
         template_code: templateCode as TemplateCode,
         treatment_plan_id: treatmentPlanId || null,
         signer_name: signerName,
@@ -147,7 +126,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
         createMutation.mutate()
       }}
     >
-      <EncounterSelect encounters={encountersQuery.data ?? []} value={encounterId} onChange={setEncounterId} />
+      <EncounterPickerField encounterPicker={encounterPicker} />
       <select value={templateCode} onChange={(e) => setTemplateCode(e.target.value as TemplateCode)}>
         <option value="">Selecciona una plantilla...</option>
         {currentCodes.map((code) => (
@@ -186,8 +165,13 @@ function NewConsentForm({ patientId }: { patientId: string }) {
         className={styles.primaryButton}
         type="submit"
         disabled={
-          !encounterId || !templateCode || !signerName.trim() || !signature || createMutation.isPending
+          !encounterPicker.encounterId ||
+          !templateCode ||
+          !signerName.trim() ||
+          !signature ||
+          createMutation.isPending
         }
+        title={!encounterPicker.encounterId ? 'Selecciona o inicia una atencion' : undefined}
       >
         Firmar y generar PDF
       </button>

@@ -182,9 +182,16 @@ usado).
 **Playwright no encuentra el backend/frontend al correr `npx playwright test`**
 `e2e/playwright.config.ts` los levanta solo (`webServer`) contra la base de datos de
 desarrollo — confirma que esa base ya tiene las migraciones aplicadas y, si quieres un
-estado conocido, que corriste `python -m app.seed` antes. Si un backend/frontend ya
-estaba corriendo en esos puertos, Playwright lo reutiliza (`reuseExistingServer`) en vez
-de levantar uno nuevo — fuera de CI.
+estado conocido, que corriste `python -m app.seed` antes. El backend/frontend del E2E
+usan puertos propios (**8011**/**5185**, distintos de los 8001/5174 de desarrollo
+manual — Fase 12.1, docs/06): si alguno de esos dos ya estaba corriendo, Playwright lo
+reutiliza (`reuseExistingServer`) en vez de levantar uno nuevo, fuera de CI. Antes de
+esta separación, el E2E reutilizaba sin querer un backend de desarrollo ya corriendo en
+el puerto 8001 (típico si alguien está probando la app a mano al mismo tiempo) —
+`AI_FAKE_MODE=true` solo se le pasa al proceso que Playwright arranca él mismo, así que
+un backend reutilizado sin ese env intentaba usar el Ollama real y el paso de dictado de
+`full-flow.spec.ts` fallaba de forma intermitente e imposible de diagnosticar desde el
+navegador. Con puertos dedicados esto ya no puede pasar.
 
 **`npx playwright test` tarda mucho o un test de rendimiento falla por poco**
 `performance.spec.ts` corre contra `npm run dev` (sin build de producción), así que el

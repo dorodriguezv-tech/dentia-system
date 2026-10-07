@@ -36,5 +36,6 @@ por defecto deben validarse con la clinica antes de produccion
 | `billing.write` | Registrar cargos y pagos |  | X |  |  |  |  | X |
 | `billing.configure` | Activar o desactivar la cobranza de la sucursal |  | X |  |  |  |  |  |
 | `reports.read` | Ver reportes | X | X |  |  |  |  | X |
+| `catalogs.manage` | Administrar catalogos de la clinica (tipos de cita, hallazgos, diagnosticos...) |  | X |  |  |  |  |  |
 | `ai.use` | Usar el asistente de IA por voz |  |  | X | X |  |  |  |
 | `ai.configure` | Configurar el asistente de IA |  | X |  |  |  |  |  |

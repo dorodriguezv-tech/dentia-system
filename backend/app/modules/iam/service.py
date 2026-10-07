@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit_service
 from app.audit.models import AuditEvent
 from app.core.config import get_settings
+from app.core.deps import user_has_any_permission
 from app.core.errors import AppError
 from app.core.security import (
     TokenError,
@@ -19,9 +20,11 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.modules.agenda import rules as agenda_rules
+from app.modules.agenda import service as agenda_service
 from app.modules.iam import rules
 from app.modules.iam.models import Clinic, RefreshToken, Role, User, UserClinic
-from app.modules.iam.schemas import UserCreateRequest, UserUpdateRequest
+from app.modules.iam.schemas import ClinicUpdateRequest, UserCreateRequest, UserUpdateRequest
 
 settings = get_settings()
 
@@ -85,7 +88,7 @@ async def login(
         await db.commit()
         raise AppError("INVALID_CREDENTIALS", "Correo o contrasena incorrectos", status_code=401)
 
-    if user.mfa_enabled:
+    if user.mfa_enabled and rules.MFA_ENABLED:
         await db.commit()
         return user, create_mfa_token(user.id), None
 
@@ -185,6 +188,35 @@ async def get_my_clinics(db: AsyncSession, *, user_id: uuid.UUID) -> list[tuple[
     return [(clinic, role) for clinic, role in (await db.execute(stmt)).all()]
 
 
+async def update_current_clinic(
+    db: AsyncSession, *, clinic_id: uuid.UUID, data: ClinicUpdateRequest, actor_id: uuid.UUID
+) -> Clinic:
+    """Pendiente de B1 (Parte B, Fase 12.2): editar nombre/direccion/telefono de la
+    propia sucursal. Siempre la de `clinic_id` (X-Clinic-Id) -- nunca recibe un id
+    por la URL, asi que no hay forma de editar una sucursal ajena desde aqui."""
+    clinic = await db.get(Clinic, clinic_id)
+    if clinic is None:
+        raise AppError("NOT_FOUND", "Sucursal no encontrada", status_code=404)
+
+    if data.name is not None:
+        clinic.name = data.name
+    if data.address is not None:
+        clinic.address = data.address
+    if data.phone is not None:
+        clinic.phone = data.phone
+
+    await audit_service.log(
+        db,
+        action="iam.clinic_updated",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="clinic",
+        entity_id=str(clinic.id),
+    )
+    await db.commit()
+    return clinic
+
+
 async def setup_mfa(db: AsyncSession, *, user: User) -> tuple[str, str]:
     secret = pyotp.random_base32()
     user.mfa_secret = secret
@@ -263,6 +295,65 @@ async def create_clinic_user(
     )
     db.add(membership)
 
+    # A1: un odontologo/especialista nuevo debe aparecer de inmediato en la agenda,
+    # sin que el administrador tenga que crear su Provider a mano por separado.
+    if role.code in agenda_rules.PROVIDER_ROLES:
+        provider = await agenda_service.ensure_provider_for_user(
+            db, clinic_id=clinic_id, user_id=user.id, actor_id=created_by
+        )
+        # B2 (Parte B, Fase 12.2): gabinete por defecto en esta sucursal.
+        await agenda_service.set_provider_default_resource(
+            db, clinic_id=clinic_id, provider=provider, resource_id=data.default_resource_id
+        )
+
+    assigned_clinic_ids = [clinic_id]
+    seen_additional: set[uuid.UUID] = set()
+    for assignment in data.additional_clinics:
+        if assignment.clinic_id == clinic_id or assignment.clinic_id in seen_additional:
+            raise AppError(
+                "DUPLICATE_CLINIC",
+                "Cada sucursal solo se puede elegir una vez",
+                status_code=400,
+            )
+        seen_additional.add(assignment.clinic_id)
+
+        # B2: el administrador solo puede asignar a sucursales donde el mismo tiene
+        # `iam.manage_users` -- igual que si llamara este endpoint con esa sucursal
+        # activa (X-Clinic-Id), no se le da acceso a sucursales ajenas por aqui.
+        allowed = await user_has_any_permission(
+            db, user_id=created_by, clinic_id=assignment.clinic_id, codes=("iam.manage_users",)
+        )
+        if not allowed:
+            raise AppError(
+                "FORBIDDEN",
+                "No tienes permiso para asignar usuarios en una de las sucursales elegidas",
+                status_code=403,
+            )
+
+        extra_clinic = await db.get(Clinic, assignment.clinic_id)
+        if extra_clinic is None:
+            raise AppError("NOT_FOUND", "Sucursal no encontrada", status_code=404)
+
+        db.add(
+            UserClinic(
+                user_id=user.id,
+                clinic_id=assignment.clinic_id,
+                role_id=role.id,
+                created_by=created_by,
+            )
+        )
+        if role.code in agenda_rules.PROVIDER_ROLES:
+            extra_provider = await agenda_service.ensure_provider_for_user(
+                db, clinic_id=assignment.clinic_id, user_id=user.id, actor_id=created_by
+            )
+            await agenda_service.set_provider_default_resource(
+                db,
+                clinic_id=assignment.clinic_id,
+                provider=extra_provider,
+                resource_id=assignment.default_resource_id,
+            )
+        assigned_clinic_ids.append(assignment.clinic_id)
+
     await audit_service.log(
         db,
         action="iam.user_created",
@@ -270,7 +361,7 @@ async def create_clinic_user(
         clinic_id=clinic_id,
         entity_type="user",
         entity_id=str(user.id),
-        details={"role": role.code},
+        details={"role": role.code, "clinic_ids": [str(c) for c in assigned_clinic_ids]},
     )
     await db.commit()
     return user, role
@@ -308,6 +399,20 @@ async def update_clinic_user(
             raise AppError("INVALID_ROLE", "Rol no configurado en el catalogo", status_code=400)
         membership.role_id = role.id
 
+    role = await db.get(Role, membership.role_id)
+    assert role is not None
+
+    # A1: mantener el Provider sincronizado con el rol/estado final del usuario, sin
+    # importar si este llamado cambio el rol, el estado activo, o ambos -- idempotente.
+    if role.code in agenda_rules.PROVIDER_ROLES and user.is_active:
+        await agenda_service.ensure_provider_for_user(
+            db, clinic_id=clinic_id, user_id=user.id, actor_id=updated_by
+        )
+    else:
+        await agenda_service.set_provider_active_for_user(
+            db, clinic_id=clinic_id, user_id=user.id, is_active=False
+        )
+
     await audit_service.log(
         db,
         action="iam.user_updated",
@@ -318,6 +423,4 @@ async def update_clinic_user(
     )
     await db.commit()
 
-    role = await db.get(Role, membership.role_id)
-    assert role is not None
     return user, role

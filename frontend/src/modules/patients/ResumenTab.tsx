@@ -1,7 +1,8 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
+import * as agendaApi from '../agenda/api'
 import * as encountersApi from '../encounters/api'
 import { NOTE_STATUS_LABELS } from '../encounters/types'
 import { canWritePatients, canWriteRecords } from '../auth/roles'
@@ -31,6 +32,13 @@ export function ResumenTab({ patientId }: { patientId: string }) {
     queryKey: ['patient-timeline', patientId],
     queryFn: () => encountersApi.getPatientTimeline(patientId),
   })
+  // B3 (Parte B, Fase 12.2): para mostrar el nombre (no solo el id) del profesional
+  // tratante y el gabinete por defecto, y para ofrecerlos en el formulario de abajo.
+  const providersQuery = useQuery({ queryKey: ['providers'], queryFn: agendaApi.listProviders })
+  const resourcesQuery = useQuery({
+    queryKey: ['resources'],
+    queryFn: () => agendaApi.listResources(),
+  })
 
   const [status, setStatus] = useState<StatusCode | ''>('')
   const [statusReason, setStatusReason] = useState('')
@@ -48,6 +56,35 @@ export function ResumenTab({ patientId }: { patientId: string }) {
     },
     onError: (err: unknown) => {
       setStatusError(err instanceof ApiRequestError ? err.message : 'No se pudo cambiar el estado')
+    },
+  })
+
+  // B3 (Parte B, Fase 12.2): igual que el cambio de estado, cambiar el gabinete o
+  // el profesional tratante por defecto exige un motivo (edicion controlada) --
+  // el backend lo rechaza sin el (care_assignment_reason).
+  const [careProviderId, setCareProviderId] = useState('')
+  const [careResourceId, setCareResourceId] = useState('')
+  const [careReason, setCareReason] = useState('')
+  const [careError, setCareError] = useState<string | null>(null)
+
+  const careAssignmentMutation = useMutation({
+    mutationFn: () =>
+      api.updatePatient(patientId, {
+        primary_provider_id: careProviderId || null,
+        default_resource_id: careResourceId || null,
+        care_assignment_reason: careReason,
+      }),
+    onSuccess: () => {
+      setCareProviderId('')
+      setCareResourceId('')
+      setCareReason('')
+      setCareError(null)
+      queryClient.invalidateQueries({ queryKey: ['patient', patientId] })
+    },
+    onError: (err: unknown) => {
+      setCareError(
+        err instanceof ApiRequestError ? err.message : 'No se pudo cambiar la asignacion',
+      )
     },
   })
 
@@ -94,21 +131,22 @@ export function ResumenTab({ patientId }: { patientId: string }) {
   }
 
   const [chiefComplaint, setChiefComplaint] = useState('')
-  const [startingEncounter, setStartingEncounter] = useState(false)
 
-  async function handleStartEncounter(event: FormEvent) {
-    event.preventDefault()
-    setStartingEncounter(true)
-    try {
-      const encounter = await encountersApi.createEncounter({
+  // A4: antes esto era un try/finally sin catch -- si createEncounter fallaba (403,
+  // 500, red), el boton se volvia a habilitar pero nada explicaba por que no paso
+  // nada. useMutation, sin su propio onError, cae en la red de seguridad global
+  // (app/globalMutationErrorHandling.ts) que muestra el error igual que cualquier
+  // otro "Agregar" de la aplicacion.
+  const startEncounterMutation = useMutation({
+    mutationFn: () =>
+      encountersApi.createEncounter({
         patient_id: patientId,
         chief_complaint: chiefComplaint || null,
-      })
+      }),
+    onSuccess: (encounter) => {
       navigate(`/pacientes/${patientId}/atencion/${encounter.id}`)
-    } finally {
-      setStartingEncounter(false)
-    }
-  }
+    },
+  })
 
   return (
     <div className={styles.grid}>
@@ -131,6 +169,20 @@ export function ResumenTab({ patientId }: { patientId: string }) {
             <div className={styles.infoRow}>
               <dt>Sexo</dt>
               <dd>{patientQuery.data.sex ?? '-'}</dd>
+            </div>
+            <div className={styles.infoRow}>
+              <dt>Profesional tratante</dt>
+              <dd>
+                {providersQuery.data?.find((p) => p.id === patientQuery.data?.primary_provider_id)
+                  ?.full_name ?? 'Sin asignar'}
+              </dd>
+            </div>
+            <div className={styles.infoRow}>
+              <dt>Gabinete por defecto</dt>
+              <dd>
+                {resourcesQuery.data?.find((r) => r.id === patientQuery.data?.default_resource_id)
+                  ?.name ?? 'Sin asignar'}
+              </dd>
             </div>
           </dl>
         )}
@@ -182,6 +234,58 @@ export function ResumenTab({ patientId }: { patientId: string }) {
                 disabled={!status || !statusReason.trim() || statusMutation.isPending}
               >
                 {statusMutation.isPending ? 'Guardando...' : 'Guardar estado'}
+              </button>
+            </form>
+
+            <form
+              className={styles.form}
+              onSubmit={(e) => {
+                e.preventDefault()
+                careAssignmentMutation.mutate()
+              }}
+            >
+              <h2>Profesional y gabinete por defecto</h2>
+              {careError && <div className={styles.errorBox}>{careError}</div>}
+              <select
+                aria-label="Profesional tratante"
+                value={careProviderId}
+                onChange={(e) => setCareProviderId(e.target.value)}
+              >
+                <option value="">Sin cambios</option>
+                {providersQuery.data?.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.full_name}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Gabinete por defecto"
+                value={careResourceId}
+                onChange={(e) => setCareResourceId(e.target.value)}
+              >
+                <option value="">Sin cambios</option>
+                {resourcesQuery.data?.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Motivo de la asignacion"
+                value={careReason}
+                onChange={(e) => setCareReason(e.target.value)}
+              />
+              <button
+                className={styles.primaryButton}
+                type="submit"
+                disabled={
+                  (!careProviderId && !careResourceId) ||
+                  !careReason.trim() ||
+                  careAssignmentMutation.isPending
+                }
+              >
+                {careAssignmentMutation.isPending ? 'Guardando...' : 'Guardar asignacion'}
               </button>
             </form>
           </>
@@ -254,15 +358,25 @@ export function ResumenTab({ patientId }: { patientId: string }) {
         <h2>Linea de tiempo clinica</h2>
 
         {canStartEncounter && (
-          <form className={styles.form} onSubmit={handleStartEncounter}>
+          <form
+            className={styles.form}
+            onSubmit={(e) => {
+              e.preventDefault()
+              startEncounterMutation.mutate()
+            }}
+          >
             <input
               type="text"
               placeholder="Motivo de la consulta (opcional)"
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
             />
-            <button className={styles.primaryButton} type="submit" disabled={startingEncounter}>
-              {startingEncounter ? 'Iniciando...' : 'Iniciar atencion'}
+            <button
+              className={styles.primaryButton}
+              type="submit"
+              disabled={startEncounterMutation.isPending}
+            >
+              {startEncounterMutation.isPending ? 'Iniciando...' : 'Iniciar atencion'}
             </button>
           </form>
         )}

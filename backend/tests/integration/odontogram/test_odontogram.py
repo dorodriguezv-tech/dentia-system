@@ -130,6 +130,51 @@ async def test_whole_tooth_finding_accepts_null_surface(
     assert response.json()["surface"] is None
 
 
+async def test_create_finding_rejects_a_code_not_in_the_clinic_catalog(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """B1 (Parte B, Fase 12.2): 'Hallazgos del odontograma' ya no es un Literal fijo,
+    sino el catalogo administrable de la sucursal."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "no_existe",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_FINDING_CODE"
+
+
+async def test_create_finding_requires_surface_when_the_catalog_item_says_so(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """'caries' esta marcado requires_surface=True en el catalogo (antes la
+    superficie siempre era opcional sin importar el hallazgo)."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "finding_code": "caries",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "SURFACE_REQUIRED"
+
+
 async def test_odontogram_shows_only_current_findings(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

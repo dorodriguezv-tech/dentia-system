@@ -29,7 +29,9 @@ export const PRESETS: Preset[] = [
   {
     code: 'azul_sereno',
     name: 'Azul sereno',
-    primary: '#3A7FC1',
+    // #3575B1, no el azul original #3A7FC1 -- no pasaba 4.5:1 WCAG, ver
+    // backend/app/modules/branding/presets.py.
+    primary: '#3575B1',
     secondary: '#5BBFD6',
     accent: '#F4B860',
     bg: '#F5F8FC',
@@ -37,7 +39,8 @@ export const PRESETS: Preset[] = [
   {
     code: 'aqua_suave',
     name: 'Aqua suave',
-    primary: '#1FA2B8',
+    // #167484, no el original #1FA2B8 -- ver backend/app/modules/branding/presets.py.
+    primary: '#167484',
     secondary: '#7CC6A6',
     accent: '#FF9F80',
     bg: '#F4FAFB',
@@ -45,7 +48,8 @@ export const PRESETS: Preset[] = [
   {
     code: 'lavanda_suave',
     name: 'Lavanda suave',
-    primary: '#7B7FD4',
+    // #5C61CA, no el original #7B7FD4 -- ver backend/app/modules/branding/presets.py.
+    primary: '#5C61CA',
     secondary: '#5FB3C9',
     accent: '#F2B5A0',
     bg: '#F8F8FD',
@@ -53,7 +57,8 @@ export const PRESETS: Preset[] = [
   {
     code: 'verde_salvia',
     name: 'Verde salvia',
-    primary: '#6A9E7F',
+    // #507B61, no el original #6A9E7F -- ver backend/app/modules/branding/presets.py.
+    primary: '#507B61',
     secondary: '#4F8FA8',
     accent: '#E8B04B',
     bg: '#F6F9F6',

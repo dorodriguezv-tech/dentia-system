@@ -4,32 +4,24 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.diagnosis.rules import DIAGNOSIS_CODES, ORIGINS
+from app.modules.diagnosis.rules import ORIGINS
 from app.modules.odontogram.schemas import Surface
 
 Origin = Literal["MANUAL", "AI_ASSISTED"]
 
-DiagnosisCode = Literal[
-    "caries",
-    "caries_recurrente",
-    "pulpitis_reversible",
-    "pulpitis_irreversible",
-    "necrosis_pulpar",
-    "absceso_periapical",
-    "gingivitis",
-    "periodontitis",
-    "fractura_dental",
-    "edentulismo_parcial",
-    "maloclusion",
-    "sin_hallazgos",
-]
+# B1 (Parte B, Fase 12.2): ya no es un Literal fijo -- "Diagnosticos" ahora vive en el
+# catalogo administrable (app/modules/catalogs), validado contra la BD en el service
+# cuando se manda (sigue siendo opcional: el texto del diagnostico siempre es libre).
+DiagnosisCode = str
 
 
 class DiagnosisCreateRequest(BaseModel):
     encounter_id: uuid.UUID
     tooth_fdi: int | None = None
     surface: Surface | None = None
-    code: DiagnosisCode | None = None
+    code: DiagnosisCode | None = Field(
+        default=None, min_length=1, max_length=60, pattern=r"^[a-z0-9_]+$"
+    )
     text: str = Field(min_length=1, max_length=2000)
 
 
@@ -53,7 +45,6 @@ class AnnulRequest(BaseModel):
 
 
 def _validate_catalogs() -> None:
-    assert set(DIAGNOSIS_CODES) == set(DiagnosisCode.__args__)  # type: ignore[attr-defined]
     assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
 
 

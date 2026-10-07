@@ -39,8 +39,3 @@ def test_is_editable_solo_reservada_y_confirmada() -> None:
     assert rules.is_editable("CONFIRMADA") is True
     assert rules.is_editable("EN_SALA") is False
     assert rules.is_editable("TERMINADA") is False
-
-
-def test_default_duration_minutes() -> None:
-    assert rules.default_duration_minutes("consulta") == 30
-    assert rules.default_duration_minutes("endodoncia") == 90

@@ -91,7 +91,11 @@ async def test_logout_revokes_refresh_token(client: AsyncClient, make_user) -> N
     assert refresh_response.status_code == 401
 
 
-async def test_login_with_mfa_enabled_requires_second_step(client: AsyncClient, make_user) -> None:
+async def test_login_skips_mfa_step_while_globally_disabled(client: AsyncClient, make_user) -> None:
+    # rules.MFA_ENABLED esta en False temporalmente (ver ese archivo): incluso una
+    # cuenta que ya tiene mfa_enabled/mfa_secret en la base entra directo, sin pedir
+    # el codigo. Cuando se reactive (MFA_ENABLED = True), este login debe volver a
+    # devolver mfa_required=True y un mfa_token en vez de los tokens de sesion.
     secret = pyotp.random_base32()
     await make_user(
         email="admin@example.com",
@@ -107,37 +111,8 @@ async def test_login_with_mfa_enabled_requires_second_step(client: AsyncClient, 
     )
     assert login_response.status_code == 200
     body = login_response.json()
-    assert body["mfa_required"] is True
-    mfa_token = body["mfa_token"]
-
-    code = pyotp.TOTP(secret).now()
-    mfa_response = await client.post(
-        "/api/v1/auth/login/mfa", json={"mfa_token": mfa_token, "code": code}
-    )
-    assert mfa_response.status_code == 200
-    assert mfa_response.json()["access_token"]
-
-
-async def test_login_with_mfa_wrong_code_is_rejected(client: AsyncClient, make_user) -> None:
-    secret = pyotp.random_base32()
-    await make_user(
-        email="admin@example.com",
-        password="Contrasena123",
-        role_code="admin_clinica",
-        mfa_enabled=True,
-        mfa_secret=secret,
-    )
-
-    login_response = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "admin@example.com", "password": "Contrasena123"},
-    )
-    mfa_token = login_response.json()["mfa_token"]
-
-    mfa_response = await client.post(
-        "/api/v1/auth/login/mfa", json={"mfa_token": mfa_token, "code": "000000"}
-    )
-    assert mfa_response.status_code == 401
+    assert body["access_token"]
+    assert "mfa_token" not in body
 
 
 async def _access_token_for(client: AsyncClient, email: str, password: str) -> str:

@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import get_clinic_id, require_permission
+from app.core.deps import (
+    get_clinic_id,
+    get_current_user,
+    require_permission,
+    user_has_any_permission,
+)
+from app.core.errors import AppError
 from app.modules.agenda import service
 from app.modules.agenda.schemas import (
     AppointmentCreateRequest,
@@ -19,6 +25,7 @@ from app.modules.agenda.schemas import (
     RescheduleRequest,
     ResourceCreateRequest,
     ResourceOut,
+    ResourceUpdateRequest,
     StatusChangeRequest,
     WaitlistCreateRequest,
     WaitlistOut,
@@ -40,7 +47,12 @@ async def list_providers(
     rows = await service.list_providers(db, clinic_id=clinic_id)
     return [
         ProviderOut(
-            id=p.id, user_id=p.user_id, full_name=name, color=p.color, is_active=p.is_active
+            id=p.id,
+            user_id=p.user_id,
+            full_name=name,
+            color=p.color,
+            is_active=p.is_active,
+            default_resource_id=p.default_resource_id,
         )
         for p, name in rows
     ]
@@ -62,16 +74,32 @@ async def create_provider(
         full_name=name,
         color=provider.color,
         is_active=provider.is_active,
+        default_resource_id=provider.default_resource_id,
     )
 
 
 @router.get("/resources", response_model=list[ResourceOut])
 async def list_resources(
+    include_inactive: bool = Query(default=False),
     clinic_id: uuid.UUID = Depends(get_clinic_id),
-    _actor: User = Depends(require_permission("agenda.read")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ResourceOut]:
-    items = await service.list_resources(db, clinic_id=clinic_id)
+    allowed = await user_has_any_permission(
+        db, user_id=current_user.id, clinic_id=clinic_id, codes=("agenda.read",)
+    )
+    if not allowed:
+        raise AppError("FORBIDDEN", "No tienes permiso para esta accion", status_code=403)
+    # Pendiente de B1 (Parte B, Fase 12.2): solo quien puede administrar gabinetes
+    # (agenda.write) ve los inactivos -- igual que `catalogs.manage` con los
+    # catalogos genericos.
+    if include_inactive:
+        can_manage = await user_has_any_permission(
+            db, user_id=current_user.id, clinic_id=clinic_id, codes=("agenda.write",)
+        )
+        if not can_manage:
+            include_inactive = False
+    items = await service.list_resources(db, clinic_id=clinic_id, include_inactive=include_inactive)
     return [ResourceOut.model_validate(i) for i in items]
 
 
@@ -83,6 +111,20 @@ async def create_resource(
     db: AsyncSession = Depends(get_db),
 ) -> ResourceOut:
     item = await service.create_resource(db, clinic_id=clinic_id, data=payload, actor_id=actor.id)
+    return ResourceOut.model_validate(item)
+
+
+@router.patch("/resources/{resource_id}", response_model=ResourceOut)
+async def update_resource(
+    resource_id: uuid.UUID,
+    payload: ResourceUpdateRequest,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("agenda.write")),
+    db: AsyncSession = Depends(get_db),
+) -> ResourceOut:
+    item = await service.update_resource(
+        db, clinic_id=clinic_id, resource_id=resource_id, data=payload, actor_id=actor.id
+    )
     return ResourceOut.model_validate(item)
 
 

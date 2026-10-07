@@ -11,6 +11,7 @@ import app.ai.models  # noqa: F401
 import app.modules.agenda.models  # noqa: F401
 import app.modules.billing.models  # noqa: F401
 import app.modules.branding.models  # noqa: F401
+import app.modules.catalogs.models  # noqa: F401
 import app.modules.diagnosis.models  # noqa: F401
 import app.modules.documents.models  # noqa: F401
 import app.modules.encounters.models  # noqa: F401

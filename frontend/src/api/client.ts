@@ -36,6 +36,10 @@ interface RequestOptions {
   signal?: AbortSignal
   /** false para /auth/login y /auth/refresh: no mandan ni requieren sesion. */
   auth?: boolean
+  /** B2 (Parte B, Fase 12.2): para consultar una sucursal distinta de la activa
+   * (p.ej. el gabinete por defecto de una sucursal adicional al dar de alta un
+   * usuario) -- por defecto usa la sucursal activa, como siempre. */
+  clinicId?: string
 }
 
 interface SessionHooks {
@@ -59,7 +63,7 @@ async function doFetch(path: string, options: RequestOptions): Promise<Response>
   if (options.auth !== false && sessionHooks) {
     const token = sessionHooks.getAccessToken()
     if (token) headers.Authorization = `Bearer ${token}`
-    const clinicId = sessionHooks.getClinicId()
+    const clinicId = options.clinicId ?? sessionHooks.getClinicId()
     if (clinicId) headers['X-Clinic-Id'] = clinicId
   }
 

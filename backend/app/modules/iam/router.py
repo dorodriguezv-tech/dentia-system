@@ -8,6 +8,8 @@ from app.core.deps import get_clinic_id, get_current_user, require_permission
 from app.modules.iam import service
 from app.modules.iam.models import User
 from app.modules.iam.schemas import (
+    ClinicOut,
+    ClinicUpdateRequest,
     LoginMfaRequest,
     LoginRequest,
     LogoutRequest,
@@ -95,6 +97,19 @@ async def my_clinics(
 ) -> list[MyClinicOut]:
     pairs = await service.get_my_clinics(db, user_id=current_user.id)
     return [MyClinicOut(clinic=clinic, role=role) for clinic, role in pairs]
+
+
+@router.patch("/clinics/current", response_model=ClinicOut)
+async def update_current_clinic(
+    payload: ClinicUpdateRequest,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("catalogs.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ClinicOut:
+    clinic = await service.update_current_clinic(
+        db, clinic_id=clinic_id, data=payload, actor_id=actor.id
+    )
+    return ClinicOut.model_validate(clinic)
 
 
 @router.post("/auth/mfa/setup", response_model=MfaSetupResponse)

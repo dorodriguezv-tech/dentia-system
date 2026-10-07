@@ -119,6 +119,62 @@ async def test_history_triggers_keyword_alert(
     assert "Paciente con diabetes" in alerts.json()
 
 
+async def test_create_history_rejects_a_category_not_in_the_clinic_catalog(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """B1 (Parte B, Fase 12.2): 'Categorias de antecedentes' ya no es un Literal
+    fijo, sino el catalogo administrable de la sucursal."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        f"/api/v1/patients/{patient_id}/history",
+        headers=headers,
+        json={
+            "encounter_id": encounter_id,
+            "category": "no_existe",
+            "text": "Antecedente con categoria invalida",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_HISTORY_CATEGORY"
+
+
+async def test_a_new_alert_keyword_from_the_catalog_triggers_immediately(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """'Palabras clave de alerta' tambien es catalogo administrable (B1): un
+    administrador agrega una palabra nueva y, sin tocar codigo, el expediente la
+    detecta de inmediato."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    create_response = await client.post(
+        "/api/v1/catalogs/condition_alert_keyword",
+        headers=_headers(admin_token, clinic.id),
+        json={
+            "code": "asma",
+            "name": "asma",
+            "extra": {"alert_label": "Paciente con asma"},
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+
+    await client.post(
+        f"/api/v1/patients/{patient_id}/history",
+        headers=headers,
+        json={
+            "encounter_id": encounter_id,
+            "category": "personal_patologico",
+            "text": "Paciente con asma diagnosticada en la infancia",
+        },
+    )
+
+    alerts = await client.get(f"/api/v1/patients/{patient_id}/alerts", headers=headers)
+    assert "Paciente con asma" in alerts.json()
+
+
 async def test_patient_summary_includes_derived_alerts(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

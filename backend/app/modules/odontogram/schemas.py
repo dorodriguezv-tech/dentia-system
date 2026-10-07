@@ -4,26 +4,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.odontogram.finding_catalog import FINDING_CODES
 from app.modules.odontogram.rules import KINDS, ORIGINS, SURFACES
 
 Surface = Literal["O", "M", "D", "V", "L", "P", "I"]
 Kind = Literal["EXISTING", "PLANNED", "PERFORMED"]
 Origin = Literal["MANUAL", "AI_ASSISTED"]
-FindingCode = Literal[
-    "sano",
-    "caries",
-    "restauracion",
-    "corona",
-    "endodoncia",
-    "ausente",
-    "extraccion_indicada",
-    "implante",
-    "protesis_fija",
-    "sellador",
-    "fractura",
-    "movilidad",
-]
+# B1 (Parte B, Fase 12.2): ya no es un Literal fijo -- "Hallazgos del odontograma"
+# ahora vive en el catalogo administrable (app/modules/catalogs), validado contra la
+# BD en el service (incluido si la pieza/superficie exige el hallazgo, campo
+# `extra.requires_surface`), no por Pydantic.
+FindingCode = str
 
 
 class ToothFindingCreateRequest(BaseModel):
@@ -31,7 +21,7 @@ class ToothFindingCreateRequest(BaseModel):
     encounter_id: uuid.UUID
     tooth_fdi: int
     surface: Surface | None = None
-    finding_code: FindingCode
+    finding_code: FindingCode = Field(min_length=1, max_length=60, pattern=r"^[a-z0-9_]+$")
     kind: Kind = "EXISTING"
     material: str | None = Field(default=None, max_length=100)
 
@@ -71,7 +61,6 @@ def _validate_catalogs() -> None:
     assert set(SURFACES) == set(Surface.__args__)  # type: ignore[attr-defined]
     assert set(KINDS) == set(Kind.__args__)  # type: ignore[attr-defined]
     assert set(ORIGINS) == set(Origin.__args__)  # type: ignore[attr-defined]
-    assert set(FINDING_CODES) == set(FindingCode.__args__)  # type: ignore[attr-defined]
 
 
 _validate_catalogs()

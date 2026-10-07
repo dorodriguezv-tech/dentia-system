@@ -12,9 +12,16 @@ import type {
   StatusCode,
 } from './types'
 
-export function listPatients(status?: StatusCode): Promise<PatientListItemOut[]> {
-  const query = status ? `?status=${status}` : ''
-  return apiRequest<PatientListItemOut[]>(`/patients${query}`)
+export function listPatients(
+  status?: StatusCode,
+  mineOnly?: boolean,
+): Promise<PatientListItemOut[]> {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  // B3 (Parte B, Fase 12.2): filtro "Mis pacientes" para el rol odontologo.
+  if (mineOnly) params.set('mine_only', 'true')
+  const query = params.toString()
+  return apiRequest<PatientListItemOut[]>(`/patients${query ? `?${query}` : ''}`)
 }
 
 export function searchPatients(q: string, signal?: AbortSignal): Promise<PatientListItemOut[]> {

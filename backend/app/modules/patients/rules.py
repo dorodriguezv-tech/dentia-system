@@ -13,6 +13,13 @@ STATUS_CHANGE_REQUIRES_REASON = True
 
 DUPLICATE_NAME_SIMILARITY_THRESHOLD = 0.4
 
+# Fase 12.1 (correccion A2): umbral de tolerancia a errores de captura para la
+# busqueda global (palabra contra palabra, no el nombre completo contra el nombre
+# completo) -- deliberadamente distinto de DUPLICATE_NAME_SIMILARITY_THRESHOLD, que
+# sigue siendo solo para check_duplicates. similarity('peres','perez') = 0.5 (un
+# error de una letra); similarity('gonzalez','perez') = 0.07 (nombre no relacionado).
+SEARCH_WORD_FUZZY_THRESHOLD = 0.45
+
 
 def calculate_age(date_of_birth: date, *, as_of: date | None = None) -> int:
     reference = as_of or date.today()

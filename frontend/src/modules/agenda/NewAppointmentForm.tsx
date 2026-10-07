@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import * as catalogsApi from '../catalogs/api'
 import * as patientsApi from '../patients/api'
 import type { PatientListItemOut } from '../patients/types'
-import { APPOINTMENT_TYPE_CODES, APPOINTMENT_TYPES } from './catalog'
 import { combineDateAndTime } from './dateUtils'
 import styles from './NewAppointmentForm.module.css'
 import type { AppointmentType, ProviderOut, ResourceOut } from './types'
@@ -39,8 +40,22 @@ export function NewAppointmentForm({
   const [results, setResults] = useState<PatientListItemOut[]>([])
   const [selectedPatient, setSelectedPatient] = useState<PatientListItemOut | null>(null)
   const [providerId, setProviderId] = useState(defaultProviderId)
-  const [resourceId, setResourceId] = useState('')
-  const [appointmentType, setAppointmentType] = useState<AppointmentType>('consulta')
+  // B2 (Parte B, Fase 12.2): preselecciona el gabinete por defecto del profesional
+  // que ya viene elegido (el de la columna/fila en la que se hizo clic).
+  const [resourceId, setResourceId] = useState(
+    () => providers.find((p) => p.id === defaultProviderId)?.default_resource_id ?? '',
+  )
+  const [appointmentType, setAppointmentType] = useState<AppointmentType>('')
+
+  // B1 (Parte B, Fase 12.2): catalogo administrable, ya no un literal fijo -- un
+  // tipo de cita nuevo que el administrador acaba de crear aparece aqui de
+  // inmediato (criterio de aceptacion de B1).
+  const appointmentTypesQuery = useQuery({
+    queryKey: ['catalog-items', 'appointment_type'],
+    queryFn: () => catalogsApi.listCatalogItems('appointment_type', false),
+  })
+  const appointmentTypes = appointmentTypesQuery.data ?? []
+  const effectiveAppointmentType = appointmentType || appointmentTypes[0]?.code || ''
 
   const starts = combineDateAndTime(date, hour, minute)
 
@@ -52,6 +67,30 @@ export function NewAppointmentForm({
       return
     }
     setResults(await patientsApi.searchPatients(value))
+  }
+
+  function defaultResourceForProvider(id: string): string | null {
+    return providers.find((p) => p.id === id)?.default_resource_id ?? null
+  }
+
+  // B2/B3 (Parte B, Fase 12.2): al elegir un paciente, preselecciona su
+  // profesional/gabinete tratante; si el paciente no tiene uno propio, cae al
+  // gabinete por defecto del profesional ya elegido.
+  function handleSelectPatient(patient: PatientListItemOut) {
+    setSelectedPatient(patient)
+    const nextProviderId = patient.primary_provider_id || providerId
+    setProviderId(nextProviderId)
+    const nextResourceId =
+      patient.default_resource_id || defaultResourceForProvider(nextProviderId)
+    if (nextResourceId) setResourceId(nextResourceId)
+  }
+
+  function handleProviderChange(nextProviderId: string) {
+    setProviderId(nextProviderId)
+    if (!resourceId) {
+      const defaultResource = defaultResourceForProvider(nextProviderId)
+      if (defaultResource) setResourceId(defaultResource)
+    }
   }
 
   return (
@@ -91,7 +130,7 @@ export function NewAppointmentForm({
             <ul className={styles.results}>
               {results.map((patient) => (
                 <li key={patient.id}>
-                  <button type="button" onClick={() => setSelectedPatient(patient)}>
+                  <button type="button" onClick={() => handleSelectPatient(patient)}>
                     {patient.full_name} — exp. {patient.expediente_number}
                   </button>
                 </li>
@@ -104,7 +143,7 @@ export function NewAppointmentForm({
       <select
         aria-label="Profesional"
         value={providerId}
-        onChange={(e) => setProviderId(e.target.value)}
+        onChange={(e) => handleProviderChange(e.target.value)}
       >
         {providers.map((provider) => (
           <option key={provider.id} value={provider.id}>
@@ -128,12 +167,15 @@ export function NewAppointmentForm({
 
       <select
         aria-label="Tipo de cita"
-        value={appointmentType}
-        onChange={(e) => setAppointmentType(e.target.value as AppointmentType)}
+        value={effectiveAppointmentType}
+        onChange={(e) => setAppointmentType(e.target.value)}
       >
-        {APPOINTMENT_TYPE_CODES.map((code) => (
-          <option key={code} value={code}>
-            {APPOINTMENT_TYPES[code].label} ({APPOINTMENT_TYPES[code].defaultMinutes} min)
+        {appointmentTypes.map((item) => (
+          <option key={item.code} value={item.code}>
+            {item.name}
+            {typeof item.extra.default_minutes === 'number'
+              ? ` (${item.extra.default_minutes} min)`
+              : ''}
           </option>
         ))}
       </select>
@@ -148,7 +190,7 @@ export function NewAppointmentForm({
             patient_id: selectedPatient.id,
             provider_id: providerId,
             resource_id: resourceId || null,
-            appointment_type: appointmentType,
+            appointment_type: effectiveAppointmentType,
             starts_at: starts.toISOString(),
           })
         }

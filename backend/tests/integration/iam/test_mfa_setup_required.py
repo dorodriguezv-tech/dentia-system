@@ -3,9 +3,11 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def test_admin_clinica_without_mfa_is_flagged_as_setup_required(
+async def test_admin_clinica_without_mfa_is_not_flagged_while_requirement_is_disabled(
     client: AsyncClient, make_user
 ) -> None:
+    # rules.MFA_REQUIRED_ROLES esta vacio temporalmente (ver ese archivo) -- cuando
+    # se reactive, este caso vuelve a esperar mfa_setup_required=True.
     await make_user(email="admin@example.com", password="Contrasena123", role_code="admin_clinica")
 
     response = await client.post(
@@ -14,7 +16,7 @@ async def test_admin_clinica_without_mfa_is_flagged_as_setup_required(
     )
 
     assert response.status_code == 200
-    assert response.json()["user"]["mfa_setup_required"] is True
+    assert response.json()["user"]["mfa_setup_required"] is False
 
 
 async def test_odontologo_is_not_flagged_as_setup_required(client: AsyncClient, make_user) -> None:

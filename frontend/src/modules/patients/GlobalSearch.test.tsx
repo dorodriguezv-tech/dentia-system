@@ -51,6 +51,8 @@ describe('GlobalSearch', () => {
         date_of_birth: '1990-05-20',
         status: 'activo',
         phone: null,
+        default_resource_id: null,
+        primary_provider_id: null,
       },
     ])
 
@@ -64,5 +66,15 @@ describe('GlobalSearch', () => {
 
     expect(await screen.findByText('Ficha del paciente')).toBeInTheDocument()
     expect(useGlobalSearchStore.getState().open).toBe(false)
+  })
+
+  it('A2: con un solo caracter no busca y pide escribir al menos 2', async () => {
+    useGlobalSearchStore.setState({ open: true })
+    renderInRouter()
+
+    await userEvent.type(screen.getByPlaceholderText(/Buscar paciente/), 'j')
+
+    expect(await screen.findByText('Escribe al menos 2 caracteres.')).toBeInTheDocument()
+    expect(api.searchPatients).not.toHaveBeenCalled()
   })
 })

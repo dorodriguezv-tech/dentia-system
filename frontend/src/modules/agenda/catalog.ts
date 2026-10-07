@@ -1,4 +1,4 @@
-import type { AppointmentStatus, AppointmentType } from './types'
+import type { AppointmentStatus } from './types'
 
 /**
  * Copia minima, solo para la interfaz, de backend/app/modules/agenda/rules.py
@@ -27,18 +27,3 @@ export const STATUS_COLORS: Record<AppointmentStatus, string> = {
   NO_SHOW: 'var(--color-status-no-show)',
   REPROGRAMADA: 'var(--color-status-reprogramada)',
 }
-
-// Catalogo provisional de tipos de cita (se unifica con el catalogo de procedimientos
-// real en la Fase 7, ver docs/PENDIENTES_CLINICOS.md).
-export const APPOINTMENT_TYPES: Record<AppointmentType, { label: string; defaultMinutes: number }> = {
-  consulta: { label: 'Consulta / valoracion', defaultMinutes: 30 },
-  limpieza: { label: 'Limpieza dental', defaultMinutes: 45 },
-  restauracion: { label: 'Restauracion (resina/amalgama)', defaultMinutes: 60 },
-  endodoncia: { label: 'Endodoncia', defaultMinutes: 90 },
-  extraccion: { label: 'Extraccion', defaultMinutes: 45 },
-  ortodoncia_control: { label: 'Control de ortodoncia', defaultMinutes: 20 },
-  protesis: { label: 'Protesis', defaultMinutes: 60 },
-  urgencia: { label: 'Urgencia', defaultMinutes: 30 },
-}
-
-export const APPOINTMENT_TYPE_CODES = Object.keys(APPOINTMENT_TYPES) as AppointmentType[]

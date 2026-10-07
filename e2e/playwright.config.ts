@@ -7,7 +7,18 @@ import { defineConfig, devices } from '@playwright/test'
  * Ambos se levantan automaticamente (`webServer`) contra la misma base de datos
  * de desarrollo que usa `npm run dev` -- no hay una base separada para E2E
  * todavia (ver docs/PENDIENTES_CLINICOS.md).
+ *
+ * Correccion (Fase 12.1, docs/06): puertos propios (8011/5185), distintos de los
+ * 8001/5174 que se usan para desarrollo manual. Antes, si ya habia un backend o
+ * frontend de desarrollo corriendo en 8001/5174 (lo normal si alguien esta
+ * probando la app a mano), `reuseExistingServer` lo reutilizaba tal cual -- sin
+ * AI_FAKE_MODE=true, asi que el paso de dictado de full-flow.spec.ts intentaba
+ * usar el Ollama real y fallaba de forma intermitente e imposible de diagnosticar
+ * por el navegador. Puertos dedicados evitan el choque por completo.
  */
+const BACKEND_PORT = 8011
+const FRONTEND_PORT = 5185
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -17,7 +28,7 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
   timeout: 60_000,
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: `http://localhost:${FRONTEND_PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -30,22 +41,29 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command:
-        '"../backend/.venv/Scripts/python.exe" -m uvicorn app.main:app --port 8001',
+      command: `"../backend/.venv/Scripts/python.exe" -m uvicorn app.main:app --port ${BACKEND_PORT}`,
       cwd: '../backend',
-      url: 'http://localhost:8001/api/v1/health',
+      url: `http://localhost:${BACKEND_PORT}/api/v1/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
         AI_FAKE_MODE: 'true',
+        // Sin esto, el backend solo acepta CORS desde :5174 (la lista blanca de
+        // backend/app/core/config.py, estricta a proposito -- CLAUDE.md sec. 5) y
+        // el navegador bloquea en silencio toda peticion del frontend E2E en :5185
+        // (incluido el login, por eso fallaban tantas pruebas a la vez).
+        CORS_ORIGINS: `["http://localhost:${FRONTEND_PORT}"]`,
       },
     },
     {
-      command: 'npm run dev',
+      command: `npm run dev -- --port ${FRONTEND_PORT} --strictPort`,
       cwd: '../frontend',
-      url: 'http://localhost:5174',
+      url: `http://localhost:${FRONTEND_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
+      env: {
+        VITE_API_URL: `http://localhost:${BACKEND_PORT}/api/v1`,
+      },
     },
   ],
 })

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
 from app.core.errors import AppError
+from app.modules.catalogs import service as catalogs_service
 from app.modules.diagnosis.models import Diagnosis
 from app.modules.diagnosis.schemas import AnnulRequest, DiagnosisCreateRequest
 from app.modules.encounters.models import Encounter
@@ -60,6 +61,20 @@ async def create_diagnosis(
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=patient_id)
     await _get_encounter_in_clinic(db, clinic_id=clinic_id, encounter_id=data.encounter_id)
     _validate_tooth_surface(data.tooth_fdi, data.surface)
+
+    # B1 (Parte B, Fase 12.2): "Diagnosticos" ya no es un Literal fijo -- el codigo
+    # sigue siendo opcional (el texto del diagnostico siempre es libre), pero si se
+    # manda, valida contra el catalogo administrable de la sucursal.
+    if data.code is not None:
+        codes = await catalogs_service.get_active_codes(
+            db, clinic_id=clinic_id, catalog_type="diagnosis"
+        )
+        if data.code not in codes:
+            raise AppError(
+                "INVALID_DIAGNOSIS_CODE",
+                "El codigo de diagnostico no existe o esta desactivado en esta sucursal",
+                status_code=400,
+            )
 
     item = Diagnosis(
         clinic_id=clinic_id,

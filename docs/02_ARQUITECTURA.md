@@ -776,6 +776,208 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   `docs/MANUAL_TECNICO.md` (instalación, variables de entorno, checklist de
   despliegue, solución de problemas), además de esta sección y el README.
 
+### 5.13 Correcciones de errores reportados (Fase 12.1)
+Siete errores reportados por el odontólogo, cada uno reproducido primero (antes de
+corregirlo) y cubierto con una prueba nueva — ver `docs/06_INSTRUCCIONES_CLAUDE_CODE_CORRECCIONES_Y_FASE13.md`
+Parte A para el detalle original de cada reporte.
+
+- **A1 — profesionales nuevos no aparecían en la agenda:** causa real: crear un
+  usuario (o cambiarle el rol) nunca creaba su `Provider` (entidad agendable,
+  distinta de `User` desde la Fase 6). `iam.service.create_clinic_user`/
+  `update_clinic_user` ahora llaman a `agenda_service.ensure_provider_for_user`/
+  `set_provider_active_for_user` (paleta de color rotativa, se desactiva — nunca se
+  borra — al quitar el rol clínico o desactivar al usuario); `list_providers` ahora
+  filtra `is_active`. Migración de backfill para los usuarios clínicos que ya
+  existían sin `Provider`.
+- **A2 — la búsqueda de pacientes no encontraba coincidencias parciales:**
+  `search_patients` comparaba el nombre completo contra el texto completo con
+  `similarity()` (calibrado para `check_duplicates`, un umbral distinto a propósito
+  — nunca se tocó), así que "perez" no encontraba "Juan Carlos Pérez López". Ahora
+  compara palabra por palabra (prefijo + `similarity()` por palabra, con un umbral
+  propio) — cubre apellidos en cualquier orden, prefijos parciales y un error de
+  una letra — más teléfono comparado solo por dígitos. Frontend: mínimo 2
+  caracteres antes de buscar.
+- **A3/A4 — selector de atención vacío y botones "Agregar" sin reacción:** el
+  selector de atención (expediente, planes de tratamiento, consentimientos —
+  **copiado y pegado tres veces**, el mismo defecto en cada pantalla) nunca
+  preseleccionaba nada ni ofrecía crear una atención si el paciente no tenía
+  ninguna, y ninguna mutación mostraba el error del backend si fallaba
+  (`ResumenTab`'s "Iniciar atención" ni siquiera atrapaba el error: un
+  *unhandled promise rejection* real). Corrección de raíz: módulo compartido
+  `frontend/src/modules/encounters/useEncounterPicker.ts` +
+  `EncounterPicker.tsx` (preselecciona la atención de hoy, ofrece
+  "+ Iniciar atención nueva", muestra el error de carga/creación) reemplaza las
+  tres copias; y una red de seguridad global
+  (`app/globalMutationErrorHandling.ts`, un `MutationCache` de TanStack Query +
+  `ErrorToast.tsx`) muestra el error de **cualquier** mutación de la app que no
+  maneje el suyo, para que un "Agregar" nunca vuelva a fallar en silencio.
+- **A5 — "Firmar y generar PDF" no funcionaba:** mismo defecto que A3 (el
+  formulario de consentimientos tenía su propia copia del selector roto); con A3
+  corregido ahí también, el flujo funciona. El backend ya manejaba bien la firma
+  en base64 con o sin el prefijo `data:` y ya incrustaba logo/firma como `data:`
+  URI — no tenían el bug que se sospechaba.
+- **A6 — las plantillas de consentimiento no funcionaban:** no había **ninguna**
+  plantilla sembrada — el selector estaba vacío de origen. `app/seed.py` siembra
+  un ejemplo por cada código del catálogo real (`general`, `extraccion`,
+  `endodoncia`, `anestesia` — el reporte original mencionaba 5 códigos que no
+  existen en el catálogo actual; se usó el catálogo real), marcados "Ejemplo —
+  validar con la clínica". Migración de backfill para sucursales que ya existían
+  sin plantillas. Pendiente (no se hizo, es mejora de UX, no bloqueaba el flujo):
+  botones de variables y vista previa en el editor.
+- **A7 — logo de la clínica:** el logo (o el nombre, sin logo — son excluyentes
+  entre sí, no se muestran juntos) ahora es un enlace a inicio, con alto máximo de
+  40 px y ancho automático (antes se forzaba a un cuadro fijo de 28×28, podía
+  deformar un logo no cuadrado).
+- **E2E del propio Playwright en puertos dedicados (8011/5185):** al verificar las
+  correcciones de arriba con el E2E completo, `reuseExistingServer` reutilizaba sin
+  querer un backend/frontend de desarrollo ya corriendo en los puertos normales
+  (8001/5174 — típico si alguien está probando la app a mano al mismo tiempo); como
+  `AI_FAKE_MODE=true` solo se le pasa al proceso que Playwright arranca él mismo, un
+  backend reutilizado sin ese env intentaba usar el Ollama real y el paso de
+  dictado de `full-flow.spec.ts` fallaba de forma intermitente. `e2e/playwright.config.ts`
+  ahora usa puertos propios (con su propio `CORS_ORIGINS` y `VITE_API_URL`) para que
+  esto no pueda volver a pasar.
+- **Contraste WCAG de 4 presets de marca:** al correr `accessibility.spec.ts` con
+  los puertos dedicados, la sucursal de prueba tenía activo el preset "Azul sereno",
+  cuyo primario (`#3A7FC1`) no llegaba a 4.5:1 contra blanco/`--color-bg` ni como
+  texto blanco sobre el botón primario — la misma clase de bug que ya se había
+  corregido en "Menta clínica" (Fase 12), encontrada aquí porque "Los demás presets
+  no se tocaron" (comentario real que quedó en el código de esa fase). Los otros 3
+  presets sin tocar (`aqua_suave`, `lavanda_suave`, `verde_salvia`) tenían el mismo
+  defecto. `backend/app/modules/branding/presets.py` y
+  `frontend/src/theme/presets.ts` oscurecen el primario de los 4
+  (`color_utils.suggest_contrasting_color()`, misma lógica que Menta clínica);
+  migración de backfill para sucursales que ya habían guardado alguno de esos 4
+  presets (el color se copia a `clinic_branding.colors` al guardarse, no es una
+  referencia viva al catálogo); prueba nueva que valida los 6 presets del catálogo
+  contra WCAG AA, no solo los que ya fallaron una vez.
+
+### 5.14 Catálogos administrables por sucursal (Fase 12.2, Parte B — B1)
+Seis catálogos que antes vivían fijos en código (`agenda/rules.py`,
+`odontogram/finding_catalog.py`, `diagnosis/rules.py`, `records/rules.py`) —
+tipos de cita, hallazgos del odontograma, diagnósticos, categorías de
+antecedentes y las dos listas de palabras clave de alerta (condiciones y
+medicamentos) — ahora viven en una sola tabla genérica `clinic_catalog_items`
+(`catalog_type` + `code`/`name`/`is_active`/`sort_order`/`extra` JSONB), con
+CRUD por sucursal. Un administrador ya puede crear un tipo de cita nuevo y
+usarlo de inmediato al agendar, o desactivar un hallazgo (deja de aparecer en
+el menú rápido del odontograma — los registros históricos que ya lo usan lo
+siguen mostrando, porque `ToothFinding` guarda el código, no una referencia
+viva al catálogo).
+
+- **Por qué una sola tabla y no seis:** los seis catálogos comparten la misma
+  forma (código + nombre + activo/inactivo + orden) y solo difieren en qué
+  campos extra necesitan (p. ej. `default_minutes`/`color` en tipos de cita,
+  `requires_surface` en hallazgos) — esos campos extra viven en `extra` (JSONB)
+  en vez de columnas propias. Es una decisión de alcance: una tabla con seis
+  routers/servicios idénticos salvo el nombre habría sido más código sin más
+  capacidad real.
+- **Qué se quedó fuera a propósito:** procedimientos (`treatment.ProcedureCatalog`,
+  ya existía desde la Fase 7, se integró a la misma pantalla pero sin tocar su
+  tabla) y métodos de pago (demasiado acoplados a lógica de cobranza con
+  `Literal` para moverlos en esta fase).
+- **Permiso nuevo `catalogs.manage`** (solo `admin_clinica` — el superadmin
+  sigue sin acceso a datos clínicos, regla de seguridad 5 de CLAUDE.md, y la
+  mayoría de estos catálogos lo son). `GET /catalogs/{tipo}` acepta además
+  cualquiera de los permisos de lectura normales del catálogo correspondiente
+  (`agenda.read`, `odontogram.read`, `diagnosis.read`, `records.read`) para que
+  un odontólogo pueda seguir leyendo el catálogo al usarlo (p. ej. el menú
+  rápido de hallazgos) sin necesitar `catalogs.manage`; sin ese permiso, el
+  parámetro `include_inactive` se ignora en silencio (nunca ve los inactivos).
+- **Migración de backfill:** inserta el permiso, lo otorga a `admin_clinica` y
+  siembra los 39 valores por defecto (los mismos que tenían los `Literal`
+  fijos) en cada sucursal existente — sin importar código de la aplicación
+  (convención del proyecto para migraciones de datos). `app/seed.py` siembra
+  lo mismo para la sucursal de demostración, compartiendo la lista de datos
+  con `tests/conftest.py` (la fixture `clinic`, usada por casi toda la suite
+  de integración, ya incluye estos 39 elementos).
+- **Pendiente de la IA (Fase 13/Parte C):** Ollama necesita un `Literal`
+  cerrado para forzar la decodificación estructurada (`app/ai/actions.py`), así
+  que por ahora mantiene su propia copia fija de hallazgos/diagnósticos/
+  categorías — la instrucción original ("el prompt, la gramática rápida y los
+  catálogos de validación de la IA deben leer de estas tablas") queda explícita
+  como trabajo de Dentia, no de esta fase.
+- **Importar/exportar por CSV** (`GET /catalogs/{tipo}/export`, `POST
+  /catalogs/{tipo}/import`, solo `catalogs.manage`): el CSV incluye los
+  inactivos (código, nombre, activo, orden, `extra` como JSON en una columna)
+  para que editar y reimportar no reactive nada sin querer. La importación es
+  por `code` — crea o actualiza, nunca borra — y es parcial: una fila inválida
+  se reporta en la respuesta (`CatalogImportSummary.errors`) y se salta, sin
+  abortar el resto del archivo.
+- **Gabinetes (`Resource`) y Sucursal (`Clinic`) ya tienen pestaña propia**
+  dentro de esta misma pantalla (ya no quedan fuera, a diferencia de la
+  primera versión de B1):
+  - *Gabinetes*: `Resource` ganó `PATCH /resources/{id}` (renombrar/desactivar,
+    mismo permiso `agenda.write` que ya exigía crearlo) y `GET /resources`
+    ahora filtra los inactivos por defecto — antes nunca filtraba nada porque
+    nunca existió la desactivación; igual que con los catálogos genéricos,
+    solo quien tiene `agenda.write` puede pedir `include_inactive=true`.
+  - *Sucursal*: `PATCH /clinics/current` edita nombre/dirección/teléfono —
+    siempre la sucursal activa (`X-Clinic-Id`), nunca recibe un id por la URL,
+    así que no hay forma de editar una sucursal ajena desde aquí. Gated por
+    `catalogs.manage` (`admin_clinica`), **no** por `iam.manage_clinics` (solo
+    `superadmin`, crear/administrar sucursales entre organizaciones, CLAUDE.md
+    sec. 5) — son decisiones distintas a propósito: esto es la propia clínica
+    editando sus datos de contacto, no creación ni administración entre
+    organizaciones.
+- Frontend: pantalla **Configuración → Catálogos** (`/configuracion/catalogos`,
+  solo `admin_clinica`) con una pestaña por catálogo (seis genéricas + una
+  pestaña "Procedimientos y precios" que reutiliza la API de la Fase 7, más
+  "Gabinetes" y "Sucursal"), tabla con alta, activar/desactivar y exportar/
+  importar CSV en línea.
+
+### 5.15 Gabinete y profesional por defecto (Fase 12.2, Parte B — B2/B3)
+Antes de esta fase, agendar una cita siempre partía de cero: elegir profesional,
+gabinete y tipo de cita desde el principio, cita tras cita, aun para el mismo
+paciente con el mismo odontólogo de siempre. Dos columnas nuevas (nunca una
+tabla nueva — son metadatos de una fila que ya existía) resuelven esto:
+
+- **`Provider.default_resource_id`** (B2): el gabinete donde normalmente
+  atiende ese profesional *en esta sucursal* — recordar que `Provider` ya era
+  una fila por sucursal (`uq_provider_clinic_user`), así que un profesional que
+  trabaja en dos sucursales puede tener un gabinete por defecto distinto en
+  cada una, sin ningún modelo nuevo.
+- **`Patient.default_resource_id` / `Patient.primary_provider_id`** (B3): el
+  gabinete y el profesional tratante habitual de un paciente.
+- Ambas se validan contra la sucursal al guardarse (`agenda_service.get_resource_in_clinic`/
+  `get_provider_in_clinic`, ya existían para validar una cita — reutilizadas,
+  no duplicadas) y son siempre opcionales: un profesional o un paciente sin
+  asignación simplemente no preselecciona nada, como antes de esta fase.
+- **Alta de usuario (B2):** el formulario de "Agregar usuario" deja elegir el
+  gabinete por defecto del profesional nuevo en la sucursal activa, y además
+  **una o más sucursales adicionales** (cada una con su propio gabinete) —
+  antes el alta sólo creaba al usuario en la sucursal activa. El administrador
+  solo puede elegir ahí sucursales donde **también** tiene `iam.manage_users`
+  (mismo chequeo que ya hace `require_permission` para la sucursal activa,
+  repetido explícitamente por sucursal elegida — `IAM`/`service.py::create_clinic_user`);
+  elegir la misma sucursal dos veces, o una donde no administra usuarios, se
+  rechaza (400/403). Cada sucursal adicional recibe su propio `UserClinic` +
+  `Provider` (si el rol es `agenda_rules.PROVIDER_ROLES`), igual que la
+  sucursal activa.
+- **Alta de paciente (B3):** paso 1 del alta ("Datos") deja elegir el
+  profesional tratante y el gabinete por defecto, opcionales.
+- **Edición controlada (B3):** cambiar el gabinete o el profesional tratante
+  de un paciente ya existente exige un motivo (`care_assignment_reason`),
+  igual que cambiar su estado (`status_reason`, Fase 3) — se audita en
+  `patients.updated` junto con el resto de cambios de esa edición.
+- **Agenda:** `NewAppointmentForm.tsx` preselecciona el gabinete del
+  profesional ya elegido al abrir el formulario; al elegir un paciente por el
+  buscador, preselecciona su profesional y gabinete tratante (si el paciente
+  no tiene uno propio, cae al gabinete por defecto del profesional ya
+  elegido) — el usuario siempre puede cambiar cualquiera de los dos antes de
+  agendar.
+- **"Mis pacientes" (B3):** `GET /patients?mine_only=true` filtra por
+  `primary_provider_id` igual al `Provider` del usuario que hace la consulta
+  en la sucursal activa; un rol sin `Provider` ahí (p. ej. `recepcion`) recibe
+  una lista vacía, no un error. Toggle visible en el listado de pacientes
+  solo para `odontologo`/`especialista`.
+- **Hallazgo colateral corregido en esta misma fase:** `app/modules/catalogs/models.py`
+  (B1) nunca se agregó a `backend/alembic/env.py` — `alembic check` lo marcaba
+  como una tabla a **eliminar** (autogenerate no la veía registrada en
+  `Base.metadata`). No afectaba a `alembic upgrade head` (la migración de B1 ya
+  tenía su DDL escrito a mano), pero sí a cualquier migración futura generada
+  con `--autogenerate`. Corregido agregando el import que faltaba.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -823,6 +1025,8 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | 10 | `billing` completo: `Payment` (efectivo/tarjeta/transferencia), `PaymentAllocation` (aplicación total o parcial a un cargo, o anticipo sin aplicar), saldo y estado de cada `Charge` calculados contra los pagos activos (regla 4, nunca guardados), cancelación de cargos/pagos con motivo (regla 2; un cargo con pagos aplicados no se puede cancelar sin cancelar esos pagos primero), recibo PDF con el logo de la clínica, corte de caja por sesión (`CashSession`, totales por método y diferencia contra lo esperado). `ClinicBillingSettings.billing_enabled` permite desactivar la cobranza por sucursal (p.ej. clínicas universitarias de práctica) sin dejar de generar el cargo sugerido al registrar un procedimiento realizado. Nuevo permiso `billing.configure` (incremental, solo `admin_clinica`). Frontend: pestaña "Cuenta" en el paciente, pantalla "Caja" para abrir/cerrar sesión, Configuración → Cobranza | Hecho |
 | 11 | `reports` (sin tablas propias, seis reportes de solo lectura sobre modelos existentes: pacientes, citas y tasa de no-show, producción por profesional, planes de tratamiento, cuentas por cobrar como fotografía actual, uso del asistente de IA) con exportación CSV auditada (`reports.export`) y `GET /reports/dashboard`, un tablero de inicio por rol que no exige `reports.read` sino el permiso propio de cada sección que arma (`patients.read`, `agenda.read`, `treatment.read`, `billing.read`, `ai.use`/`ai.configure`). `scripts/backup.ps1`/`.sh` (pg_dump + storage/ cifrados con OpenSSL si hay `BACKUP_PASSPHRASE`, retención configurable) y `scripts/restore_test.ps1`/`.sh` (restaura en una base desechable, verifica y limpia) documentados en `docs/OPERACION.md`, con programación en Windows (Programador de tareas) y Linux (cron). Frontend: pantalla "Reportes" con selector de fechas y exportación por pestaña; página de inicio reconstruida como tablero por rol | Hecho |
 | 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
+| 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
+| 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

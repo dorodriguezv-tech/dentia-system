@@ -40,7 +40,7 @@ export function AgendaPage() {
   const [panel, setPanel] = useState<ActivePanel>(null)
 
   const providersQuery = useQuery({ queryKey: ['providers'], queryFn: api.listProviders })
-  const resourcesQuery = useQuery({ queryKey: ['resources'], queryFn: api.listResources })
+  const resourcesQuery = useQuery({ queryKey: ['resources'], queryFn: () => api.listResources() })
 
   const effectiveProviderId = selectedProviderId || providersQuery.data?.[0]?.id || ''
 

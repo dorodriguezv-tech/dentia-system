@@ -26,8 +26,12 @@ from app.modules.agenda.schemas import (
     StatusChangeRequest,
     WorkingHoursCreateRequest,
 )
+from app.modules.catalogs import service as catalogs_service
+from app.modules.catalogs.schemas import CatalogItemCreateRequest
 from app.modules.diagnosis import service as diagnosis_service
 from app.modules.diagnosis.schemas import DiagnosisCreateRequest
+from app.modules.documents import service as documents_service
+from app.modules.documents.schemas import DocumentTemplateCreateRequest, TemplateCode
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.schemas import (
     ClinicalNoteCreateRequest,
@@ -499,6 +503,343 @@ async def _seed_treatment(
     )
 
 
+# Correccion A6 (docs/06_INSTRUCCIONES...): sin esto, el selector de plantillas al
+# firmar un consentimiento quedaba vacio -- "Firmar y generar PDF" nunca podia
+# habilitarse porque no habia nada que elegir. "Ejemplo" en el nombre porque el texto
+# legal real lo debe redactar/validar la clinica (ver docs/PENDIENTES_CLINICOS.md).
+DOCUMENT_TEMPLATE_SEEDS: list[tuple[TemplateCode, str, str]] = [
+    (
+        "general",
+        "Ejemplo — validar con la clinica: consentimiento general",
+        "<p>Yo, {{paciente.nombre}}, de {{paciente.edad}} anos, autorizo a "
+        "{{clinica.nombre}} y al profesional {{profesional.nombre}} a realizar el "
+        "tratamiento dental que se me explico, incluidos sus riesgos y alternativas. "
+        "Fecha: {{fecha}}.</p>",
+    ),
+    (
+        "extraccion",
+        "Ejemplo — validar con la clinica: extraccion dental",
+        "<p>Autorizo a {{profesional.nombre}} a realizar la extraccion de la pieza "
+        "indicada en mi expediente. Entiendo los riesgos (sangrado, infeccion, dano a "
+        "piezas vecinas) y las alternativas de tratamiento. Procedimiento: "
+        "{{procedimiento.nombre}}. Fecha: {{fecha}}.</p>",
+    ),
+    (
+        "endodoncia",
+        "Ejemplo — validar con la clinica: endodoncia (tratamiento de conductos)",
+        "<p>Autorizo a {{profesional.nombre}} a realizar el tratamiento de conductos "
+        "(endodoncia) indicado en mi plan de tratamiento "
+        "{{plan.titulo}}. Entiendo que puede requerir mas de una cita y que existe "
+        "riesgo de fractura o perdida de la pieza. Fecha: {{fecha}}.</p>",
+    ),
+    (
+        "anestesia",
+        "Ejemplo — validar con la clinica: anestesia local",
+        "<p>Autorizo la aplicacion de anestesia local para mi tratamiento en "
+        "{{clinica.nombre}}. He informado al profesional {{profesional.nombre}} de "
+        "mis alergias y antecedentes medicos conocidos. Fecha: {{fecha}}.</p>",
+    ),
+]
+
+
+async def _seed_document_templates(
+    db: AsyncSession, *, clinic_id: uuid.UUID, actor_id: uuid.UUID
+) -> None:
+    for code, name, html_content in DOCUMENT_TEMPLATE_SEEDS:
+        await documents_service.create_template_version(
+            db,
+            clinic_id=clinic_id,
+            data=DocumentTemplateCreateRequest(code=code, name=name, html_content=html_content),
+            actor_id=actor_id,
+        )
+
+
+# Correccion B1 (docs/06_INSTRUCCIONES..., Parte B): hasta esta fase, estos catalogos
+# vivian fijos en codigo (agenda/rules.py, odontogram/finding_catalog.py,
+# diagnosis/rules.py, records/rules.py) -- un administrador no podia agregar ni
+# desactivar un elemento sin pedir un cambio de codigo. Misma lista que usa
+# tests/conftest.py (fixture `clinic`, para que toda prueba tenga un catalogo
+# realista) y, duplicada a proposito (una migracion no debe depender del codigo de
+# la aplicacion), la migracion de backfill 4d7a2e9c15f3.
+# (catalog_type, code, name, sort_order, extra)
+CATALOG_SEEDS: list[tuple[str, str, str, int, dict[str, object]]] = [
+    ("appointment_type", "consulta", "Consulta / valoracion", 0, {"default_minutes": 30}),
+    ("appointment_type", "limpieza", "Limpieza dental", 1, {"default_minutes": 45}),
+    (
+        "appointment_type",
+        "restauracion",
+        "Restauracion (resina/amalgama)",
+        2,
+        {"default_minutes": 60},
+    ),
+    ("appointment_type", "endodoncia", "Endodoncia", 3, {"default_minutes": 90}),
+    ("appointment_type", "extraccion", "Extraccion", 4, {"default_minutes": 45}),
+    (
+        "appointment_type",
+        "ortodoncia_control",
+        "Control de ortodoncia",
+        5,
+        {"default_minutes": 20},
+    ),
+    ("appointment_type", "protesis", "Protesis", 6, {"default_minutes": 60}),
+    ("appointment_type", "urgencia", "Urgencia", 7, {"default_minutes": 30}),
+    (
+        "odontogram_finding",
+        "sano",
+        "Sano",
+        0,
+        {"color": "#A9C6B8", "symbol": "", "requires_surface": True},
+    ),
+    (
+        "odontogram_finding",
+        "caries",
+        "Caries",
+        1,
+        {"color": "#D64545", "symbol": "C", "requires_surface": True},
+    ),
+    (
+        "odontogram_finding",
+        "restauracion",
+        "Restauracion",
+        2,
+        {"color": "#4A90C2", "symbol": "R", "requires_surface": True},
+    ),
+    (
+        "odontogram_finding",
+        "corona",
+        "Corona",
+        3,
+        {"color": "#E0A100", "symbol": "CO", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "endodoncia",
+        "Endodoncia",
+        4,
+        {"color": "#7B5EA7", "symbol": "E", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "ausente",
+        "Ausente",
+        5,
+        {"color": "#8C8C8C", "symbol": "X", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "extraccion_indicada",
+        "Extraccion indicada",
+        6,
+        {"color": "#D64545", "symbol": "XI", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "implante",
+        "Implante",
+        7,
+        {"color": "#2BB3A3", "symbol": "IM", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "protesis_fija",
+        "Protesis fija",
+        8,
+        {"color": "#3A7FC1", "symbol": "PF", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "sellador",
+        "Sellador",
+        9,
+        {"color": "#6AB04C", "symbol": "S", "requires_surface": True},
+    ),
+    (
+        "odontogram_finding",
+        "fractura",
+        "Fractura",
+        10,
+        {"color": "#B8460E", "symbol": "FX", "requires_surface": True},
+    ),
+    (
+        "odontogram_finding",
+        "movilidad",
+        "Movilidad",
+        11,
+        {"color": "#C77D1E", "symbol": "MO", "requires_surface": False},
+    ),
+    ("diagnosis", "caries", "Caries dental", 0, {}),
+    ("diagnosis", "caries_recurrente", "Caries recurrente", 1, {}),
+    ("diagnosis", "pulpitis_reversible", "Pulpitis reversible", 2, {}),
+    ("diagnosis", "pulpitis_irreversible", "Pulpitis irreversible", 3, {}),
+    ("diagnosis", "necrosis_pulpar", "Necrosis pulpar", 4, {}),
+    ("diagnosis", "absceso_periapical", "Absceso periapical", 5, {}),
+    ("diagnosis", "gingivitis", "Gingivitis", 6, {}),
+    ("diagnosis", "periodontitis", "Periodontitis", 7, {}),
+    ("diagnosis", "fractura_dental", "Fractura dental", 8, {}),
+    ("diagnosis", "edentulismo_parcial", "Edentulismo parcial", 9, {}),
+    ("diagnosis", "maloclusion", "Maloclusion", 10, {}),
+    ("diagnosis", "sin_hallazgos", "Sin hallazgos patologicos", 11, {}),
+    ("history_category", "heredofamiliar", "Heredofamiliar", 0, {}),
+    ("history_category", "personal_patologico", "Personal patologico", 1, {}),
+    ("history_category", "personal_no_patologico", "Personal no patologico", 2, {}),
+    ("history_category", "odontologico", "Odontologico", 3, {}),
+    ("history_category", "habito", "Habito", 4, {}),
+    ("history_category", "factor_riesgo", "Factor de riesgo", 5, {}),
+    (
+        "condition_alert_keyword",
+        "diabetes",
+        "diabetes",
+        0,
+        {"alert_label": "Paciente con diabetes"},
+    ),
+    (
+        "condition_alert_keyword",
+        "embarazo",
+        "embarazo",
+        1,
+        {"alert_label": "Paciente embarazada"},
+    ),
+    (
+        "condition_alert_keyword",
+        "embarazada",
+        "embarazada",
+        2,
+        {"alert_label": "Paciente embarazada"},
+    ),
+    (
+        "condition_alert_keyword",
+        "hipertension",
+        "hipertension",
+        3,
+        {"alert_label": "Paciente hipertenso"},
+    ),
+    (
+        "condition_alert_keyword",
+        "marcapasos",
+        "marcapasos",
+        4,
+        {"alert_label": "Paciente con marcapasos"},
+    ),
+    (
+        "condition_alert_keyword",
+        "hemofilia",
+        "hemofilia",
+        5,
+        {"alert_label": "Paciente con trastorno de coagulacion"},
+    ),
+    ("condition_alert_keyword", "vih", "vih", 6, {"alert_label": "Paciente con VIH"}),
+    (
+        "condition_alert_keyword",
+        "hepatitis",
+        "hepatitis",
+        7,
+        {"alert_label": "Paciente con hepatitis"},
+    ),
+    (
+        "condition_alert_keyword",
+        "epilepsia",
+        "epilepsia",
+        8,
+        {"alert_label": "Paciente con epilepsia"},
+    ),
+    (
+        "condition_alert_keyword",
+        "cardiopatia",
+        "cardiopatia",
+        9,
+        {"alert_label": "Paciente con cardiopatia"},
+    ),
+    (
+        "medication_alert_keyword",
+        "anticoagulante",
+        "anticoagulante",
+        0,
+        {"alert_label": "Paciente usa anticoagulantes"},
+    ),
+    (
+        "medication_alert_keyword",
+        "warfarina",
+        "warfarina",
+        1,
+        {"alert_label": "Paciente usa anticoagulantes (warfarina)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "acenocumarina",
+        "acenocumarina",
+        2,
+        {"alert_label": "Paciente usa anticoagulantes (acenocumarina)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "rivaroxaban",
+        "rivaroxaban",
+        3,
+        {"alert_label": "Paciente usa anticoagulantes (rivaroxaban)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "apixaban",
+        "apixaban",
+        4,
+        {"alert_label": "Paciente usa anticoagulantes (apixaban)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "clopidogrel",
+        "clopidogrel",
+        5,
+        {"alert_label": "Paciente usa antiagregantes plaquetarios (clopidogrel)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "aspirina",
+        "aspirina",
+        6,
+        {"alert_label": "Paciente usa antiagregantes plaquetarios (aspirina)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "insulina",
+        "insulina",
+        7,
+        {"alert_label": "Paciente usa insulina"},
+    ),
+    (
+        "medication_alert_keyword",
+        "bifosfonato",
+        "bifosfonato",
+        8,
+        {"alert_label": "Paciente usa bifosfonatos (riesgo de osteonecrosis)"},
+    ),
+    (
+        "medication_alert_keyword",
+        "corticoesteroide",
+        "corticoesteroide",
+        9,
+        {"alert_label": "Paciente usa corticoesteroides"},
+    ),
+    (
+        "medication_alert_keyword",
+        "inmunosupresor",
+        "inmunosupresor",
+        10,
+        {"alert_label": "Paciente usa inmunosupresores"},
+    ),
+]
+
+
+async def _seed_catalogs(db: AsyncSession, *, clinic_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+    for catalog_type, code, name, sort_order, extra in CATALOG_SEEDS:
+        await catalogs_service.create_item(
+            db,
+            clinic_id=clinic_id,
+            catalog_type=catalog_type,
+            data=CatalogItemCreateRequest(code=code, name=name, sort_order=sort_order, extra=extra),
+            actor_id=actor_id,
+        )
+
+
 async def seed() -> None:
     async with async_session_factory() as db:
         existing = (
@@ -587,6 +928,8 @@ async def seed() -> None:
             professional_id=odontologo.id,
             patients=patients,
         )
+        await _seed_document_templates(db, clinic_id=clinic.id, actor_id=admin.id)
+        await _seed_catalogs(db, clinic_id=clinic.id, actor_id=admin.id)
 
         print(f"Organizacion: {organization.name}")
         print(f"Sucursal: {clinic.name}")

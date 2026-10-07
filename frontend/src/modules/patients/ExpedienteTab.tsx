@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import * as encountersApi from '../encounters/api'
+import { EncounterPickerField } from '../encounters/EncounterPicker'
+import { useEncounterPicker, type EncounterPicker } from '../encounters/useEncounterPicker'
 import { canReadRecords, canWriteDiagnosis, canWriteRecords } from '../auth/roles'
 import { useActiveRole } from '../auth/store'
 import { DIAGNOSIS_CATALOG } from '../diagnosis/catalog'
@@ -18,28 +19,6 @@ import {
   type VitalSignsOut,
 } from '../records/types'
 import styles from './PatientDetailPage.module.css'
-
-function EncounterSelect({
-  encounters,
-  value,
-  onChange,
-}: {
-  encounters: { id: string; started_at: string; chief_complaint: string | null }[]
-  value: string
-  onChange: (encounterId: string) => void
-}) {
-  return (
-    <select aria-label="Atencion" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Selecciona una atencion...</option>
-      {encounters.map((encounter) => (
-        <option key={encounter.id} value={encounter.id}>
-          {new Date(encounter.started_at).toLocaleDateString('es-MX')} —{' '}
-          {encounter.chief_complaint ?? 'Sin motivo'}
-        </option>
-      ))}
-    </select>
-  )
-}
 
 function AnnulButton({ onAnnul }: { onAnnul: (reason: string) => void }) {
   const [reason, setReason] = useState('')
@@ -73,18 +52,22 @@ function AnnulButton({ onAnnul }: { onAnnul: (reason: string) => void }) {
   )
 }
 
-function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+function HistorySection({
+  patientId,
+  canWrite,
+  encounterPicker,
+}: {
+  patientId: string
+  canWrite: boolean
+  encounterPicker: EncounterPicker
+}) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
   const historyQuery = useQuery({
     queryKey: ['patient-history', patientId],
     queryFn: () => recordsApi.listHistory(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
+  const { encounterId } = encounterPicker
   const [category, setCategory] = useState<HistoryCategory>('heredofamiliar')
   const [text, setText] = useState('')
 
@@ -136,11 +119,7 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
             createMutation.mutate()
           }}
         >
-          <EncounterSelect
-            encounters={encountersQuery.data ?? []}
-            value={encounterId}
-            onChange={setEncounterId}
-          />
+          <EncounterPickerField encounterPicker={encounterPicker} />
           <select
             aria-label="Categoria del antecedente"
             value={category}
@@ -163,6 +142,7 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
             className={styles.primaryButton}
             type="submit"
             disabled={!encounterId || !text.trim() || createMutation.isPending}
+            title={!encounterId ? 'Selecciona o inicia una atencion' : undefined}
           >
             Agregar antecedente
           </button>
@@ -172,18 +152,22 @@ function HistorySection({ patientId, canWrite }: { patientId: string; canWrite: 
   )
 }
 
-function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+function AllergiesSection({
+  patientId,
+  canWrite,
+  encounterPicker,
+}: {
+  patientId: string
+  canWrite: boolean
+  encounterPicker: EncounterPicker
+}) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
   const allergiesQuery = useQuery({
     queryKey: ['patient-allergies', patientId],
     queryFn: () => recordsApi.listAllergies(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
+  const { encounterId } = encounterPicker
   const [substance, setSubstance] = useState('')
   const [reaction, setReaction] = useState('')
   const [severity, setSeverity] = useState<Severity>('leve')
@@ -243,11 +227,7 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
             createMutation.mutate()
           }}
         >
-          <EncounterSelect
-            encounters={encountersQuery.data ?? []}
-            value={encounterId}
-            onChange={setEncounterId}
-          />
+          <EncounterPickerField encounterPicker={encounterPicker} />
           <input
             type="text"
             placeholder="Sustancia"
@@ -276,6 +256,7 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
             className={styles.primaryButton}
             type="submit"
             disabled={!encounterId || !substance.trim() || createMutation.isPending}
+            title={!encounterId ? 'Selecciona o inicia una atencion' : undefined}
           >
             Agregar alergia
           </button>
@@ -285,18 +266,22 @@ function AllergiesSection({ patientId, canWrite }: { patientId: string; canWrite
   )
 }
 
-function MedicationsSection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+function MedicationsSection({
+  patientId,
+  canWrite,
+  encounterPicker,
+}: {
+  patientId: string
+  canWrite: boolean
+  encounterPicker: EncounterPicker
+}) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
   const medicationsQuery = useQuery({
     queryKey: ['patient-medications', patientId],
     queryFn: () => recordsApi.listMedications(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
+  const { encounterId } = encounterPicker
   const [name, setName] = useState('')
   const [dose, setDose] = useState('')
   const [frequency, setFrequency] = useState('')
@@ -358,11 +343,7 @@ function MedicationsSection({ patientId, canWrite }: { patientId: string; canWri
             createMutation.mutate()
           }}
         >
-          <EncounterSelect
-            encounters={encountersQuery.data ?? []}
-            value={encounterId}
-            onChange={setEncounterId}
-          />
+          <EncounterPickerField encounterPicker={encounterPicker} />
           <input
             type="text"
             placeholder="Nombre"
@@ -386,6 +367,7 @@ function MedicationsSection({ patientId, canWrite }: { patientId: string; canWri
             className={styles.primaryButton}
             type="submit"
             disabled={!encounterId || !name.trim() || createMutation.isPending}
+            title={!encounterId ? 'Selecciona o inicia una atencion' : undefined}
           >
             Agregar medicamento
           </button>
@@ -395,18 +377,22 @@ function MedicationsSection({ patientId, canWrite }: { patientId: string; canWri
   )
 }
 
-function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+function VitalSignsSection({
+  patientId,
+  canWrite,
+  encounterPicker,
+}: {
+  patientId: string
+  canWrite: boolean
+  encounterPicker: EncounterPicker
+}) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
   const vitalSignsQuery = useQuery({
     queryKey: ['patient-vital-signs', patientId],
     queryFn: () => recordsApi.listVitalSigns(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
+  const { encounterId } = encounterPicker
   const [bpSystolic, setBpSystolic] = useState('')
   const [bpDiastolic, setBpDiastolic] = useState('')
   const [heartRate, setHeartRate] = useState('')
@@ -455,11 +441,7 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
             createMutation.mutate()
           }}
         >
-          <EncounterSelect
-            encounters={encountersQuery.data ?? []}
-            value={encounterId}
-            onChange={setEncounterId}
-          />
+          <EncounterPickerField encounterPicker={encounterPicker} />
           <input
             type="number"
             placeholder="Presion sistolica"
@@ -489,6 +471,7 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
             className={styles.primaryButton}
             type="submit"
             disabled={!encounterId || createMutation.isPending}
+            title={!encounterId ? 'Selecciona o inicia una atencion' : undefined}
           >
             Agregar signos vitales
           </button>
@@ -498,18 +481,22 @@ function VitalSignsSection({ patientId, canWrite }: { patientId: string; canWrit
   )
 }
 
-function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+function DiagnosisSection({
+  patientId,
+  canWrite,
+  encounterPicker,
+}: {
+  patientId: string
+  canWrite: boolean
+  encounterPicker: EncounterPicker
+}) {
   const queryClient = useQueryClient()
-  const encountersQuery = useQuery({
-    queryKey: ['patient-encounters', patientId],
-    queryFn: () => encountersApi.listPatientEncounters(patientId),
-  })
   const diagnosesQuery = useQuery({
     queryKey: ['patient-diagnoses', patientId],
     queryFn: () => diagnosisApi.listDiagnoses(patientId),
   })
 
-  const [encounterId, setEncounterId] = useState('')
+  const { encounterId } = encounterPicker
   const [code, setCode] = useState<DiagnosisCode | ''>('')
   const [text, setText] = useState('')
 
@@ -567,11 +554,7 @@ function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite
             createMutation.mutate()
           }}
         >
-          <EncounterSelect
-            encounters={encountersQuery.data ?? []}
-            value={encounterId}
-            onChange={setEncounterId}
-          />
+          <EncounterPickerField encounterPicker={encounterPicker} />
           <select
             aria-label="Codigo del catalogo de diagnosticos"
             value={code}
@@ -595,6 +578,7 @@ function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite
             className={styles.primaryButton}
             type="submit"
             disabled={!encounterId || !text.trim() || createMutation.isPending}
+            title={!encounterId ? 'Selecciona o inicia una atencion' : undefined}
           >
             Agregar diagnostico
           </button>
@@ -606,20 +590,45 @@ function DiagnosisSection({ patientId, canWrite }: { patientId: string; canWrite
 
 export function ExpedienteTab({ patientId }: { patientId: string }) {
   const activeRole = useActiveRole()
+  const canWrite = canWriteRecords(activeRole)
+  // A3: una sola atencion "activa" compartida por toda la pestana -- iniciar una
+  // atencion nueva desde cualquier seccion (o la preseleccion automatica de la
+  // atencion de hoy) aplica a todas. Crear la atencion exige records.write en el
+  // backend, asi que "+ Iniciar atencion nueva" se ofrece con ese mismo permiso, sin
+  // importar el permiso especifico de cada seccion (p.ej. diagnosis.write).
+  // Se llama antes del `return` de abajo porque los Hooks de React deben correr
+  // siempre en el mismo orden, incluso para un rol sin permiso para ver el expediente
+  // -- `enabled` evita de todos modos la peticion (y el 403 de auditoria) para ese rol.
+  const canRead = canReadRecords(activeRole)
+  const encounterPicker = useEncounterPicker(patientId, canWrite, canRead)
 
-  if (!canReadRecords(activeRole)) {
+  if (!canRead) {
     return <p>No tienes permiso para ver el expediente clinico.</p>
   }
 
-  const canWrite = canWriteRecords(activeRole)
-
   return (
     <div className={styles.grid}>
-      <HistorySection patientId={patientId} canWrite={canWrite} />
-      <AllergiesSection patientId={patientId} canWrite={canWrite} />
-      <MedicationsSection patientId={patientId} canWrite={canWrite} />
-      <VitalSignsSection patientId={patientId} canWrite={canWrite} />
-      <DiagnosisSection patientId={patientId} canWrite={canWriteDiagnosis(activeRole)} />
+      <HistorySection patientId={patientId} canWrite={canWrite} encounterPicker={encounterPicker} />
+      <AllergiesSection
+        patientId={patientId}
+        canWrite={canWrite}
+        encounterPicker={encounterPicker}
+      />
+      <MedicationsSection
+        patientId={patientId}
+        canWrite={canWrite}
+        encounterPicker={encounterPicker}
+      />
+      <VitalSignsSection
+        patientId={patientId}
+        canWrite={canWrite}
+        encounterPicker={encounterPicker}
+      />
+      <DiagnosisSection
+        patientId={patientId}
+        canWrite={canWriteDiagnosis(activeRole)}
+        encounterPicker={encounterPicker}
+      />
     </div>
   )
 }

@@ -82,7 +82,7 @@ Los crea `python -m app.seed` (organización **Clínica Dental Demo**, sucursal
 
 | Correo | Rol | Notas |
 |---|---|---|
-| `admin@dentalcare-demo.mx` | Administrador de la clínica | Pide configurar MFA (TOTP) la primera vez que entra — es obligatorio para este rol, no se puede omitir |
+| `admin@dentalcare-demo.mx` | Administrador de la clínica | MFA deshabilitada temporalmente (ver `docs/SEGURIDAD.md`) — entra directo, sin pedir configurar TOTP |
 | `odontologo@dentalcare-demo.mx` | Odontólogo | Expediente, odontograma, diagnóstico, tratamiento, consentimientos, IA |
 | `recepcion@dentalcare-demo.mx` | Recepción | Alta de pacientes y agenda |
 | `caja@dentalcare-demo.mx` | Caja | Pagos, corte de caja y reportes |

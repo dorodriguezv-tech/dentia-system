@@ -44,28 +44,36 @@ def is_editable(status: str) -> bool:
     return status in ("RESERVADA", "CONFIRMADA")
 
 
-# Catalogo provisional de tipos de cita, solo para sugerir una duracion por defecto.
-# Se debe unificar con el catalogo real de procedimientos y precios de la Fase 7
-# (ver pendiente en docs/PENDIENTES_CLINICOS.md).
-APPOINTMENT_TYPES: dict[str, dict[str, object]] = {
-    "consulta": {"label": "Consulta / valoracion", "default_minutes": 30},
-    "limpieza": {"label": "Limpieza dental", "default_minutes": 45},
-    "restauracion": {"label": "Restauracion (resina/amalgama)", "default_minutes": 60},
-    "endodoncia": {"label": "Endodoncia", "default_minutes": 90},
-    "extraccion": {"label": "Extraccion", "default_minutes": 45},
-    "ortodoncia_control": {"label": "Control de ortodoncia", "default_minutes": 20},
-    "protesis": {"label": "Protesis", "default_minutes": 60},
-    "urgencia": {"label": "Urgencia", "default_minutes": 30},
-}
-APPOINTMENT_TYPE_CODES: tuple[str, ...] = tuple(APPOINTMENT_TYPES.keys())
-
-
-def default_duration_minutes(appointment_type: str) -> int:
-    minutes = APPOINTMENT_TYPES[appointment_type]["default_minutes"]
-    assert isinstance(minutes, int)
-    return minutes
-
+# "Tipos de consulta/cita" (antes fijo aqui) ahora vive en el catalogo administrable
+# por sucursal (B1, Fase 12.2): app/modules/catalogs, catalog_type="appointment_type".
+# Ver agenda/service.py::_default_duration_minutes.
+DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
 # Recordatorios (CLAUDE.md Fase 6): por ahora solo se registran como tarea pendiente,
 # el envio real queda fuera de alcance. "24h_antes" es el unico tipo por ahora.
 REMINDER_KINDS = ("24h_antes",)
+
+# Fase 12.1 (correccion A1): roles que atienden pacientes y por lo tanto necesitan un
+# Provider (entidad agendable, distinta de User desde la Fase 6) para aparecer en la
+# agenda. Un Provider ya no se crea a mano: se crea/reactiva solo al dar de alta o
+# promover a un usuario a uno de estos roles (ver iam/service.py), y se desactiva al
+# quitarle el rol o desactivar al usuario -- nunca se borra, porque puede tener citas.
+PROVIDER_ROLES = frozenset({"odontologo", "especialista"})
+
+# Paleta rotativa para el color por defecto de un Provider nuevo (distinta de los
+# colores de marca de la clinica, que son configurables aparte): solo busca que dos
+# profesionales nuevos no compartan color en el calendario a simple vista.
+PROVIDER_COLOR_PALETTE = (
+    "#2BB3A3",
+    "#4A90C2",
+    "#E0A100",
+    "#D64545",
+    "#7B7FD4",
+    "#3BA55C",
+    "#F2A65A",
+    "#5BBFD6",
+)
+
+
+def next_provider_color(existing_provider_count: int) -> str:
+    return PROVIDER_COLOR_PALETTE[existing_provider_count % len(PROVIDER_COLOR_PALETTE)]

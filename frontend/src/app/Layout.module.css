@@ -19,13 +19,16 @@
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--color-primary);
+  text-decoration: none;
   margin-bottom: 1.5rem;
 }
 
 .brandLogo {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
+  /* A7: alto maximo ~40px, proporcion respetada (nunca estirado a un cuadro fijo). */
+  max-height: 40px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
 }
 
 .nav {

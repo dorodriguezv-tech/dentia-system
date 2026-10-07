@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { contrastRatio } from './colorUtils'
 import { PRESETS, fullPalette } from './presets'
+
+const WCAG_AA_MINIMUM = 4.5
 
 describe('fullPalette', () => {
   it('devuelve los 4 colores de marca del preset mas los compartidos', () => {
@@ -21,4 +24,17 @@ describe('fullPalette', () => {
       }
     }
   })
+
+  it(
+    'el color primario de cada preset pasa WCAG AA (4.5:1) contra blanco y contra ' +
+      'su propio bg (regresion de accessibility.spec.ts: azul_sereno, aqua_suave, ' +
+      'lavanda_suave y verde_salvia se quedaron con el mismo bug que menta_clinica, ' +
+      'ya corregido antes, hasta que una sucursal real lo agarro)',
+    () => {
+      for (const preset of PRESETS) {
+        expect(contrastRatio(preset.primary, '#FFFFFF')).toBeGreaterThanOrEqual(WCAG_AA_MINIMUM)
+        expect(contrastRatio(preset.primary, preset.bg)).toBeGreaterThanOrEqual(WCAG_AA_MINIMUM)
+      }
+    },
+  )
 })

@@ -47,25 +47,56 @@ async def get_clinic_id(
     return clinic_id
 
 
+async def user_has_any_permission(
+    db: AsyncSession, *, user_id: uuid.UUID, clinic_id: uuid.UUID, codes: tuple[str, ...]
+) -> bool:
+    stmt = (
+        select(Permission.code)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .join(Role, Role.id == RolePermission.role_id)
+        .join(UserClinic, UserClinic.role_id == Role.id)
+        .where(
+            UserClinic.user_id == user_id,
+            UserClinic.clinic_id == clinic_id,
+            Permission.code.in_(codes),
+        )
+    )
+    result = await db.execute(stmt)
+    return result.first() is not None
+
+
 def require_permission(code: str) -> Callable[..., Awaitable[User]]:
     async def dependency(
         current_user: User = Depends(get_current_user),
         clinic_id: uuid.UUID = Depends(get_clinic_id),
         db: AsyncSession = Depends(get_db),
     ) -> User:
-        stmt = (
-            select(Permission.code)
-            .join(RolePermission, RolePermission.permission_id == Permission.id)
-            .join(Role, Role.id == RolePermission.role_id)
-            .join(UserClinic, UserClinic.role_id == Role.id)
-            .where(
-                UserClinic.user_id == current_user.id,
-                UserClinic.clinic_id == clinic_id,
-                Permission.code == code,
-            )
+        allowed = await user_has_any_permission(
+            db, user_id=current_user.id, clinic_id=clinic_id, codes=(code,)
         )
-        result = await db.execute(stmt)
-        if result.first() is None:
+        if not allowed:
+            raise AppError("FORBIDDEN", "No tienes permiso para esta accion", status_code=403)
+        return current_user
+
+    return dependency
+
+
+def require_any_permission(*codes: str) -> Callable[..., Awaitable[User]]:
+    """Como `require_permission`, pero pasa si el usuario tiene **alguno** de los
+    permisos dados. Util para un endpoint que varios roles con permisos distintos
+    necesitan leer (p.ej. GET /catalogs/{tipo}, Fase 12.2 Parte B1: cada tipo de
+    catalogo lo usa un modulo clinico distinto, mas `catalogs.manage` para quien
+    los administra sin tener el permiso clinico de ese modulo)."""
+
+    async def dependency(
+        current_user: User = Depends(get_current_user),
+        clinic_id: uuid.UUID = Depends(get_clinic_id),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        allowed = await user_has_any_permission(
+            db, user_id=current_user.id, clinic_id=clinic_id, codes=codes
+        )
+        if not allowed:
             raise AppError("FORBIDDEN", "No tienes permiso para esta accion", status_code=403)
         return current_user
 

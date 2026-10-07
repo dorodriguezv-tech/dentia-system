@@ -3,9 +3,11 @@ import { useEffect, useRef } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { useAuthStore } from '../modules/auth/store'
 import { ThemeProvider } from '../theme/ThemeProvider'
+import { ErrorToast } from './ErrorToast'
+import { createGlobalMutationCache } from './globalMutationErrorHandling'
 import { router } from './router'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({ mutationCache: createGlobalMutationCache() })
 
 export function AppProviders() {
   const bootstrap = useAuthStore((s) => s.bootstrap)
@@ -25,6 +27,7 @@ export function AppProviders() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
+        <ErrorToast />
       </QueryClientProvider>
     </ThemeProvider>
   )

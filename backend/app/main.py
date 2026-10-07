@@ -10,6 +10,7 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.modules.agenda.router import router as agenda_router
 from app.modules.billing.router import router as billing_router
 from app.modules.branding.router import router as branding_router
+from app.modules.catalogs.router import router as catalogs_router
 from app.modules.diagnosis.router import router as diagnosis_router
 from app.modules.documents.router import router as documents_router
 from app.modules.encounters.router import router as encounters_router
@@ -58,6 +59,7 @@ app.include_router(ai_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(imaging_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
+app.include_router(catalogs_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

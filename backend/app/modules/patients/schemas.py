@@ -47,6 +47,10 @@ class PatientCreateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=30)
     email: Email | None = None
     address: str | None = Field(default=None, max_length=300)
+    # B3 (Parte B, Fase 12.2): gabinete y profesional tratante por defecto, opcionales
+    # desde el alta -- la agenda los preselecciona despues al agendar.
+    default_resource_id: uuid.UUID | None = None
+    primary_provider_id: uuid.UUID | None = None
 
     @field_validator("date_of_birth")
     @classmethod
@@ -66,11 +70,27 @@ class PatientUpdateRequest(BaseModel):
     address: str | None = Field(default=None, max_length=300)
     status: StatusCode | None = None
     status_reason: str | None = Field(default=None, max_length=300)
+    # B3 (Parte B, Fase 12.2): igual que el estado, cambiar el gabinete o el
+    # profesional tratante por defecto exige un motivo (edicion controlada).
+    default_resource_id: uuid.UUID | None = None
+    primary_provider_id: uuid.UUID | None = None
+    care_assignment_reason: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
     def _status_change_needs_reason(self) -> "PatientUpdateRequest":
         if self.status is not None and not (self.status_reason or "").strip():
             raise ValueError("status_reason es obligatorio al cambiar el estado del paciente")
+        return self
+
+    @model_validator(mode="after")
+    def _care_assignment_change_needs_reason(self) -> "PatientUpdateRequest":
+        if (self.default_resource_id is not None or self.primary_provider_id is not None) and not (
+            self.care_assignment_reason or ""
+        ).strip():
+            raise ValueError(
+                "care_assignment_reason es obligatorio al cambiar el gabinete o el "
+                "profesional tratante por defecto"
+            )
         return self
 
 
@@ -88,6 +108,8 @@ class PatientOut(BaseModel):
     address: str | None
     status: StatusCode
     has_photo: bool
+    default_resource_id: uuid.UUID | None
+    primary_provider_id: uuid.UUID | None
 
     model_config = {"from_attributes": True}
 
@@ -109,6 +131,10 @@ class PatientListItemOut(BaseModel):
     date_of_birth: date
     status: StatusCode
     phone: str | None
+    # B3 (Parte B, Fase 12.2): la agenda los usa para preseleccionar gabinete y
+    # profesional en NewAppointmentForm.tsx al elegir un paciente por este buscador.
+    default_resource_id: uuid.UUID | None = None
+    primary_provider_id: uuid.UUID | None = None
 
 
 class DuplicateCheckRequest(BaseModel):
