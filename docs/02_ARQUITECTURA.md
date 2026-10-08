@@ -1543,7 +1543,6 @@ herramienta de código puede generar esas grabaciones de forma honesta.
   podría no alcanzar a verlo entre un sondeo del DOM y el siguiente — habría
   sido una prueba inestable sin aportar nada que el resto no confirme ya.
 - **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
-  - #46: licencia del diccionario (material de terceros) sin confirmar.
   - #47: vocabulario por contexto dinámico (pantalla/catálogos de sucursal/
     pacientes del día) no implementado — solo el vocabulario fijo.
   - #48: el corpus de 13.6 es autovalidado, no una medición independiente.
