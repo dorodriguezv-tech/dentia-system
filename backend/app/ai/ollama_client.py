@@ -36,6 +36,7 @@ async def chat(
     system_prompt: str,
     user_prompt: str,
     json_schema: dict[str, Any],
+    keep_alive: float | str | None = None,
 ) -> dict[str, Any]:
     """Llama a POST /api/chat con format=<json_schema> y temperature=0 (salida
     determinista, igual en cada corrida con el mismo dictado).
@@ -52,7 +53,7 @@ async def chat(
     settings = get_settings()
     if settings.ai_fake_mode:
         return {"message": {"role": "assistant", "content": _FAKE_CHAT_CONTENT}}
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -62,6 +63,12 @@ async def chat(
         "stream": False,
         "options": {"temperature": 0, "repeat_penalty": 1.3, "num_predict": 800},
     }
+    # Fase 13 (Dentia, 13.5, sec. 8 del diseno): mantener el modelo cargado
+    # (-1) durante una sesion de voz activa evita la espera de recarga en
+    # cada orden -- None (los llamadores fuera de voz, p.ej. el dictado REST
+    # de la Fase 8) deja que Ollama use su propio idle timeout por defecto.
+    if keep_alive is not None:
+        payload["keep_alive"] = keep_alive
     try:
         async with httpx.AsyncClient(timeout=settings.ollama_timeout_s) as client:
             response = await client.post(f"{settings.ollama_url}/api/chat", json=payload)

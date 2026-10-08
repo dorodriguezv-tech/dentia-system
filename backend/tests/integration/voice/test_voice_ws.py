@@ -352,7 +352,7 @@ async def test_full_capture_flow_start_consulta_20_findings_cancela_and_deshaz(
     # "gracias" (al final) no la reconoce la ruta rapida y hay una atencion
     # activa -- sin esto, cae en la ruta LLM de la 13.5 y el resultado de la
     # prueba dependeria de si hay un Ollama real corriendo en esta maquina.
-    async def _empty_chat(*, model, system_prompt, user_prompt, json_schema):
+    async def _empty_chat(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
         return {"message": {"role": "assistant", "content": '{"actions": [], "unrecognized": []}'}}
 
     monkeypatch.setattr(ollama_client, "chat", _empty_chat)
@@ -469,7 +469,7 @@ async def test_modo_dictado_accumulates_sentences_and_accepts_all_on_confirm(
     monkeypatch.setattr("app.voice.session.get_settings", lambda: _FakeSettings())
     monkeypatch.setattr("app.voice.tts.get_settings", lambda: _FakeSettings())
 
-    async def _fake_chat(*, model, system_prompt, user_prompt, json_schema):
+    async def _fake_chat(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
         content = _json.dumps(
             {
                 "actions": [

@@ -23,7 +23,7 @@ def _fake_chat(actions: list[dict], unrecognized: list[dict] | None = None):
     """Mismo patron que tests/integration/ai/test_ai.py -- evita que las
     pruebas de la ruta LLM/dictado (13.5) dependan de un Ollama real."""
 
-    async def _chat(*, model, system_prompt, user_prompt, json_schema):
+    async def _chat(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
         content = json.dumps({"actions": actions, "unrecognized": unrecognized or []})
         return {"message": {"role": "assistant", "content": content}}
 
@@ -1404,16 +1404,21 @@ async def test_unrecognized_llm_route_with_multiple_actions_falls_back(
     assert result.pending is None
 
 
-async def test_unrecognized_without_an_active_encounter_skips_the_llm_route(
+async def test_unrecognized_without_an_active_encounter_skips_the_clinical_llm_route(
     client, make_user, clinic, db_session: AsyncSession, monkeypatch
 ) -> None:
+    """Sin atencion activa, `_try_llm_fallback` (clinico) ni se intenta -- pero
+    la ruta LLM de AGENDA (resto de 13.5) si, porque no exige atencion activa
+    ni `voice.clinical` (sec. C2 del doc 06, igual que la agenda de la ruta
+    rapida): `chat()` SI se llama una vez, para esa, y como no devuelve
+    ninguna accion de agenda reconocida, cae igual en "no te entendi"."""
     user = await make_user(email="odonto@example.com", role_code="odontologo")
 
-    called = False
+    calls = 0
 
     async def _chat(**_kwargs):
-        nonlocal called
-        called = True
+        nonlocal calls
+        calls += 1
         return {"message": {"role": "assistant", "content": "{}"}}
 
     monkeypatch.setattr(ollama_client, "chat", _chat)
@@ -1428,7 +1433,147 @@ async def test_unrecognized_without_an_active_encounter_skips_the_llm_route(
         has_clinical=True,
     )
     assert result.say == "No te entendí, ¿me lo repites?"
-    assert called is False
+    assert calls == 1
+
+
+def _fake_agenda_chat(action: dict | None):
+    """Mismo patron que `_fake_chat` (ruta LLM clinica) pero con la forma de
+    `agenda_llm.AgendaInterpretResult` ({"action": ...}), no la de
+    `AiInterpretResult` ({"actions": [...], "unrecognized": [...]})."""
+
+    async def _chat(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
+        content = json.dumps({"action": action})
+        return {"message": {"role": "assistant", "content": content}}
+
+    return _chat
+
+
+async def test_agenda_llm_fallback_agenda_cita_with_free_phrasing(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    """Resto de 13.5: una frase de agenda que `nlu_fast` no reconoce (no trae
+    las anclas "a las"/"con") se resuelve igual via la ruta LLM de agenda --
+    disponible para recepcion, sin atencion activa ni `voice.clinical`."""
+    recepcion = await make_user(email="recepcion@example.com", role_code="recepcion")
+    await _make_patient(db_session, clinic, ("Maria", "Lopez"))
+    provider_id = await _make_provider(
+        client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
+    )
+    monkeypatch.setattr(
+        ollama_client,
+        "chat",
+        _fake_agenda_chat(
+            {
+                "type": "agendar_cita",
+                "patient_name": "Maria Lopez",
+                "provider_name": "Ruiz",
+                "date_text": "manana",
+                "time_text": "10",
+                "appointment_type_hint": "limpieza",
+            }
+        ),
+    )
+
+    result = await dialogue.handle_order(
+        db_session,
+        clinic_id=clinic.id,
+        user_id=recepcion.id,
+        transcript="Dentia, el jueves que viene necesito un espacio para Maria Lopez",
+        context=ScreenContext(),
+        last_say=None,
+        has_clinical=False,
+    )
+    assert result.pending is not None
+    assert result.pending.level == 3
+    assert "Maria Lopez" in result.say
+    assert "Laura Ruiz" in result.say
+
+    executed = await result.pending.execute()
+    assert "Listo, cita agendada" in executed.say
+
+    tomorrow = date.today() + timedelta(days=1)
+    starts_from = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
+    appointments = await agenda_service.list_appointments(
+        db_session,
+        clinic_id=clinic.id,
+        starts_from=starts_from,
+        starts_to=starts_from + timedelta(days=1),
+        provider_id=uuid.UUID(provider_id),
+    )
+    assert len(appointments) == 1
+    assert appointments[0]["appointment_type"] == "limpieza"
+    assert appointments[0]["starts_at"].hour == 10
+
+
+async def test_agenda_llm_fallback_with_no_recognized_action_falls_to_unrecognized(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    recepcion = await make_user(email="recepcion@example.com", role_code="recepcion")
+    monkeypatch.setattr(ollama_client, "chat", _fake_agenda_chat(None))
+
+    result = await dialogue.handle_order(
+        db_session,
+        clinic_id=clinic.id,
+        user_id=recepcion.id,
+        transcript="Dentia, cuéntame un chiste",
+        context=ScreenContext(),
+        last_say=None,
+        has_clinical=False,
+    )
+    assert result.say == "No te entendí, ¿me lo repites?"
+
+
+async def test_agenda_llm_fallback_cancelar_cita_without_a_reason_is_not_recognized(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    """El esquema de `agenda_llm.py` exige `reason` para "cancelar_cita" -- si
+    Ollama no lo manda, la validacion de Pydantic falla y se trata igual que
+    "no reconoci nada" (mismo criterio que la ruta rapida, #43)."""
+    recepcion = await make_user(email="recepcion@example.com", role_code="recepcion")
+    monkeypatch.setattr(
+        ollama_client,
+        "chat",
+        _fake_agenda_chat({"type": "cancelar_cita", "patient_name": "Maria Lopez"}),
+    )
+
+    result = await dialogue.handle_order(
+        db_session,
+        clinic_id=clinic.id,
+        user_id=recepcion.id,
+        transcript="Dentia, ya no va a venir Maria Lopez",
+        context=ScreenContext(),
+        last_say=None,
+        has_clinical=False,
+    )
+    assert result.say == "No te entendí, ¿me lo repites?"
+
+
+async def test_agenda_llm_fallback_lista_espera_pronoun_uses_the_last_patient(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    recepcion = await make_user(email="recepcion@example.com", role_code="recepcion")
+    patient_id = await _make_patient(db_session, clinic, ("Maria", "Lopez"))
+    monkeypatch.setattr(
+        ollama_client, "chat", _fake_agenda_chat({"type": "lista_espera", "patient_name": None})
+    )
+
+    result = await dialogue.handle_order(
+        db_session,
+        clinic_id=clinic.id,
+        user_id=recepcion.id,
+        transcript="Dentia, ponla tambien en la lista de espera porfavor",
+        context=ScreenContext(),
+        last_say=None,
+        has_clinical=False,
+        last_patient=(patient_id, "Maria Lopez"),
+    )
+    assert result.pending is not None
+    executed = await result.pending.execute()
+    assert "espera" in executed.say.lower()
+
+    waitlist = await agenda_service.list_waitlist(db_session, clinic_id=clinic.id)
+    assert len(waitlist) == 1
+    assert waitlist[0].patient_id == uuid.UUID(patient_id)
 
 
 # ----------------------------------- 13.4 (resto): huecos, cancelar/no_show,

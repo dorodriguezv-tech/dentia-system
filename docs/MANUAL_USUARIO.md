@@ -328,6 +328,10 @@ Lo que ya puedes hacer por voz:
     confirmas en pantalla (Dentia nunca crea el paciente por su cuenta).
   - Si el horario que pides ya está ocupado, Dentia te lo dice y te pide otra
     hora — nunca agenda una cita encimada con otra.
+  - Si dices una orden de agenda con otras palabras (por ejemplo "el jueves
+    que viene necesito un espacio para María López con la doctora Ruiz"),
+    Dentia intenta entenderla igual antes de darse por vencida — puede
+    tardar un poco más. No necesitas memorizar las frases exactas de arriba.
 - **Frases libres y dictado**, una vez iniciada la consulta: si dices algo
   que Dentia no reconoce con sus frases de siempre, intenta entenderlo igual
   (por ejemplo "la paciente me dice que es alérgica a la penicilina") y te

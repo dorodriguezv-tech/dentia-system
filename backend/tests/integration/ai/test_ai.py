@@ -54,7 +54,7 @@ async def _setup(client: AsyncClient, make_user, clinic, db_session: AsyncSessio
 
 
 def _fake_chat(actions: list[dict], unrecognized: list[dict] | None = None):
-    async def _chat(*, model, system_prompt, user_prompt, json_schema):
+    async def _chat(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
         content = json.dumps({"actions": actions, "unrecognized": unrecognized or []})
         return {"message": {"role": "assistant", "content": content}}
 
@@ -342,7 +342,7 @@ async def test_interpret_returns_503_when_ollama_unavailable(
 ) -> None:
     headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
 
-    async def _unavailable(*, model, system_prompt, user_prompt, json_schema):
+    async def _unavailable(*, model, system_prompt, user_prompt, json_schema, keep_alive=None):
         raise OllamaUnavailableError("sin conexion")
 
     monkeypatch.setattr(ollama_client, "chat", _unavailable)

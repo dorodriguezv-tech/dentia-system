@@ -126,6 +126,7 @@ async def interpret(
     encounter_id: uuid.UUID,
     transcript: str,
     actor_id: uuid.UUID,
+    keep_alive: float | str | None = None,
 ) -> tuple[list[AiSuggestion], list[UnrecognizedEntry]]:
     encounter = await _get_encounter_in_clinic(db, clinic_id=clinic_id, encounter_id=encounter_id)
     patient_id = encounter.patient_id
@@ -143,11 +144,15 @@ async def interpret(
     )
 
     try:
+        # `keep_alive` solo lo pasa la ruta de voz (Fase 13, 13.5): el
+        # dictado REST normal de esta misma Fase 8 lo deja en None (deja a
+        # Ollama con su idle timeout por defecto).
         response = await ollama_client.chat(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             json_schema=AiInterpretResult.model_json_schema(),
+            keep_alive=keep_alive,
         )
     except OllamaUnavailableError as exc:
         raise AppError(

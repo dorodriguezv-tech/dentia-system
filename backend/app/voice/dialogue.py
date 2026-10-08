@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import applier as ai_applier
 from app.ai import interpreter as ai_interpreter
 from app.ai.models import AiSuggestion
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.modules.agenda import rules as agenda_rules
 from app.modules.agenda import service as agenda_service
@@ -55,7 +56,7 @@ from app.modules.patients import service as patients_service
 from app.modules.patients.models import Patient
 from app.modules.records import service as records_service
 from app.modules.treatment import service as treatment_service
-from app.voice import datetime_parse, nlu_fast
+from app.voice import agenda_llm, datetime_parse, nlu_fast
 from app.voice.context import ScreenContext
 
 _RESOLVED_APPOINTMENT_STATUSES = {"CANCELADA", "NO_SHOW", "REPROGRAMADA"}
@@ -166,10 +167,10 @@ async def handle_order(
 ) -> DialogueResult:
     fast_match = nlu_fast.match(transcript)
     if fast_match is None:
-        # Ruta LLM (13.5, sec. 5 del diseno): solo para capturas clinicas con
-        # una atencion activa -- recepcion (sin voice.clinical) y cualquier
-        # pantalla sin atencion siguen cayendo directo en "no te entendi" (el
-        # esquema por pantalla/rol de agenda para la ruta LLM queda pendiente).
+        # Ruta LLM clinica (13.5, sec. 5 del diseno): solo con una atencion
+        # activa y `voice.clinical` -- reusa el esquema de 11 acciones de la
+        # Fase 8 (interpreter.py), que no varia por pantalla/rol (esquema
+        # dinamico por pantalla, sec. 5/6.3 del diseno, sigue pendiente).
         if has_clinical and active_encounter_id:
             llm_result = await _try_llm_fallback(
                 db,
@@ -180,6 +181,21 @@ async def handle_order(
             )
             if llm_result is not None:
                 return llm_result
+        # Ruta LLM de agenda (resto de 13.5, pendiente explicito de la sec.
+        # 5.20): disponible para CUALQUIERA con `voice.use` -- a diferencia
+        # de la clinica, no exige atencion activa ni `voice.clinical`, es
+        # justo lo que recepcion puede hacer por rol (igual que la agenda de
+        # la ruta rapida, C2 del doc 06). Se intenta despues de la clinica
+        # (nunca antes) para no desplazar un dictado clinico real.
+        agenda_llm_result = await _try_agenda_llm_fallback(
+            db,
+            clinic_id=clinic_id,
+            user_id=user_id,
+            transcript=transcript,
+            last_patient=last_patient,
+        )
+        if agenda_llm_result is not None:
+            return agenda_llm_result
         return DialogueResult(say=_UNRECOGNIZED_SAY)
 
     intent = fast_match.intent
@@ -1410,6 +1426,7 @@ async def _try_llm_fallback(
             encounter_id=uuid.UUID(encounter_id),
             transcript=stripped,
             actor_id=user_id,
+            keep_alive=get_settings().ollama_keep_alive,
         )
     except AppError:
         return None
@@ -1439,6 +1456,98 @@ async def _try_llm_fallback(
     )
 
 
+def _format_llm_time(time_text: str | None) -> str:
+    """El esquema de `agenda_llm.py` le pide al modelo solo el numero/hora
+    ("10", "10:30"), sin el prefijo "a las" -- `datetime_parse.
+    extract_time_of_day` siempre lo espera, igual que `nlu_fast._format_time_
+    text` para la ruta rapida."""
+    if not time_text:
+        return ""
+    normalized = time_text.strip().lower()
+    return normalized if normalized.startswith("a las") else f"a las {normalized}"
+
+
+async def _try_agenda_llm_fallback(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    user_id: uuid.UUID,
+    transcript: str,
+    last_patient: tuple[str, str] | None,
+) -> DialogueResult | None:
+    """Resto de 13.5 (pendiente explicito de la sec. 5.20): agenda por voz
+    con frase libre, para cuando `nlu_fast` no reconoce las anclas de
+    palabra clave de la ruta rapida (sec. C2 del doc 06). El esquema de
+    `agenda_llm.py` le pide al modelo que devuelva fecha/hora en el MISMO
+    formato de texto que ya entiende `datetime_parse.py` -- asi el resultado
+    se convierte en un `dict` de slots identico al de `nlu_fast.FastMatch` y
+    se reusan los MISMOS manejadores de la ruta rapida (preview, nivel de
+    confirmacion, `execute()`), sin duplicar logica de agenda."""
+    stripped = nlu_fast.strip_wake_word(transcript)
+    if not stripped:
+        return None
+
+    result = await agenda_llm.interpret_agenda_order(stripped)
+    if result is None or result.action is None:
+        return None
+    action = result.action
+
+    if isinstance(action, agenda_llm.AgendarCitaAction):
+        appointment_hint = _normalize_name(action.appointment_type_hint or "")
+        slots = {
+            "patient_query": _normalize_name(action.patient_name),
+            "date_text": action.date_text or "",
+            "time_text": _format_llm_time(action.time_text),
+            "provider_query": _normalize_name(action.provider_name or ""),
+            "full_text": f"{appointment_hint} {_normalize_name(stripped)}".strip(),
+        }
+        return await _handle_agendar_cita(db, clinic_id=clinic_id, user_id=user_id, slots=slots)
+    if isinstance(action, agenda_llm.ReprogramarCitaAction):
+        slots = {
+            "patient_query": _normalize_name(action.patient_name),
+            "date_text": action.date_text,
+            "time_text": _format_llm_time(action.time_text),
+        }
+        return await _handle_reprogramar_cita(db, clinic_id=clinic_id, user_id=user_id, slots=slots)
+    if isinstance(action, agenda_llm.ConfirmarCitaAction):
+        slots = {
+            "patient_query": _normalize_name(action.patient_name or ""),
+            "time_text": _format_llm_time(action.time_text),
+        }
+        return await _handle_confirmar_cita(db, clinic_id=clinic_id, user_id=user_id, slots=slots)
+    if isinstance(action, agenda_llm.RegistrarLlegadaAction):
+        slots = {"patient_query": _normalize_name(action.patient_name)}
+        return await _handle_registrar_llegada(
+            db, clinic_id=clinic_id, user_id=user_id, slots=slots
+        )
+    if isinstance(action, agenda_llm.CancelarCitaAction):
+        slots = {
+            "patient_query": _normalize_name(action.patient_name or ""),
+            "time_text": _format_llm_time(action.time_text),
+            "reason": action.reason,
+        }
+        return await _handle_cancelar_cita(db, clinic_id=clinic_id, user_id=user_id, slots=slots)
+    if isinstance(action, agenda_llm.NoShowAction):
+        slots = {"patient_query": _normalize_name(action.patient_name)}
+        return await _handle_no_show(db, clinic_id=clinic_id, user_id=user_id, slots=slots)
+    if isinstance(action, agenda_llm.ListaEsperaAction):
+        slots = {"patient_query": _normalize_name(action.patient_name or "")}
+        return await _handle_lista_espera(
+            db,
+            clinic_id=clinic_id,
+            user_id=user_id,
+            slots=slots,
+            last_patient=last_patient,
+        )
+    if isinstance(action, agenda_llm.HuecosLibresAction):
+        slots = {
+            "provider_query": _normalize_name(action.provider_name),
+            "date_text": action.date_text or "",
+        }
+        return await _handle_huecos_libres(db, clinic_id=clinic_id, slots=slots)
+    return None
+
+
 async def finish_dictation(
     db: AsyncSession,
     *,
@@ -1462,6 +1571,7 @@ async def finish_dictation(
         encounter_id=uuid.UUID(encounter_id),
         transcript=transcript,
         actor_id=user_id,
+        keep_alive=get_settings().ollama_keep_alive,
     )
     if not suggestions:
         return DialogueResult(say="No entendí ninguna propuesta de ese dictado.")

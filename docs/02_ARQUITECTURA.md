@@ -1375,17 +1375,19 @@ recepción puede hacer por rol), más la mitad clínica (`diagnostico`,
   `docs/PENDIENTES_CLINICOS.md` #42.
 
 ### 5.20 "Dentia" — 13.5 "Ruta LLM y dictado" (Fase 13, Parte C)
-Quinta etapa: cuando la ruta rápida (nlu_fast, sin LLM) no reconoce una orden,
-Dentia ya no se rinde directo con "no te entendí" — intenta la ruta LLM antes,
-reutilizando **el mismo intérprete de la Fase 8** (`app/ai/interpreter.py`:
-texto → Ollama → `AiSuggestion` validada contra catálogos reales) en vez de
-construir un esquema de voz aparte. También se implementó `modo_dictado`
-completo (sec. 4.2 del diseño).
+Quinta etapa, **completa**: cuando la ruta rápida (nlu_fast, sin LLM) no
+reconoce una orden, Dentia ya no se rinde directo con "no te entendí" —
+intenta la ruta LLM antes, con DOS esquemas fijos según el tipo de orden: el
+clínico, reutilizando **el mismo intérprete de la Fase 8**
+(`app/ai/interpreter.py`: texto → Ollama → `AiSuggestion` validada contra
+catálogos reales), y el de agenda (`app/voice/agenda_llm.py`, nuevo — ver
+abajo), en vez de construir un esquema de voz aparte para cada uno. También
+se implementó `modo_dictado` completo (sec. 4.2 del diseño).
 
-- **Una orden suelta (`dialogue.py::_try_llm_fallback`):** solo si hay una
-  atención activa y el usuario tiene `voice.clinical` (recepción y cualquier
-  pantalla sin consulta siguen cayendo directo en "no te entendí" — el
-  esquema de agenda para la ruta LLM queda pendiente). Si el intérprete
+- **Una orden suelta clínica (`dialogue.py::_try_llm_fallback`):** solo si
+  hay una atención activa y el usuario tiene `voice.clinical` (recepción y
+  cualquier pantalla sin consulta caen directo a la ruta LLM de agenda, ver
+  abajo). Si el intérprete
   devuelve **exactamente una** acción reconocida y nada sin reconocer, Dentia
   la convierte en una vista previa hablada (`_describe_action`, genérica por
   tipo de acción — el detalle completo queda en el panel de Propuestas) y
@@ -1420,21 +1422,53 @@ completo (sec. 4.2 del diseño).
   la ruta rápida no reconozca ahora sí puede llegar a intentar un Ollama
   real si no se mockea — un caso real apareció en la prueba de 20 hallazgos
   de 13.3 (el "gracias" de relleno) y tuvo que agregarse el mock ahí también.
+- **`app/voice/agenda_llm.py` (nuevo, resto de 13.5): ruta LLM de agenda por
+  frase libre.** Cuando `nlu_fast` no reconoce una orden de agenda porque no
+  calza con sus anclas de palabra clave ("con", "a las"...), se intenta una
+  vez con Ollama antes de rendirse — disponible para **cualquiera con
+  `voice.use`** (recepción incluida: a diferencia de la ruta LLM clínica, NO
+  exige `voice.clinical` ni atención activa, igual que la agenda de la ruta
+  rápida, C2 del doc 06). Esquema propio (`AgendaInterpretResult`, unión
+  discriminada de 8 acciones: `agendar_cita`, `reprogramar_cita`,
+  `confirmar_cita`, `registrar_llegada`, `cancelar_cita`, `no_show`,
+  `lista_espera`, `huecos_libres`) — deliberadamente NO le pide al modelo
+  que resuelva fecha/hora a un valor final: el esquema le pide devolverlas
+  en el MISMO formato de texto que ya entiende `datetime_parse.py` ("manana",
+  "el jueves", "10", "10:30"). Así, `dialogue.py::_try_agenda_llm_fallback`
+  convierte el resultado en un `dict` de slots **idéntico** al que ya
+  producen los regex de `nlu_fast.py`, y lo pasa por los MISMOS manejadores
+  (`_handle_agendar_cita`, etc.) que la ruta rápida — cero lógica de agenda
+  duplicada, mismo nivel de confirmación y mismo camino de ejecución.
+  `cancelar_cita` exige `reason` en el esquema (Pydantic): si Ollama no lo
+  manda, la validación falla y se trata igual que "no reconocí nada" (mismo
+  criterio que la ruta rápida, pendiente #43). `lista_espera.patient_name` es
+  el único campo opcional entre las 8 acciones — para el pronombre del
+  ejemplo del doc 06 ("agrégala a la lista de espera"), resuelto contra
+  `last_patient` igual que la ruta rápida. Se intenta **después** de la ruta
+  LLM clínica (nunca antes, para no desplazar un dictado clínico real) y no
+  requiere `model_digest` (no crea `AiSuggestion`: la agenda nunca pasó por
+  ahí, ver más arriba).
+- **`OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` (nuevo, sec. 8 del diseño):**
+  modelo e idle-timeout dedicados a la ruta LLM de voz — separados de
+  `OLLAMA_MODEL` (el de la Fase 8, dictado clínico completo) porque una
+  orden de agenda es corta y la intención ya viene acotada, no necesita el
+  modelo grande. `keep_alive` ahora es un parámetro opcional de
+  `ollama_client.chat`/`ai_interpreter.interpret` (`None` por quien no lo
+  pase, como el dictado REST normal de la Fase 8) — tanto `agenda_llm.py`
+  como la ruta LLM clínica de voz (`_try_llm_fallback`/`finish_dictation`)
+  lo pasan para evitar la espera de recarga del modelo en cada orden
+  durante una sesión de voz activa.
 - **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
-  - El esquema de intenciones **por pantalla y rol** que describe la sec. 5
-    del diseño (JSON Schema dinámico de Ollama limitado a lo permitido en la
-    pantalla actual) no se construyó — en su lugar, la ruta LLM reusa
-    directamente el esquema ya existente de acciones clínicas de la Fase 8,
-    que no varía por pantalla. Suficiente para esta etapa; no cubre agenda
-    ni otras intenciones no clínicas por voz libre.
+  - El esquema **dinámico por pantalla y rol** que describe la sec. 5/6.3
+    del diseño (un registro declarativo de intenciones del que se derivaría
+    el esquema permitido) no se construyó — en su lugar hay dos esquemas
+    FIJOS (el clínico de la Fase 8 y el nuevo de agenda), ninguno varía por
+    pantalla. Cubre bien los dos casos reales de hoy (dictado clínico y
+    agenda), pero una intención nueva fuera de esos dos universos seguiría
+    sin ruta LLM.
   - Vocabulario odontológico desde `docs/Diccionario_odontológico_2023.pdf`
     (C3 del doc 06: extracción de términos, `hotwords` de faster-whisper,
     corrección con `rapidfuzz`) no implementado todavía.
-  - `OLLAMA_KEEP_ALIVE`/`OLLAMA_INTENT_MODEL` (variables mencionadas en la
-    sec. 8 del diseño) no se agregaron — la ruta LLM de voz usa la misma
-    configuración de Ollama que ya tenía la Fase 8
-    (`ollama_model`/`ollama_timeout_s`), sin un modelo/`keep_alive` dedicado
-    para voz.
 
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
@@ -1485,7 +1519,7 @@ completo (sec. 4.2 del diseño).
 | 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
 | 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
 | 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
-| 13 (13.1–13.5) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**: agenda por voz de recepción — `agendar_cita`/`confirmar_cita`/`registrar_llegada`/`reprogramar_cita`/`huecos_libres`/`cancelar_cita`/`no_show`/`lista_espera`/`alta_rapida_paciente`, con propuesta real de horarios libres — y la mitad clínica — `diagnostico`/`procedimiento_planeado`/`procedimiento_realizado`) y 13.5 "Ruta LLM y dictado" (una orden suelta que la ruta rápida no reconoce intenta la ruta LLM reusando el intérprete de la Fase 8; `modo_dictado` completo; aviso "Un momento…") — ver secciones 5.16 a 5.20. Sin esquema LLM por pantalla/rol, vocabulario odontológico (C3) ni ajuste fino todavía (resto de 13.5, 13.6) | En curso |
+| 13 (13.1–13.5) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**: agenda por voz de recepción — `agendar_cita`/`confirmar_cita`/`registrar_llegada`/`reprogramar_cita`/`huecos_libres`/`cancelar_cita`/`no_show`/`lista_espera`/`alta_rapida_paciente`, con propuesta real de horarios libres — y la mitad clínica — `diagnostico`/`procedimiento_planeado`/`procedimiento_realizado`) y 13.5 "Ruta LLM y dictado" (**completa**: una orden suelta que la ruta rápida no reconoce intenta la ruta LLM clínica reusando el intérprete de la Fase 8, y si no, la ruta LLM de agenda — `app/voice/agenda_llm.py`, nuevo, disponible para recepción sin atención activa ni `voice.clinical` — antes de rendirse; `modo_dictado` completo; aviso "Un momento…"; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) — ver secciones 5.16 a 5.20. Sin esquema LLM dinámico por pantalla/rol (dos esquemas fijos alcanzan hoy), vocabulario odontológico (C3) ni ajuste fino todavía (13.6) | En curso |
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

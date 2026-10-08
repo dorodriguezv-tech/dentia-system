@@ -95,6 +95,8 @@ python -m piper.download_voices es_MX-claude-high --download-dir ../voices
 | `OLLAMA_URL` | `http://localhost:11434` | dirección del servidor Ollama local |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | modelo usado para interpretar el dictado |
 | `OLLAMA_TIMEOUT_S` | `120` | tiempo máximo de espera a Ollama |
+| `OLLAMA_INTENT_MODEL` | `qwen2.5:7b` | modelo dedicado a la ruta LLM de voz de Dentia (agenda por frase libre, Fase 13.5) — separado de `OLLAMA_MODEL` porque una orden de agenda es corta y no necesita el modelo grande; `qwen2.5:3b` en equipos sin GPU |
+| `OLLAMA_KEEP_ALIVE` | `-1` | cuánto mantiene Ollama el modelo cargado en memoria tras cada orden de voz (`-1` = indefinido) — evita la espera de recarga en cada orden durante una sesión activa |
 | `WHISPER_MODEL` | `small` | tamaño del modelo de transcripción (`faster-whisper`) |
 | `WHISPER_DEVICE` | `cpu` | `cpu` o `cuda` si hay GPU disponible |
 | `WHISPER_COMPUTE_TYPE` | `int8` | precisión de cómputo de Whisper |

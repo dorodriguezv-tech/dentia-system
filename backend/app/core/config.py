@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     ollama_timeout_s: int = 120
+    # Fase 13 (Dentia, 13.5 "Ruta LLM y dictado", sec. 8 del diseno): modelo e
+    # idle timeout DEDICADOS a la ruta LLM de voz (agenda por frase libre,
+    # app/voice/agenda_llm.py) -- separados de `ollama_model` (el de la
+    # Fase 8, para dictado clinico completo) porque una orden de agenda es
+    # corta y la intencion ya viene acotada: no necesita el modelo grande.
+    # keep_alive=-1 evita la espera de recarga del modelo en cada orden
+    # (sec. 8: "Mantener cargado").
+    ollama_intent_model: str = "qwen2.5:7b"
+    ollama_keep_alive: float = -1
     whisper_model: str = "small"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
