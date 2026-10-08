@@ -67,3 +67,8 @@ export interface VoiceContextMessage {
 export interface VoiceFakeWakeMessage {
   type: 'fake_wake'
 }
+
+export interface VoiceFakeOrderMessage {
+  type: 'fake_order'
+  text: string
+}

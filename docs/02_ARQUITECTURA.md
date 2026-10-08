@@ -1466,9 +1466,90 @@ se implementó `modo_dictado` completo (sec. 4.2 del diseño).
     pantalla. Cubre bien los dos casos reales de hoy (dictado clínico y
     agenda), pero una intención nueva fuera de esos dos universos seguiría
     sin ruta LLM.
-  - Vocabulario odontológico desde `docs/Diccionario_odontológico_2023.pdf`
-    (C3 del doc 06: extracción de términos, `hotwords` de faster-whisper,
-    corrección con `rapidfuzz`) no implementado todavía.
+
+### 5.21 "Dentia" — C3 "Vocabulario odontológico" y resto de 13.6 "Afinación" (Fase 13, Parte C)
+C3 (extracción del vocabulario) y la parte de 13.6 que SÍ se puede hacer sin
+grabar audio real: corpus de regresión + script de evaluación de la ruta
+rápida, y un E2E con `VOICE_FAKE_MODE` de punta a punta por un navegador
+real. Las partes de 13.6 que de verdad necesitan audio real (pruebas de
+ruido, entrenamiento de un modelo propio de palabra de activación) **no se
+hicieron** — ver el pendiente #49 de `docs/PENDIENTES_CLINICOS.md`: ninguna
+herramienta de código puede generar esas grabaciones de forma honesta.
+
+- **`app/ai/vocab/build.py` (nuevo, C3):** `python -m app.ai.vocab.build
+  --source ../docs/Diccionario_odontológico_2023.pdf` extrae ~1100 términos
+  del diccionario (166 páginas) hacia `terminos_dentales.txt`/`.json`
+  (término → categoría, cuando el diccionario trae un paréntesis que no es
+  una remisión "Ver X"). No es un analizador de diccionarios perfecto
+  (deliberado, ver docstring del módulo): el objetivo es vocabulario para
+  Whisper/`rapidfuzz`, no una base lexica — un puñado de remisiones o
+  nombres de la bibliografía coladas es inofensivo. Dos bugs reales
+  corregidos probando esto: (1) la palabra normal "bibliografía" dentro de
+  una oración activaba el corte de la sección de bibliografía (se corrigió
+  exigiendo el encabezado ESPACIADO letra por letra, "B I B L I O G R A F I
+  A", que es como aparece tipografiado ahí); (2) una letra sola en su propio
+  renglón (divisor alfabético de sección, p.ej. "B") se fusionaba con la
+  entrada siguiente si el separador de sinónimos permitía saltos de línea —
+  "BANDAS" se perdía por completo (se corrigió sin permitir `\n` ahí). Si el
+  PDF no tiene suficiente texto extraíble (probablemente escaneado), avisa y
+  no escribe nada — nunca inventa un vocabulario.
+- **`app/ai/vocab/terms.py` (nuevo):** combina DOS fuentes — el diccionario
+  externo y las ETIQUETAS (no los códigos) de los catálogos clínicos FIJOS
+  del sistema (`FINDING_CATALOG`, `DIAGNOSIS_CATALOG`). Necesario porque el
+  diccionario externo no trae todo: "pulpitis reversible" (el ejemplo
+  literal del diseño, sec. 3 del doc 05) no es una entrada del PDF, sino una
+  etiqueta de `app/modules/diagnosis/rules.py`. Los catálogos
+  ADMINISTRABLES por sucursal (B1) quedan fuera — exigirían pasar
+  `clinic_id`/pantalla a `stt.py`, que hoy son funciones puras sobre audio
+  (pendiente #47).
+- **`app/ai/vocab/correct.py` (nuevo):** corrige la transcripción contra el
+  vocabulario combinado con `rapidfuzz` — el ejemplo literal del diseño
+  ("pulpitis reversibe" → "pulpitis reversible") ya funciona. Revisa pares
+  de palabras consecutivas (frases de dos palabras del vocabulario) ANTES
+  que palabras sueltas, pero en bolsas separadas a propósito: un par nunca
+  se compara contra un término de una sola palabra. Bug real encontrado
+  probando esto: sin esa separación, "endodoncia en" calzaba por pura
+  casualidad contra "endodoncia" sola (alta similitud: casi todos los
+  caracteres coinciden) y SE TRAGABA la palabra "en" completa. Umbral alto
+  (85) y largo mínimo (5) a propósito: conservador, para no "corregir" una
+  palabra común del español por un término técnico parecido.
+  `app/ai/stt.py::transcribe()`/`transcribe_pcm16()` ya llaman a esto
+  despues de transcribir, y pasan el vocabulario combinado completo como
+  `hotwords` de faster-whisper (sin el límite de ~224 tokens de
+  `initial_prompt`, que sigue siendo el `DENTAL_VOCABULARY` corto de
+  siempre).
+- **`tests/voice/commands.jsonl` + `app/voice/eval.py` (nuevo, resto de
+  13.6):** 168 frases clínicas + 66 de recepción (supera el ≥150/≥60 del
+  doc 06) generadas validando cada una contra `nlu_fast.match` de verdad
+  (`python -m app.voice.eval` imprime el % por rol/intención); también
+  corre dentro de `pytest` (`test_eval_corpus.py`, parametrizado por
+  frase) como regresión continua. Da 100% porque el corpus se construyó así
+  a propósito — no es una medición independiente de qué tan bien entiende
+  Dentia una orden real dicha con palabras propias (pendiente #48).
+- **`e2e/tests/voice.spec.ts` (nuevo):** primer E2E de Dentia, contra el
+  frontend real en un navegador real (no solo el backend vía WebSocket de
+  prueba, que ya cubrían las pruebas de integración de 13.1-13.5).
+  `window.__dentiaTestSend` (nuevo, `useVoiceSession.ts`) es el único gancho
+  que se agregó al frontend — nunca existe en producción
+  (`import.meta.env.MODE !== 'production'`), y manda `fake_wake`/`fake_order`
+  al WebSocket real de la sesión, igual que ya hacían las pruebas de
+  integración del backend. `playwright.config.ts` arranca el backend de E2E
+  con `VOICE_FAKE_MODE=true` (mismo patrón que `AI_FAKE_MODE`) y una
+  ventana de seguimiento generosa (8 s, no los 8 s de producción por
+  casualidad sino para que Playwright alcance a comprobar el estado antes
+  de que la sesión vuelva sola a pasivo). Deliberadamente NO comprueba el
+  estado intermedio "awake": el servidor manda awake/speaking/listening en
+  una ráfaga casi instantánea (sin audio real que sintetizar) y Playwright
+  podría no alcanzar a verlo entre un sondeo del DOM y el siguiente — habría
+  sido una prueba inestable sin aportar nada que el resto no confirme ya.
+- **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
+  - #46: licencia del diccionario (material de terceros) sin confirmar.
+  - #47: vocabulario por contexto dinámico (pantalla/catálogos de sucursal/
+    pacientes del día) no implementado — solo el vocabulario fijo.
+  - #48: el corpus de 13.6 es autovalidado, no una medición independiente.
+  - #49: pruebas de ruido real y entrenamiento de un modelo propio de
+    palabra de activación — **bloqueado**, necesita grabaciones reales de
+    la clínica que no existen todavía.
 
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
@@ -1519,7 +1600,7 @@ se implementó `modo_dictado` completo (sec. 4.2 del diseño).
 | 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
 | 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
 | 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
-| 13 (13.1–13.5) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**: agenda por voz de recepción — `agendar_cita`/`confirmar_cita`/`registrar_llegada`/`reprogramar_cita`/`huecos_libres`/`cancelar_cita`/`no_show`/`lista_espera`/`alta_rapida_paciente`, con propuesta real de horarios libres — y la mitad clínica — `diagnostico`/`procedimiento_planeado`/`procedimiento_realizado`) y 13.5 "Ruta LLM y dictado" (**completa**: una orden suelta que la ruta rápida no reconoce intenta la ruta LLM clínica reusando el intérprete de la Fase 8, y si no, la ruta LLM de agenda — `app/voice/agenda_llm.py`, nuevo, disponible para recepción sin atención activa ni `voice.clinical` — antes de rendirse; `modo_dictado` completo; aviso "Un momento…"; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) — ver secciones 5.16 a 5.20. Sin esquema LLM dinámico por pantalla/rol (dos esquemas fijos alcanzan hoy), vocabulario odontológico (C3) ni ajuste fino todavía (13.6) | En curso |
+| 13 (13.1–13.5, C3) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**), 13.5 "Ruta LLM y dictado" (**completa**: ruta LLM clínica + ruta LLM de agenda — `app/voice/agenda_llm.py` — antes de rendirse; `modo_dictado`; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) y C3 "Vocabulario odontológico" (**completo**: `app/ai/vocab/build.py` extrae ~1100 términos del diccionario + catálogos clínicos fijos hacia `hotwords`/corrección con `rapidfuzz` de `app/ai/stt.py`) — ver secciones 5.16 a 5.21. De 13.6 "Afinación": corpus de regresión (`tests/voice/commands.jsonl`, `app/voice/eval.py`) y primer E2E de voz (`e2e/tests/voice.spec.ts`, `VOICE_FAKE_MODE`) **hechos**; pruebas con audio con ruido real y entrenamiento de un modelo propio de palabra de activación **bloqueados** (necesitan grabaciones reales de la clínica que no existen — ver `docs/PENDIENTES_CLINICOS.md` #49); esquema LLM dinámico por pantalla/rol y vocabulario por contexto (pantalla/catálogos de sucursal/pacientes del día, #47) tampoco | En curso |
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

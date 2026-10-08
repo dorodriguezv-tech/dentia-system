@@ -48,6 +48,17 @@ export default defineConfig({
       timeout: 60_000,
       env: {
         AI_FAKE_MODE: 'true',
+        // Fase 13.6 "Afinacion": mismo patron que AI_FAKE_MODE -- sin audio/
+        // modelos reales, voice.spec.ts dispara "fake_wake"/"fake_order" por
+        // el WebSocket real (ver window.__dentiaTestSend en
+        // useVoiceSession.ts). Cuenta regresiva/seguimiento cortas para que
+        // la prueba no tenga que esperar los 3 s/8 s reales de produccion.
+        VOICE_FAKE_MODE: 'true',
+        VOICE_CAPTURE_COUNTDOWN_S: '0.1',
+        // Generoso (no 0.5 s) a proposito: voice.spec.ts necesita una ventana
+        // real para que Playwright alcance a comprobar el estado "listening"
+        // antes de que la sesion vuelva sola a pasivo.
+        VOICE_FOLLOWUP_S: '8',
         // Sin esto, el backend solo acepta CORS desde :5174 (la lista blanca de
         // backend/app/core/config.py, estricta a proposito -- CLAUDE.md sec. 5) y
         // el navegador bloquea en silencio toda peticion del frontend E2E en :5185

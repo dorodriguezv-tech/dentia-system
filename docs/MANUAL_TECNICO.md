@@ -130,11 +130,18 @@ python -m piper.download_voices es_MX-claude-high --download-dir ../voices
 
 ```bash
 # Backend (desde backend/, con el entorno virtual activo)
-pytest                      # 298 pruebas (unitarias + integración)
+pytest                      # ~790 pruebas (unitarias + integración)
 ruff check app tests
 black --check app tests
 mypy app                    # modo estricto en app/
 pip-audit -r requirements.txt   # dependencias vulnerables
+
+# Vocabulario odontológico de Dentia (Fase 13, C3) -- regenera
+# app/ai/vocab/terminos_dentales.txt/.json desde el diccionario en PDF.
+python -m app.ai.vocab.build --source ../docs/Diccionario_odontológico_2023.pdf
+# Mide la ruta rápida (nlu_fast, sin LLM) contra tests/voice/commands.jsonl
+# (Fase 13.6): >= 90% de intención correcta es el criterio de aceptación.
+python -m app.voice.eval
 
 # Frontend (desde frontend/)
 npm run test
@@ -143,7 +150,7 @@ npm run build
 npm audit
 
 # E2E (desde e2e/, levanta backend+frontend solos)
-npx playwright test                              # flujo completo + accesibilidad + rendimiento
+npx playwright test                              # flujo completo + accesibilidad + rendimiento + Dentia (VOICE_FAKE_MODE)
 CAPTURE_SCREENSHOTS=1 npx playwright test tests/manual-capture.spec.ts   # regenerar docs/manual/*.png
 ```
 

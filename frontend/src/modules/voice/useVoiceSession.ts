@@ -13,6 +13,16 @@ import type { VoiceServerMessage } from './types'
 const CHANNEL_NAME = 'dentia-voice'
 const LEADER_ELECTION_WINDOW_MS = 200
 
+declare global {
+  interface Window {
+    // Fase 13.6 "Afinacion" (docs/06... C4): unico gancho para que un E2E de
+    // Playwright controle una sesion de voz real con VOICE_FAKE_MODE=true
+    // (manda {type:'fake_wake'}/{type:'fake_order', text}, ver
+    // backend/app/voice/session.py) -- nunca existe en produccion.
+    __dentiaTestSend?: (payload: unknown) => void
+  }
+}
+
 type BroadcastPayload =
   | { type: 'claim'; tabId: string }
   | { type: 'leader'; tabId: string }
@@ -125,6 +135,9 @@ export function useVoiceSession(deps: UseVoiceSessionDeps = {}): {
         onMessage: handleMessage,
         onClose: () => setState('disconnected'),
       })
+      if (import.meta.env.MODE !== 'production') {
+        window.__dentiaTestSend = (payload) => connectionRef.current?.send(payload)
+      }
       channel.postMessage({ type: 'leader', tabId } satisfies BroadcastPayload)
     }
 
@@ -137,6 +150,7 @@ export function useVoiceSession(deps: UseVoiceSessionDeps = {}): {
       captureRef.current = null
       capturingRef.current = false
       stopSpeaking()
+      if (window.__dentiaTestSend) window.__dentiaTestSend = undefined
     }
 
     channel.onmessage = (event: MessageEvent<BroadcastPayload>) => {

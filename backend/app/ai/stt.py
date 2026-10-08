@@ -10,16 +10,30 @@ import io
 import numpy as np
 from faster_whisper import WhisperModel
 
+from app.ai.vocab import correct as vocab_correct
+from app.ai.vocab import terms as vocab_terms
 from app.core.config import get_settings
 
 # Vocabulario dental para initial_prompt (docs sec. 3): ayuda a whisper a reconocer
-# terminos clinicos poco comunes en espanol general.
+# terminos clinicos poco comunes en espanol general. Deliberadamente corto (el limite
+# de initial_prompt es de ~224 tokens, sec. 3 del doc 05) -- el vocabulario completo
+# (diccionario externo + catalogos clinicos, C3 del doc 06) va por `hotwords` en vez,
+# que no tiene ese limite, y por `vocab_correct.correct_transcript` despues.
 DENTAL_VOCABULARY = (
     "oclusal, mesial, distal, vestibular, bucal, lingual, palatino, incisal, "
     "caries, resina, amalgama, endodoncia, corona, pulpitis, periodontitis, "
     "gingivitis, absceso periapical, necrosis pulpar, edentulismo, maloclusion, "
     "ortodoncia, protesis, implante, sellador, extraccion, organo dentario, FDI."
 )
+
+
+def _hotwords() -> str:
+    return " ".join(vocab_terms.combined_vocabulary())
+
+
+def _correct(text: str) -> str:
+    return vocab_correct.correct_transcript(text, vocab_terms.combined_vocabulary())
+
 
 _model: WhisperModel | None = None
 
@@ -45,8 +59,10 @@ def transcribe(audio_bytes: bytes) -> str:
         language="es",
         vad_filter=True,
         initial_prompt=DENTAL_VOCABULARY,
+        hotwords=_hotwords(),
     )
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    return _correct(text)
 
 
 def transcribe_pcm16(audio: np.ndarray) -> str:
@@ -60,5 +76,7 @@ def transcribe_pcm16(audio: np.ndarray) -> str:
         language="es",
         vad_filter=True,
         initial_prompt=DENTAL_VOCABULARY,
+        hotwords=_hotwords(),
     )
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    return _correct(text)

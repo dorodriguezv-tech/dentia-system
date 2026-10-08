@@ -1,0 +1,234 @@
+{"transcript": "Dentia, ayuda", "role": "clinica", "expected_intent": "ayuda"}
+{"transcript": "Dentia, ayudame", "role": "clinica", "expected_intent": "ayuda"}
+{"transcript": "Dentia, que puedo decir", "role": "clinica", "expected_intent": "ayuda"}
+{"transcript": "Dentia, que sabes hacer", "role": "clinica", "expected_intent": "ayuda"}
+{"transcript": "Dentia, repite", "role": "clinica", "expected_intent": "repetir"}
+{"transcript": "Dentia, repetir", "role": "clinica", "expected_intent": "repetir"}
+{"transcript": "Dentia, que dijiste", "role": "clinica", "expected_intent": "repetir"}
+{"transcript": "Dentia, como", "role": "clinica", "expected_intent": "repetir"}
+{"transcript": "Dentia, perdon", "role": "clinica", "expected_intent": "repetir"}
+{"transcript": "Dentia, silencio", "role": "clinica", "expected_intent": "silencio"}
+{"transcript": "Dentia, calla", "role": "clinica", "expected_intent": "silencio"}
+{"transcript": "Dentia, callate", "role": "clinica", "expected_intent": "silencio"}
+{"transcript": "Dentia, guarda silencio", "role": "clinica", "expected_intent": "silencio"}
+{"transcript": "Dentia, deja de escuchar", "role": "clinica", "expected_intent": "silencio"}
+{"transcript": "Dentia, deshaz", "role": "clinica", "expected_intent": "deshacer"}
+{"transcript": "Dentia, deshazlo", "role": "clinica", "expected_intent": "deshacer"}
+{"transcript": "Dentia, deshacer", "role": "clinica", "expected_intent": "deshacer"}
+{"transcript": "Dentia, quita lo ultimo", "role": "clinica", "expected_intent": "deshacer"}
+{"transcript": "Dentia, deshaz eso", "role": "clinica", "expected_intent": "deshacer"}
+{"transcript": "Dentia, inicia la consulta", "role": "clinica", "expected_intent": "iniciar_consulta"}
+{"transcript": "Dentia, iniciar la consulta", "role": "clinica", "expected_intent": "iniciar_consulta"}
+{"transcript": "Dentia, empieza la atencion", "role": "clinica", "expected_intent": "iniciar_consulta"}
+{"transcript": "Dentia, comienza la consulta", "role": "clinica", "expected_intent": "iniciar_consulta"}
+{"transcript": "Dentia, empezar atencion", "role": "clinica", "expected_intent": "iniciar_consulta"}
+{"transcript": "Dentia, dictado", "role": "clinica", "expected_intent": "modo_dictado"}
+{"transcript": "Dentia, modo dictado", "role": "clinica", "expected_intent": "modo_dictado"}
+{"transcript": "Dentia, inicia el dictado", "role": "clinica", "expected_intent": "modo_dictado"}
+{"transcript": "Dentia, empieza el dictado", "role": "clinica", "expected_intent": "modo_dictado"}
+{"transcript": "Dentia, ve a la agenda", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, abre el odontograma", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, abre el expediente", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, muestra los tratamientos", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, ve a imagenes", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, ve a inicio", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, ve a pacientes", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, abre consentimientos", "role": "clinica", "expected_intent": "ir_a"}
+{"transcript": "Dentia, abre el expediente de Maria Lopez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, busca a Maria Lopez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, abre el expediente de Juan Perez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, busca a Juan Perez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, abre el expediente de Pedro Sanchez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, busca a Pedro Sanchez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, abre el expediente de Ana Garcia", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, busca a Ana Garcia", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, abre el expediente de Luis Martinez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, busca a Luis Martinez", "role": "clinica", "expected_intent": "abrir_expediente"}
+{"transcript": "Dentia, que alergias tiene", "role": "clinica", "expected_intent": "leer_alertas"}
+{"transcript": "Dentia, dime las alertas", "role": "clinica", "expected_intent": "leer_alertas"}
+{"transcript": "Dentia, cuales alergias hay", "role": "clinica", "expected_intent": "leer_alertas"}
+{"transcript": "Dentia, tiene alergias", "role": "clinica", "expected_intent": "leer_alertas"}
+{"transcript": "Dentia, que citas tengo hoy", "role": "clinica", "expected_intent": "citas_hoy"}
+{"transcript": "Dentia, cuantas citas hay hoy", "role": "clinica", "expected_intent": "citas_hoy"}
+{"transcript": "Dentia, quien sigue", "role": "clinica", "expected_intent": "citas_hoy"}
+{"transcript": "Dentia, que citas tengo", "role": "clinica", "expected_intent": "citas_hoy"}
+{"transcript": "Dentia, la 11 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 11 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 11 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 11 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 11 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 11 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 16 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 21 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 24 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 36 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 38 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 41 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 46 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 48 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 26 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 34 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 caries", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 sana", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 resina", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 corona", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 endodoncia", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, la 18 ausente", "role": "clinica", "expected_intent": "hallazgo"}
+{"transcript": "Dentia, pon un diagnostico de pulpitis reversible en la 36", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de caries profunda", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de gingivitis generalizada", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de absceso periapical en la 36", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de bruxismo", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de pulpitis reversible en la 46", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de caries profunda", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de gingivitis generalizada", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de absceso periapical en la 46", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de bruxismo", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de pulpitis reversible en la 16", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de caries profunda", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de gingivitis generalizada", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de absceso periapical en la 16", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de bruxismo", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de pulpitis reversible en la 26", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de caries profunda", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de gingivitis generalizada", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de absceso periapical en la 26", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, pon un diagnostico de bruxismo", "role": "clinica", "expected_intent": "diagnostico"}
+{"transcript": "Dentia, planea una resina en la 36", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una resina en la 36", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una limpieza en la 36", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una limpieza en la 36", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una corona en la 36", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una corona en la 36", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una resina en la 46", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una resina en la 46", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una limpieza en la 46", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una limpieza en la 46", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una corona en la 46", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una corona en la 46", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una resina en la 16", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una resina en la 16", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una limpieza en la 16", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una limpieza en la 16", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, planea una corona en la 16", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, hice una corona en la 16", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, procedimiento planeado limpieza", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, termine la endodoncia en la 36", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, procedimiento realizado limpieza", "role": "clinica", "expected_intent": "procedimiento_realizado"}
+{"transcript": "Dentia, agrega al plan una corona en la 46", "role": "clinica", "expected_intent": "procedimiento_planeado"}
+{"transcript": "Dentia, agenda a Maria Lopez el lunes a las 12 con Patricia Nadar", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Juan Perez en 3 dias a las 10 con Mario Gomez", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Pedro Sanchez en 3 dias a las 12 con Mario Gomez", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Ana Garcia el lunes a las 11 con Laura Ruiz", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Luis Martinez el jueves a las 4 con Patricia Nadar", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Laura Ruiz manana a las 11 con Laura Ruiz", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Carlos Flores el viernes a las 9 con Mario Gomez", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Sofia Torres el jueves a las 10 con Laura Ruiz", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Jose Hernandez hoy a las 12 con Mario Gomez", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, agenda a Rosa Dominguez manana a las 9 con Laura Ruiz", "role": "recepcion", "expected_intent": "agendar_cita"}
+{"transcript": "Dentia, mueve la cita de Maria Lopez al en 3 dias", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Maria Lopez el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, mueve la cita de Juan Perez al manana", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Juan Perez el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, mueve la cita de Pedro Sanchez al manana", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Pedro Sanchez el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, mueve la cita de Ana Garcia al en 3 dias", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Ana Garcia el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, mueve la cita de Luis Martinez al viernes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Luis Martinez el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, mueve la cita de Laura Ruiz al hoy", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, reprograma la cita de Laura Ruiz el lunes", "role": "recepcion", "expected_intent": "reprogramar_cita"}
+{"transcript": "Dentia, confirma la cita de Maria Lopez", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de Juan Perez", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de Pedro Sanchez", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de Ana Garcia", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de Luis Martinez", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de Laura Ruiz", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de las 10", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, confirma la cita de las 11", "role": "recepcion", "expected_intent": "confirmar_cita"}
+{"transcript": "Dentia, llego Maria Lopez", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, llego Juan Perez", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, llego Pedro Sanchez", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, llego Ana Garcia", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, llego Luis Martinez", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, llego Laura Ruiz", "role": "recepcion", "expected_intent": "registrar_llegada"}
+{"transcript": "Dentia, que horarios libres tiene Laura Ruiz", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, que horarios libres tiene Mario Gomez", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, que horarios libres tiene Patricia Nadar", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, que horarios libres tiene Sergio Castillo", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, cuando hay espacio con Laura Ruiz esta semana", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, hay espacio con Mario Gomez manana", "role": "recepcion", "expected_intent": "huecos_libres"}
+{"transcript": "Dentia, cancela la cita de Maria Lopez, motivo enfermedad", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, cancela la cita de Juan Perez, motivo enfermedad", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, cancela la cita de Pedro Sanchez, motivo enfermedad", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, cancela la cita de Ana Garcia, motivo enfermedad", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, cancela la cita de Luis Martinez, motivo enfermedad", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, cancela la cita de las 12, motivo viaje", "role": "recepcion", "expected_intent": "cancelar_cita"}
+{"transcript": "Dentia, no se presento Maria Lopez", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, no se presento Juan Perez", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, no se presento Pedro Sanchez", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, no se presento Ana Garcia", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, no se presento Luis Martinez", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, Juan Perez no llego", "role": "recepcion", "expected_intent": "no_show"}
+{"transcript": "Dentia, agrega a Maria Lopez a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, agrega a Juan Perez a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, agrega a Pedro Sanchez a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, agrega a Ana Garcia a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, agrega a Luis Martinez a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, agregala a la lista de espera", "role": "recepcion", "expected_intent": "lista_espera"}
+{"transcript": "Dentia, registra paciente nuevo Pedro Sanchez", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}
+{"transcript": "Dentia, registra paciente nuevo Ana Garcia", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}
+{"transcript": "Dentia, registra paciente nuevo Luis Martinez", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}
+{"transcript": "Dentia, registra paciente nuevo Rosa Dominguez", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}
+{"transcript": "Dentia, nuevo paciente Carlos Flores", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}
+{"transcript": "Dentia, registra paciente nuevo Sofia Torres, telefono 5551234567", "role": "recepcion", "expected_intent": "alta_rapida_paciente"}

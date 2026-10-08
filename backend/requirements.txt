@@ -38,6 +38,10 @@ av==13.1.0
 # modelo de voz (es_MX-claude-high, ~63 MB) se descarga con
 # `python -m piper.download_voices es_MX-claude-high --download-dir ../voices`,
 # no se versiona (ver .gitignore y docs/PENDIENTES_CLINICOS.md).
+# Fase 13, C3 del doc 06: vocabulario odontologico desde un PDF
+# (app/ai/vocab/build.py) y correccion de la transcripcion (app/ai/vocab/correct.py).
+pdfplumber==0.11.10
+rapidfuzz==3.14.6
 piper-tts==1.8.0
 # Zona horaria configurable por sucursal (Clinic.timezone, bug #42 de
 # docs/PENDIENTES_CLINICOS.md): zoneinfo (stdlib) necesita esta base de datos
