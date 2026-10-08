@@ -1,5 +1,15 @@
 """Reglas de negocio de IAM, aisladas de la base de datos para poder probarlas directo."""
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+# Zona horaria por defecto de una sucursal nueva (bug #42 de
+# docs/PENDIENTES_CLINICOS.md: "hoy" debe calcularse con la hora LOCAL de la
+# sucursal, nunca con la del servidor). Configurable por sucursal
+# (`Clinic.timezone`, editable por `admin_clinica` -- B1, Fase 12.2); este es
+# solo el valor por defecto razonable para una clinica mexicana (CLAUDE.md
+# sec. 1), a validar con cada clinica real si opera en otra zona horaria.
+DEFAULT_CLINIC_TIMEZONE = "America/Mexico_City"
+
 ROLE_CODES = (
     "superadmin",
     "admin_clinica",
@@ -35,3 +45,11 @@ def can_disable_mfa(role_code: str) -> bool:
 
 def is_login_rate_limited(recent_failed_attempts: int) -> bool:
     return recent_failed_attempts >= MAX_LOGIN_FAILURES
+
+
+def is_valid_timezone(tz_name: str) -> bool:
+    try:
+        ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    return True

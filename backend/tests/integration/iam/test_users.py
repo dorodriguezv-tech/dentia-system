@@ -266,6 +266,50 @@ async def test_admin_can_edit_their_own_clinics_contact_info(
     assert response.json()["name"] == clinic.name
 
 
+async def test_clinic_has_a_default_timezone(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    """Bug #42 de docs/PENDIENTES_CLINICOS.md: una sucursal nueva ya trae una
+    zona horaria razonable (Mexico), sin que haga falta configurarla a mano."""
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+    response = await client.patch("/api/v1/clinics/current", headers=headers, json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["timezone"] == "America/Mexico_City"
+
+
+async def test_admin_can_change_the_clinic_timezone(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+    response = await client.patch(
+        "/api/v1/clinics/current", headers=headers, json={"timezone": "America/Tijuana"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["timezone"] == "America/Tijuana"
+
+
+async def test_updating_the_clinic_with_an_invalid_timezone_is_rejected(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+    response = await client.patch(
+        "/api/v1/clinics/current", headers=headers, json={"timezone": "No/Existe"}
+    )
+    assert response.status_code == 422
+
+
 async def test_non_admin_cannot_edit_the_clinic(
     client: AsyncClient, make_user, clinic: Clinic
 ) -> None:

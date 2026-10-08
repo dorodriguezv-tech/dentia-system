@@ -19,12 +19,16 @@ export interface ClinicOut {
   // obligar a cada fixture de prueba que ya construye un MyClinicOut a incluirlos.
   address?: string | null
   phone?: string | null
+  // Bug #42 de docs/PENDIENTES_CLINICOS.md: zona horaria IANA de la sucursal,
+  // usada por el backend para calcular "hoy" en citas/atenciones.
+  timezone?: string
 }
 
 export interface ClinicUpdateInput {
   name?: string
   address?: string
   phone?: string
+  timezone?: string
 }
 
 export interface MyClinicOut {

@@ -523,9 +523,14 @@ function ClinicSection() {
   const [name, setName] = useState(activeClinic?.clinic.name ?? '')
   const [address, setAddress] = useState(activeClinic?.clinic.address ?? '')
   const [phone, setPhone] = useState(activeClinic?.clinic.phone ?? '')
+  // Bug #42 de docs/PENDIENTES_CLINICOS.md: de que zona horaria es "hoy" para
+  // las citas/atenciones de esta sucursal -- el backend valida que sea un
+  // nombre IANA real (zoneinfo), el <datalist> solo sugiere las mas
+  // frecuentes para una clinica en Mexico, sin impedir escribir otra.
+  const [timezone, setTimezone] = useState(activeClinic?.clinic.timezone ?? 'America/Mexico_City')
 
   const updateMutation = useMutation({
-    mutationFn: () => authApi.updateCurrentClinic({ name, address, phone }),
+    mutationFn: () => authApi.updateCurrentClinic({ name, address, phone, timezone }),
     onSuccess: () => {
       // El nombre de la sucursal se muestra en el menu lateral (useAuthStore.clinics,
       // un store de Zustand, no de TanStack Query) -- hay que recargarlo ahi para
@@ -568,16 +573,34 @@ function ClinicSection() {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
+        <label htmlFor="clinic-timezone">Zona horaria</label>
+        <input
+          id="clinic-timezone"
+          type="text"
+          list="clinic-timezone-options"
+          required
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+        />
+        <datalist id="clinic-timezone-options">
+          <option value="America/Mexico_City">Ciudad de Mexico (centro)</option>
+          <option value="America/Tijuana">Tijuana (pacifico)</option>
+          <option value="America/Hermosillo">Hermosillo (sin horario de verano)</option>
+          <option value="America/Chihuahua">Chihuahua</option>
+          <option value="America/Cancun">Cancun (este)</option>
+        </datalist>
         <button
           className={styles.primaryButton}
           type="submit"
-          disabled={!name.trim() || updateMutation.isPending}
+          disabled={!name.trim() || !timezone.trim() || updateMutation.isPending}
         >
           {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
         </button>
       </form>
       {updateMutation.isSuccess && <p>Datos actualizados.</p>}
-      {updateMutation.isError && <div className={styles.errorBox}>No se pudieron guardar los datos.</div>}
+      {updateMutation.isError && (
+        <div className={styles.errorBox}>No se pudieron guardar los datos.</div>
+      )}
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.validators import Email
+from app.modules.iam.rules import is_valid_timezone
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +29,7 @@ class ClinicOut(BaseModel):
     name: str
     address: str | None = None
     phone: str | None = None
+    timezone: str
 
     model_config = {"from_attributes": True}
 
@@ -43,6 +45,18 @@ class ClinicUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     address: str | None = Field(default=None, max_length=300)
     phone: str | None = Field(default=None, max_length=30)
+    # Bug #42 de docs/PENDIENTES_CLINICOS.md: "hoy" para citas/atenciones debe
+    # calcularse con la zona horaria de la sucursal, no la del servidor.
+    timezone: str | None = Field(default=None, max_length=50)
+
+    @field_validator("timezone")
+    @classmethod
+    def _valid_iana_timezone(cls, value: str | None) -> str | None:
+        if value is not None and not is_valid_timezone(value):
+            raise ValueError(
+                "Zona horaria invalida (debe ser un nombre IANA, p. ej. America/Mexico_City)"
+            )
+        return value
 
 
 class RoleOut(BaseModel):

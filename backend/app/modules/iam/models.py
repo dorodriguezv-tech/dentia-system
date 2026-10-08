@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import AuditedMixin, Base, UUIDPkMixin
+from app.modules.iam.rules import DEFAULT_CLINIC_TIMEZONE
 
 
 class Organization(AuditedMixin, Base):
@@ -27,6 +28,12 @@ class Clinic(AuditedMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     # Contador para el numero de expediente de pacientes (modulo patients, Fase 3).
     next_patient_number: Mapped[int] = mapped_column(Integer, default=1)
+    # Nombre de zona horaria IANA (bug #42 de docs/PENDIENTES_CLINICOS.md): de
+    # que dia es "hoy" para citas/atenciones (columnas TIMESTAMPTZ en UTC) se
+    # calcula con ESTA zona, nunca con la hora local del servidor.
+    timezone: Mapped[str] = mapped_column(
+        String(50), default=DEFAULT_CLINIC_TIMEZONE, server_default=DEFAULT_CLINIC_TIMEZONE
+    )
 
     organization: Mapped[Organization] = relationship(back_populates="clinics")
 

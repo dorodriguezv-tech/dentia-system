@@ -204,6 +204,8 @@ async def update_current_clinic(
         clinic.address = data.address
     if data.phone is not None:
         clinic.phone = data.phone
+    if data.timezone is not None:
+        clinic.timezone = data.timezone
 
     await audit_service.log(
         db,

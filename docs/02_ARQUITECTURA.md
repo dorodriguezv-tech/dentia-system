@@ -195,6 +195,18 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   `patients.*`, `records.*`, `odontogram.*`, etc.
 - **Auditoría:** `AuditEvent` es append-only (trigger de PostgreSQL que bloquea UPDATE/DELETE).
   Un middleware registra `access_denied` en cada respuesta 403.
+- **`Clinic.timezone` (agregado al corregir el bug #42 de
+  `docs/PENDIENTES_CLINICOS.md`, probando la Fase 13):** nombre de zona
+  horaria IANA (`America/Mexico_City` por defecto), editable por
+  `admin_clinica` vía `PATCH /clinics/current` (mismo endpoint de B1 que ya
+  editaba nombre/dirección/teléfono), validado contra `zoneinfo`
+  (`iam/rules.py::is_valid_timezone`) — un valor inválido devuelve 422, no
+  se guarda a ciegas. Lo usa `app/voice/dialogue.py` para calcular "de qué
+  día" es una cita/atención (ver sec. 5.19); las columnas de agenda/
+  encuentros siguen siendo `TIMESTAMPTZ` en UTC como siempre, solo cambia
+  CON QUÉ zona se interpreta "hoy" y "medianoche". Requiere `tzdata` en
+  Windows (fijado en `requirements.txt`: el sistema no trae la base IANA,
+  a diferencia de Linux/Mac).
 
 ### 5.2 Tema y marca (Fase 2)
 - **Catálogo único:** `backend/app/modules/branding/presets.py` es la fuente de verdad de los
@@ -1350,17 +1362,17 @@ recepción puede hacer por rol), más la mitad clínica (`diagnostico`,
     esquema `AddDiagnosisAction` de la Fase 8 tampoco la tiene) — solo pieza.
     Los procedimientos sí la admiten (vía `dental_parser.extract_surfaces`,
     igual que `hallazgo`).
-  - **Bug real encontrado al probar esta etapa** (no de esta etapa misma):
-    `_handle_citas_hoy` (13.2), `_find_or_create_todays_encounter` (13.3) y
-    `_find_todays_appointment`/`_find_upcoming_appointment_for_patient` (13.4)
-    usan `date.today()` (hora local del servidor) junto con columnas
-    `TIMESTAMPTZ` en UTC — en una zona horaria detrás de UTC (México,
-    UTC-6), entre que el reloj local marca la tarde y la medianoche,
-    `date.today()` ya no coincide con `datetime.now(UTC).date()`, y Dentia
-    puede no encontrar una cita/atención "de hoy" que sí lo es para la
-    clínica. Ver `docs/PENDIENTES_CLINICOS.md` #42 — no se corrigió aquí
-    porque requiere una zona horaria de sucursal configurable, no un parche
-    puntual en estas tres funciones.
+- **Bug real encontrado al probar esta etapa, resuelto** (no de esta etapa
+  misma — ver sec. 5.1): `_handle_citas_hoy` (13.2), `_find_or_create_todays_
+  encounter` (13.3), `_find_todays_appointment` y `_find_upcoming_
+  appointment_for_patient` (13.4) usaban `date.today()`/`datetime.now(UTC).
+  date()` (hora del servidor) junto con columnas `TIMESTAMPTZ` en UTC — en
+  una zona horaria detrás de UTC (México, UTC-6), entre que el reloj local
+  marca la tarde y la medianoche, Dentia podía no encontrar una cita/
+  atención "de hoy" que sí lo era para la clínica. Las cuatro ahora usan
+  `_clinic_zoneinfo`/`_local_day_bounds_utc` (nuevo) contra la zona horaria
+  configurable de la sucursal (`Clinic.timezone`, sec. 5.1). Ver
+  `docs/PENDIENTES_CLINICOS.md` #42.
 
 ### 5.20 "Dentia" — 13.5 "Ruta LLM y dictado" (Fase 13, Parte C)
 Quinta etapa: cuando la ruta rápida (nlu_fast, sin LLM) no reconoce una orden,

@@ -207,6 +207,26 @@ describe('CatalogsPage', () => {
       name: 'Sucursal Centro',
       address: 'Calle 2',
       phone: '5555555555',
+      timezone: 'America/Mexico_City',
+    })
+  })
+
+  it('la pestaña Sucursal permite cambiar la zona horaria (bug #42)', async () => {
+    renderPage()
+    await screen.findByText('valoracion')
+    await userEvent.click(screen.getByRole('button', { name: 'Sucursal' }))
+
+    const timezoneInput = await screen.findByLabelText('Zona horaria')
+    expect(timezoneInput).toHaveValue('America/Mexico_City')
+    await userEvent.clear(timezoneInput)
+    await userEvent.type(timezoneInput, 'America/Tijuana')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(authApi.updateCurrentClinic).toHaveBeenCalledWith({
+      name: 'Sucursal Centro',
+      address: 'Calle 1',
+      phone: '5555555555',
+      timezone: 'America/Tijuana',
     })
   })
 })

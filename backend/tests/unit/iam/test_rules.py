@@ -25,3 +25,19 @@ def test_login_rate_limited_at_threshold() -> None:
 
 def test_login_not_rate_limited_below_threshold() -> None:
     assert rules.is_login_rate_limited(rules.MAX_LOGIN_FAILURES - 1) is False
+
+
+def test_default_clinic_timezone_is_itself_valid() -> None:
+    assert rules.is_valid_timezone(rules.DEFAULT_CLINIC_TIMEZONE) is True
+
+
+def test_is_valid_timezone_accepts_a_real_iana_name() -> None:
+    assert rules.is_valid_timezone("America/Tijuana") is True
+
+
+def test_is_valid_timezone_rejects_an_unknown_name() -> None:
+    assert rules.is_valid_timezone("No/Existe") is False
+
+
+def test_is_valid_timezone_rejects_empty_string() -> None:
+    assert rules.is_valid_timezone("") is False

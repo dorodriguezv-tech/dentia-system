@@ -28,6 +28,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,8 @@ from app.modules.catalogs import service as catalogs_service
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.models import Encounter
 from app.modules.encounters.schemas import EncounterCreateRequest
+from app.modules.iam.models import Clinic
+from app.modules.iam.rules import DEFAULT_CLINIC_TIMEZONE
 from app.modules.odontogram import service as odontogram_service
 from app.modules.patients import service as patients_service
 from app.modules.patients.models import Patient
@@ -57,6 +60,30 @@ from app.voice.context import ScreenContext
 
 _RESOLVED_APPOINTMENT_STATUSES = {"CANCELADA", "NO_SHOW", "REPROGRAMADA"}
 _MAX_DISAMBIGUATION_NAMES = 5
+
+
+async def _clinic_zoneinfo(db: AsyncSession, *, clinic_id: uuid.UUID) -> ZoneInfo:
+    """Bug #42 de docs/PENDIENTES_CLINICOS.md: "hoy" para citas/atenciones debe
+    calcularse con la zona horaria de la SUCURSAL (`Clinic.timezone`), nunca
+    con la hora local del servidor -- las columnas son TIMESTAMPTZ en UTC, y
+    `date.today()`/`datetime.now(UTC).date()` del servidor pueden ya ser un
+    dia distinto al que es "hoy" para la clinica (p.ej. Mexico, UTC-6, entre
+    que el reloj local marca la tarde y la medianoche)."""
+    clinic = await db.get(Clinic, clinic_id)
+    tz_name = clinic.timezone if clinic else DEFAULT_CLINIC_TIMEZONE
+    try:
+        return ZoneInfo(tz_name)
+    except Exception:
+        return ZoneInfo(DEFAULT_CLINIC_TIMEZONE)
+
+
+def _local_day_bounds_utc(tz: ZoneInfo, day: date) -> tuple[datetime, datetime]:
+    """[00:00, 24:00) de ESE dia en `tz`, convertido a UTC -- para consultar
+    columnas TIMESTAMPTZ (siempre en UTC) por el dia DE LA SUCURSAL, no por el
+    dia calendario UTC (que puede ser un dia distinto, ver #42 arriba)."""
+    start_local = datetime.combine(day, time.min, tzinfo=tz)
+    return start_local.astimezone(UTC), (start_local + timedelta(days=1)).astimezone(UTC)
+
 
 _UNRECOGNIZED_SAY = "No te entendí, ¿me lo repites?"
 
@@ -345,9 +372,9 @@ async def _handle_citas_hoy(
     if provider is None:
         return DialogueResult(say="No tienes una agenda propia en esta sucursal.")
 
-    today = date.today()
-    starts_from = datetime.combine(today, time.min, tzinfo=UTC)
-    starts_to = datetime.combine(today, time.max, tzinfo=UTC)
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    today = datetime.now(tz).date()
+    starts_from, starts_to = _local_day_bounds_utc(tz, today)
     appointments = await agenda_service.list_appointments(
         db,
         clinic_id=clinic_id,
@@ -393,9 +420,10 @@ async def _find_or_create_todays_encounter(
     encounters = await encounters_service.list_patient_encounters(
         db, clinic_id=clinic_id, patient_id=patient_id
     )
-    today = date.today()
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    today = datetime.now(tz).date()
     for encounter in encounters:
-        if encounter.started_at.astimezone(UTC).date() == today:
+        if encounter.started_at.astimezone(tz).date() == today:
             return encounter
     return await encounters_service.create_encounter(
         db,
@@ -829,9 +857,9 @@ async def _find_appointment_type(
 async def _find_todays_appointment(
     db: AsyncSession, *, clinic_id: uuid.UUID, patient_query: str, time_text: str
 ) -> tuple[dict[str, object] | None, str | None]:
-    today = date.today()
-    starts_from = datetime.combine(today, time.min, tzinfo=UTC)
-    starts_to = datetime.combine(today, time.max, tzinfo=UTC)
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    today = datetime.now(tz).date()
+    starts_from, starts_to = _local_day_bounds_utc(tz, today)
     appointments = await agenda_service.list_appointments(
         db, clinic_id=clinic_id, starts_from=starts_from, starts_to=starts_to
     )
@@ -872,8 +900,8 @@ async def _find_upcoming_appointment_for_patient(
 ) -> tuple[dict[str, object] | None, str | None]:
     if not patient_query:
         return None, "¿De qué paciente hablamos?"
-    now = datetime.now(UTC)
-    starts_from = datetime.combine(now.date(), time.min, tzinfo=UTC)
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    starts_from, _ = _local_day_bounds_utc(tz, datetime.now(tz).date())
     starts_to = starts_from + timedelta(days=days_ahead)
     appointments = await agenda_service.list_appointments(
         db, clinic_id=clinic_id, starts_from=starts_from, starts_to=starts_to
@@ -904,8 +932,9 @@ async def _handle_agendar_cita(
         assert error_say is not None
         return DialogueResult(say=error_say)
 
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
     target_date = datetime_parse.extract_relative_date(
-        slots.get("date_text", ""), today=date.today()
+        slots.get("date_text", ""), today=datetime.now(tz).date()
     )
     if target_date is None:
         return DialogueResult(say="¿Qué día? Puedo entender hoy, mañana o un día de la semana.")
@@ -1000,8 +1029,9 @@ async def _handle_reprogramar_cita(
         assert error_say is not None
         return DialogueResult(say=error_say)
 
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
     target_date = datetime_parse.extract_relative_date(
-        slots.get("date_text", ""), today=date.today()
+        slots.get("date_text", ""), today=datetime.now(tz).date()
     )
     if target_date is None:
         return DialogueResult(say="¿A qué día la muevo?")
@@ -1137,7 +1167,8 @@ async def _handle_huecos_libres(
     provider_id, provider_name = provider_match
 
     date_text = slots.get("date_text", "")
-    today = date.today()
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    today = datetime.now(tz).date()
     if "semana" in date_text:
         start_date, days_to_check = today, 7
     elif date_text:
