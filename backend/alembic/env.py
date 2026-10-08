@@ -21,6 +21,7 @@ import app.modules.odontogram.models  # noqa: F401
 import app.modules.patients.models  # noqa: F401
 import app.modules.treatment.models  # noqa: F401
 import app.modules.records.models  # noqa: F401
+import app.voice.models  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
 

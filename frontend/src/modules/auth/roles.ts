@@ -188,3 +188,14 @@ const ROLES_THAT_MANAGE_CATALOGS = new Set(['admin_clinica'])
 export function canManageCatalogs(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_MANAGE_CATALOGS.has(roleCode)
 }
+
+/** Roles con el permiso `voice.use` (ver docs/MATRIZ_PERMISOS.md) -- Fase 13
+ * ("Dentia"). odontologo/especialista tienen ademas `voice.clinical`, pero esa
+ * distincion solo le importa al backend al decidir que intenciones ofrecer
+ * (docs/06_INSTRUCCIONES... sec. C1); el frontend solo necesita saber si debe
+ * mostrar el orbe. */
+const ROLES_THAT_USE_VOICE = new Set(['odontologo', 'especialista', 'recepcion'])
+
+export function canUseVoice(roleCode: string | null): boolean {
+  return roleCode !== null && ROLES_THAT_USE_VOICE.has(roleCode)
+}

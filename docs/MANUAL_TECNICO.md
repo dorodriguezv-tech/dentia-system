@@ -70,6 +70,11 @@ uvicorn app.main:app --reload --port 8001
 cd frontend && npm install
 copy .env.example .env
 npm run dev               # http://localhost:5174
+
+# Voz de Dentia (Fase 13, opcional -- sin esto, Dentia usa la voz del sistema
+# via speechSynthesis en el navegador, nunca se queda muda):
+cd backend
+python -m piper.download_voices es_MX-claude-high --download-dir ../voices
 ```
 
 ## 3. Variables de entorno
@@ -96,6 +101,22 @@ npm run dev               # http://localhost:5174
 | `AI_STORE_AUDIO` | `false` | si es `true`, guarda el audio del dictado (por defecto no se guarda — CLAUDE.md sec. 5) |
 | `AI_SUGGESTION_TTL_HOURS` | `24` | horas antes de que una `AiSuggestion` sin revisar expire |
 | `AI_FAKE_MODE` | `false` | **solo para Playwright** (`e2e/`): respuestas deterministas sin Ollama/Whisper reales — nunca en `true` fuera de E2E |
+| `VOICE_ENABLED` | `true` | apaga el WebSocket de voz de Dentia (Fase 13) si es `false` |
+| `VOICE_WAKE_ENGINE` | `whisper_tiny` | motor de detección de "Dentia" — único implementado en la etapa 13.1 (`openwakeword`, etapa 2, queda para la 13.6) |
+| `VOICE_WAKE_MODEL_SIZE` | `tiny` | tamaño del modelo Whisper usado solo para detectar la palabra de activación (separado del que usa `WHISPER_MODEL` para transcribir órdenes completas) |
+| `VOICE_TTS_ENGINE` | `piper` | `piper` sintetiza con Piper (invocado como subproceso aparte, ver `app/voice/tts.py` y `docs/02_ARQUITECTURA.md` sec. 5.16); si el modelo de `VOICE_TTS_MODEL_PATH` no existe, cae solo a `speechSynthesis` del navegador. `browser` fuerza ese respaldo siempre |
+| `VOICE_TTS_MODEL` | `es_MX-claude-high` | nombre de la voz de Piper (solo informativo; la ruta real es `VOICE_TTS_MODEL_PATH`) |
+| `VOICE_TTS_MODEL_PATH` | `../voices/es_MX-claude-high.onnx` | ruta al `.onnx` descargado con `python -m piper.download_voices es_MX-claude-high --download-dir ../voices` (ver sección 2) — no se versiona en git |
+| `VOICE_FAKE_MODE` | `false` | **solo para pruebas automatizadas/Playwright**, igual que `AI_FAKE_MODE` — nunca en `true` fuera de pruebas |
+| `VOICE_CAPTURE_COUNTDOWN_S` | `3.0` | segundos de la cuenta regresiva antes de aplicar una captura de nivel 2 (hallazgos del odontograma) — "cancela" la interrumpe (Fase 13.3) |
+| `VOICE_FOLLOWUP_S` | `8.0` | segundos de la ventana de seguimiento tras resolver una orden — se puede seguir hablando sin repetir "Dentia" (Fase 13.3) |
+
+> **Micrófono y HTTPS en red local:** el navegador solo permite `getUserMedia`
+> (necesario para Dentia) en un contexto seguro — `https://` o `localhost`. Si la
+> clínica abre el sistema por IP en la red local (`http://192.168.x.x`), el
+> micrófono de Dentia no funcionará hasta servir el sistema por HTTPS (certificado
+> de una CA interna, o `mkcert` para desarrollo/pruebas). El resto del sistema
+> sigue funcionando igual sin HTTPS; solo Dentia lo necesita.
 
 ### Frontend (`frontend/.env`, ver `frontend/.env.example`)
 

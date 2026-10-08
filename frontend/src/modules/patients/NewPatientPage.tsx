@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
 import * as agendaApi from '../agenda/api'
 import * as api from './api'
@@ -31,8 +31,18 @@ const EMPTY_PATIENT: PatientCreateInput = {
 
 export function NewPatientPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<Step>('datos')
-  const [patient, setPatient] = useState<PatientCreateInput>(EMPTY_PATIENT)
+  // Fase 13.4 (resto), "alta_rapida_paciente": Dentia abre esta pantalla con el
+  // nombre/telefono dictados ya prellenados -- el alta se termina aqui a mano,
+  // con la deteccion de duplicados obligatoria de siempre (CLAUDE.md regla 9:
+  // la IA nunca crea el paciente directamente).
+  const [patient, setPatient] = useState<PatientCreateInput>(() => ({
+    ...EMPTY_PATIENT,
+    first_name: searchParams.get('first_name') ?? '',
+    last_name_paternal: searchParams.get('last_name_paternal') ?? '',
+    phone: searchParams.get('phone') ?? '',
+  }))
   // B3 (Parte B, Fase 12.2): gabinete y profesional tratante por defecto, opcionales
   // desde el alta -- la agenda los preselecciona despues al agendar.
   const providersQuery = useQuery({ queryKey: ['providers'], queryFn: agendaApi.listProviders })

@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,15 +24,27 @@ from app.modules.patients.router import router as patients_router
 from app.modules.records.router import router as records_router
 from app.modules.reports.router import router as reports_router
 from app.modules.treatment.router import router as treatment_router
+from app.voice import tts as voice_tts
+from app.voice.router import router as voice_router
 
 settings = get_settings()
 _docs_url, _redoc_url, _openapi_url = docs_urls(settings.environment)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    # Dentia (Fase 13): no dejar el subproceso de Piper huerfano al apagar el
+    # backend (ver app/voice/tts.py).
+    await voice_tts.shutdown()
+
 
 app = FastAPI(
     title=settings.app_name,
     docs_url=_docs_url,
     redoc_url=_redoc_url,
     openapi_url=_openapi_url,
+    lifespan=_lifespan,
 )
 app.state.db_sessionmaker = async_session_factory
 
@@ -60,6 +75,7 @@ app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(imaging_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
 app.include_router(catalogs_router, prefix=settings.api_prefix)
+app.include_router(voice_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

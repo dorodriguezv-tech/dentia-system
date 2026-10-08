@@ -195,6 +195,47 @@ async def get_tooth_history(
     return [(row, authors.get(row.created_by, "") if row.created_by else "") for row in rows]
 
 
+async def retire_finding(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    finding_id: uuid.UUID,
+    actor_id: uuid.UUID,
+) -> ToothFinding:
+    """Deshace una captura ya aplicada (docs/05_ASISTENTE_DENTIA_VOZ_CONVERSACIONAL.md
+    sec. 6.5, "deshaz" de Dentia -- Fase 13.3): nunca borra (regla 2 de
+    CLAUDE.md) -- marca el hallazgo como no vigente y, si remplazaba a uno
+    anterior, lo reactiva, dejando el odontograma como antes de la captura."""
+    finding = await db.get(ToothFinding, finding_id)
+    if finding is None or finding.clinic_id != clinic_id or finding.patient_id != patient_id:
+        raise AppError("NOT_FOUND", "Hallazgo no encontrado", status_code=404)
+    if not finding.is_current:
+        raise AppError("FINDING_NOT_CURRENT", "Ese hallazgo ya no esta vigente", status_code=409)
+
+    finding.is_current = False
+    if finding.supersedes_id is not None:
+        previous = await db.get(ToothFinding, finding.supersedes_id)
+        if previous is not None:
+            previous.is_current = True
+
+    await audit_service.log(
+        db,
+        action="odontogram.finding_retired",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="tooth_finding",
+        entity_id=str(finding.id),
+        details={
+            "patient_id": str(patient_id),
+            "tooth_fdi": finding.tooth_fdi,
+            "surface": finding.surface,
+        },
+    )
+    await db.commit()
+    return finding
+
+
 async def retire_planned(
     db: AsyncSession,
     *,

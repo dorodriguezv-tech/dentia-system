@@ -1,9 +1,13 @@
+import uuid
 from datetime import UTC, datetime
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError
+from app.modules.odontogram import service as odontogram_service
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
 
@@ -300,3 +304,134 @@ async def test_get_odontogram_at_past_date_reconstructs_state(
 
     current = await client.get(f"/api/v1/patients/{patient_id}/odontogram", headers=headers)
     assert current.json()[0]["finding_code"] == "restauracion"
+
+
+async def test_retire_finding_marks_it_not_current(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """ "deshaz" de Dentia (13.3, sec. 6.5 del diseno): nunca borra (regla 2 de
+    CLAUDE.md) -- el hallazgo se queda en la tabla, solo deja de contar como
+    vigente."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+    odonto = (
+        await db_session.execute(text("SELECT id FROM users WHERE email = 'odonto@example.com'"))
+    ).scalar_one()
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    assert caries.status_code == 201
+    caries_id = caries.json()["id"]
+
+    await odontogram_service.retire_finding(
+        db_session,
+        clinic_id=clinic.id,
+        patient_id=uuid.UUID(patient_id),
+        finding_id=uuid.UUID(caries_id),
+        actor_id=odonto,
+    )
+
+    odontogram = await client.get(f"/api/v1/patients/{patient_id}/odontogram", headers=headers)
+    assert odontogram.json() == []
+
+    history = await client.get(f"/api/v1/patients/{patient_id}/teeth/36/history", headers=headers)
+    entries = history.json()
+    assert len(entries) == 1
+    assert entries[0]["is_current"] is False
+
+
+async def test_retire_finding_reactivates_the_one_it_superseded(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+    odonto = (
+        await db_session.execute(text("SELECT id FROM users WHERE email = 'odonto@example.com'"))
+    ).scalar_one()
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    restauracion = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "restauracion",
+        },
+    )
+    restauracion_id = restauracion.json()["id"]
+
+    await odontogram_service.retire_finding(
+        db_session,
+        clinic_id=clinic.id,
+        patient_id=uuid.UUID(patient_id),
+        finding_id=uuid.UUID(restauracion_id),
+        actor_id=odonto,
+    )
+
+    odontogram = await client.get(f"/api/v1/patients/{patient_id}/odontogram", headers=headers)
+    findings = odontogram.json()
+    assert len(findings) == 1
+    assert findings[0]["id"] == caries_id
+    assert findings[0]["finding_code"] == "caries"
+
+
+async def test_retire_finding_already_retired_raises(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+    odonto = (
+        await db_session.execute(text("SELECT id FROM users WHERE email = 'odonto@example.com'"))
+    ).scalar_one()
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    await odontogram_service.retire_finding(
+        db_session,
+        clinic_id=clinic.id,
+        patient_id=uuid.UUID(patient_id),
+        finding_id=uuid.UUID(caries_id),
+        actor_id=odonto,
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        await odontogram_service.retire_finding(
+            db_session,
+            clinic_id=clinic.id,
+            patient_id=uuid.UUID(patient_id),
+            finding_id=uuid.UUID(caries_id),
+            actor_id=odonto,
+        )
+    assert exc_info.value.code == "FINDING_NOT_CURRENT"

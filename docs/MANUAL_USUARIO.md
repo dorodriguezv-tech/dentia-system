@@ -276,7 +276,83 @@ tipo de cita, o si un hallazgo exige indicar una superficie del diente).
   distinta a la que tienes seleccionada — eso lo sigue administrando quien opera el
   sistema completo.
 
-## 11. Preguntas frecuentes
+## 12. Dentia (asistente de voz) — en construcción
+
+Si tu rol es odontólogo, especialista o recepción, verás un pequeño círculo ("el
+orbe") en la esquina inferior derecha de la pantalla: es Dentia, el asistente de voz
+manos libres. Dile **"Dentia"** en voz alta para activarla.
+
+Lo que ya puedes hacer por voz:
+- **Navegar:** "Dentia, abre el expediente de Juan Pérez", "ve a la agenda",
+  "abre el odontograma", "¿qué citas tengo hoy?", "¿tiene alergias?" (si tu rol
+  incluye acceso clínico).
+- **Iniciar la consulta:** "Dentia, inicia la consulta" — retoma la cita de hoy
+  o crea una atención nueva, y te lee las alertas críticas del paciente antes de
+  empezar. Te pide confirmar con un "sí".
+- **Dictar hallazgos del odontograma**, una vez iniciada la consulta: "la 18
+  caries oclusal", "la 36 ausente"... Dentia repite lo que va a hacer y lo
+  aplica a los 3 segundos — si te equivocaste, di **"cancela"** antes de que
+  pase ese tiempo. Puedes seguir dictando pieza tras pieza sin repetir
+  "Dentia": mientras sigas hablando, te sigue escuchando (unos 8 segundos de
+  silencio y vuelve a esperar a que digas su nombre).
+- **Deshacer lo último:** "Dentia, deshaz" — quita el último hallazgo que
+  aplicó (no borra el historial, solo lo marca como ya no vigente).
+- **Diagnóstico y procedimientos**, una vez iniciada la consulta:
+  - "Dentia, pon un diagnóstico de pulpitis reversible en la treinta y seis"
+    (o "diagnóstico: caries profunda", sin pieza si no aplica).
+  - "Dentia, planea una resina en la 36" (o "procedimiento planeado...") —
+    lo agrega al plan de tratamiento, creando uno nuevo si el paciente no
+    tiene todavía.
+  - "Dentia, hice una limpieza" (o "procedimiento realizado...", "termine
+    la...") — lo registra como ya realizado.
+  - Todas piden confirmar con un "sí". Si no reconoce el procedimiento del
+    catálogo de la sucursal, te lo dice en vez de adivinar.
+- **Agenda, si tu rol es recepción (u odontólogo/especialista):**
+  - "Dentia, agenda a María López el jueves a las 11 con la doctora Ruiz,
+    limpieza" — pide confirmar con un "sí". Si no dices la hora, Dentia te
+    propone horarios reales de esa doctora ese día ("tiene libre a las 10:00
+    y a las 12:30") para que repitas la orden con la que prefieras.
+  - "Dentia, cuándo hay espacio con la doctora Ruiz esta semana" — consulta
+    disponibilidad sin agendar nada.
+  - "Dentia, confirma la cita de María López" (o "de las 10").
+  - "Dentia, llegó María López" — la pasa a sala de espera.
+  - "Dentia, mueve la cita de María López al viernes" (a la misma hora si no
+    dices una nueva) — pide confirmar con un "sí".
+  - "Dentia, cancela la cita de las 12, motivo: enfermedad" — el motivo es
+    obligatorio en la misma frase. "Dentia, María López no llegó" (o "no se
+    presentó") la marca como no-show.
+  - "Dentia, agrega a María López a la lista de espera" (o, justo después de
+    mencionarla, solo "agrégala a la lista de espera").
+  - "Dentia, registra paciente nuevo Pedro Sánchez, teléfono 555 123 4567" —
+    abre el formulario de alta con esos datos ya escritos; tú lo terminas y
+    confirmas en pantalla (Dentia nunca crea el paciente por su cuenta).
+  - Si el horario que pides ya está ocupado, Dentia te lo dice y te pide otra
+    hora — nunca agenda una cita encimada con otra.
+- **Frases libres y dictado**, una vez iniciada la consulta: si dices algo
+  que Dentia no reconoce con sus frases de siempre, intenta entenderlo igual
+  (por ejemplo "la paciente me dice que es alérgica a la penicilina") y te
+  pregunta "¿confirmas?" antes de aplicarlo — puede tardar un poco más y te
+  avisa con "un momento...". Para dictar varias cosas de
+  seguido, di **"Dentia, dictado"**, habla todo lo que necesites sin pausas
+  especiales, y termina con **"fin del dictado"**: te dice cuántas
+  propuestas entendió y te pregunta si las acepta todas. Si dices "no",
+  quedan guardadas en el panel de Propuestas para revisarlas con calma.
+
+Dentia sigue aprendiendo cosas nuevas — lo que todavía no reconoce con una
+frase de siempre, inténtalo igual: puede que lo entienda por su ruta más
+lenta (frases libres y dictado, arriba), o te dirá que no puede.
+
+- El color del orbe indica su estado: gris (escuchando en segundo plano), azul
+  (te está escuchando), morado (pensando), verde (hablando), ámbar (esperando
+  tu confirmación), rojo (apagado o sin conexión).
+- Clic en el orbe, o `Alt+M`, lo silencia/reactiva.
+- Si abres el sistema en varias pestañas a la vez, solo una tiene el micrófono
+  activo — las demás muestran el orbe apagado con la indicación "activo en otra
+  pestaña".
+- Dentia nunca graba ni guarda el audio; solo lo procesa en el momento, lo
+  necesario para reconocer su nombre y entender tu orden.
+
+## 13. Preguntas frecuentes
 
 **¿Por qué no puedo editar una nota que ya finalicé?**
 Es una regla del sistema: una nota finalizada no se modifica, para proteger el historial

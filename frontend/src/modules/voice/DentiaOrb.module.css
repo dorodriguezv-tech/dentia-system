@@ -1,0 +1,75 @@
+.orb {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  background-color: var(--color-text-muted);
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.orb:active {
+  transform: scale(0.95);
+}
+
+.passive {
+  background-color: var(--color-text-muted);
+}
+
+.listening,
+.awake {
+  background-color: var(--color-primary);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.thinking {
+  background-color: var(--color-secondary);
+}
+
+.speaking {
+  background-color: var(--color-success);
+}
+
+.confirming {
+  background-color: var(--color-warning);
+}
+
+.muted,
+.disconnected {
+  background-color: var(--color-danger);
+  opacity: 0.6;
+}
+
+.otherTab {
+  background-color: var(--color-text-muted);
+  opacity: 0.35;
+}
+
+.subtitle {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 5.5rem;
+  max-width: min(360px, calc(100vw - 2.5rem));
+  padding: 0.5rem 0.75rem;
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+  z-index: 50;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}

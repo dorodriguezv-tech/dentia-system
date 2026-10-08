@@ -39,3 +39,5 @@ por defecto deben validarse con la clinica antes de produccion
 | `catalogs.manage` | Administrar catalogos de la clinica (tipos de cita, hallazgos, diagnosticos...) |  | X |  |  |  |  |  |
 | `ai.use` | Usar el asistente de IA por voz |  |  | X | X |  |  |  |
 | `ai.configure` | Configurar el asistente de IA |  | X |  |  |  |  |  |
+| `voice.use` | Usar el asistente de voz Dentia (navegacion, agenda y pacientes) |  |  | X | X |  | X |  |
+| `voice.clinical` | Usar Dentia para capturar datos clinicos (odontograma, diagnosticos...) |  |  | X | X |  |  |  |

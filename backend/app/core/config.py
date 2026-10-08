@@ -37,6 +37,28 @@ class Settings(BaseSettings):
     # en produccion -- ver backend/app/ai/ollama_client.py y e2e/playwright.config.ts.
     ai_fake_mode: bool = False
 
+    # Fase 13 (Dentia, 13.1 "Base de voz"): ver docs/05_ASISTENTE_DENTIA_VOZ_CONVERSACIONAL.md
+    # sec. 8. voice_wake_engine solo tiene "whisper_tiny" implementado (etapa 1) --
+    # "openwakeword" (etapa 2, modelo propio entrenado) queda para 13.6.
+    voice_enabled: bool = True
+    voice_wake_engine: str = "whisper_tiny"
+    voice_wake_model_size: str = "tiny"
+    voice_tts_engine: str = "piper"
+    voice_tts_model: str = "es_MX-claude-high"
+    # Ruta al .onnx descargado con `python -m piper.download_voices` (ver
+    # requirements.txt) -- si el archivo no existe (p.ej. no se ha corrido esa
+    # descarga todavia), tts.py cae a None y el cliente usa speechSynthesis.
+    voice_tts_model_path: str = "../voices/es_MX-claude-high.onnx"
+    # Mismo patron que ai_fake_mode: respuestas deterministas sin audio/modelos reales,
+    # para pruebas automatizadas y E2E. Nunca se activa en produccion.
+    voice_fake_mode: bool = False
+
+    # Fase 13 (Dentia, 13.3 "Captura en consulta"): niveles de confirmacion y
+    # ventana de seguimiento, sec. 2.1, 3 y 8 del diseno. Las pruebas bajan
+    # voice_capture_countdown_s para no esperar tiempo real.
+    voice_capture_countdown_s: float = 3.0
+    voice_followup_s: float = 8.0
+
     @model_validator(mode="after")
     def _require_real_jwt_secret_in_production(self) -> Self:
         # Fase 12 (revision de seguridad, OWASP A02/A07): el valor por defecto es solo

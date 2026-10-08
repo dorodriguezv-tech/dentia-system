@@ -8,11 +8,13 @@ import {
   canManageUsers,
   canReadAgenda,
   canReadReports,
+  canUseVoice,
   canWriteBilling,
 } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
 import { GlobalSearch } from '../modules/patients/GlobalSearch'
 import { useGlobalSearchStore } from '../modules/patients/searchStore'
+import { DentiaOrb } from '../modules/voice/DentiaOrb'
 import { useThemeStore } from '../theme/store'
 import styles from './Layout.module.css'
 
@@ -130,6 +132,7 @@ export function Layout() {
         <Outlet />
       </main>
       <GlobalSearch />
+      {canUseVoice(activeRole) && <DentiaOrb />}
     </div>
   )
 }

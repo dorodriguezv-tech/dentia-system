@@ -10,7 +10,7 @@ vi.mock('../agenda/api')
 import * as agendaApi from '../agenda/api'
 import * as api from './api'
 
-function renderWizard() {
+function renderWizard(initialPath = '/pacientes/nuevo') {
   const queryClient = new QueryClient()
   const router = createMemoryRouter(
     [
@@ -18,7 +18,7 @@ function renderWizard() {
       { path: '/pacientes/:id', element: <div>Ficha del paciente</div> },
       { path: '/pacientes', element: <div>Listado de pacientes</div> },
     ],
-    { initialEntries: ['/pacientes/nuevo'] },
+    { initialEntries: [initialPath] },
   )
   render(
     <QueryClientProvider client={queryClient}>
@@ -41,6 +41,14 @@ describe('NewPatientPage', () => {
     vi.mocked(api.createContact).mockReset()
     vi.mocked(agendaApi.listProviders).mockReset().mockResolvedValue([])
     vi.mocked(agendaApi.listResources).mockReset().mockResolvedValue([])
+  })
+
+  it('prellena nombre y telefono cuando Dentia abre el alta rapida (13.4)', async () => {
+    renderWizard('/pacientes/nuevo?first_name=Pedro&last_name_paternal=Sanchez&phone=5551234567')
+
+    expect(screen.getByLabelText('Nombre(s)')).toHaveValue('Pedro')
+    expect(screen.getByLabelText('Apellido paterno')).toHaveValue('Sanchez')
+    expect(screen.getByLabelText('Telefono')).toHaveValue('5551234567')
   })
 
   it('exige confirmar cuando hay posibles duplicados antes de poder crear', async () => {

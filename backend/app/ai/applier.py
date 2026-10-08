@@ -327,7 +327,13 @@ async def accept_suggestion(
     suggestion_id: uuid.UUID,
     edits: dict[str, Any] | None,
     actor_id: uuid.UUID,
-) -> AiSuggestion:
+    confirmation_mode: str = "touch",
+) -> tuple[AiSuggestion, str | None]:
+    """`confirmation_mode` (docs/05_ASISTENTE_DENTIA_VOZ_CONVERSACIONAL.md sec. 9):
+    "touch" es el panel de Propuestas de la Fase 8 (default); Dentia (Fase 13,
+    Parte C) pasa "voice_implicit" (nivel 2, cuenta regresiva) o
+    "voice_explicit" (nivel 3, "si"). Devuelve tambien el id de la entidad
+    creada -- Dentia lo necesita para la pila de deshacer (sec. 6.5)."""
     suggestion = await _get_suggestion_in_clinic(
         db, clinic_id=clinic_id, suggestion_id=suggestion_id
     )
@@ -361,10 +367,11 @@ async def accept_suggestion(
             "model": suggestion.model_name,
             "model_digest": suggestion.model_digest,
             "edited": bool(edits),
+            "confirmation_mode": confirmation_mode,
         },
     )
     await db.commit()
-    return suggestion
+    return suggestion, entity_id
 
 
 async def reject_suggestion(

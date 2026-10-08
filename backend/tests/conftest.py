@@ -27,6 +27,7 @@ test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 TRANSACTIONAL_TABLES = (
+    "voice_command_logs",
     "audit_events",
     "ai_suggestions",
     "ai_clinic_settings",
@@ -89,6 +90,21 @@ async def _clean_tables() -> AsyncIterator[None]:
             text(f"TRUNCATE TABLE {', '.join(TRANSACTIONAL_TABLES)} RESTART IDENTITY CASCADE")
         )
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_voice_tts_worker() -> AsyncIterator[None]:
+    """Dentia (Fase 13): app/voice/tts.py mantiene un subproceso de Piper vivo
+    entre llamadas (para no pagar ~3 s de arranque por frase). Ese subproceso
+    queda atado al event loop de asyncio que lo creo -- pytest-asyncio crea un
+    loop nuevo por prueba (asyncio_default_fixture_loop_scope = "function"), y
+    reusar el mismo proceso desde el loop de la SIGUIENTE prueba corrompe sus
+    pipes. Se apaga despues de cada prueba para que la siguiente arranque uno
+    propio si lo necesita."""
+    yield
+    from app.voice import tts as voice_tts
+
+    await voice_tts.shutdown()
 
 
 @pytest_asyncio.fixture

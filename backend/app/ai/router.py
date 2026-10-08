@@ -79,7 +79,7 @@ async def accept_suggestion(
     actor: User = Depends(require_permission("ai.use")),
     db: AsyncSession = Depends(get_db),
 ) -> AiSuggestionOut:
-    item = await applier.accept_suggestion(
+    item, _entity_id = await applier.accept_suggestion(
         db, clinic_id=clinic_id, suggestion_id=suggestion_id, edits=payload.edits, actor_id=actor.id
     )
     return AiSuggestionOut.model_validate(item)

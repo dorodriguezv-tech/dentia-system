@@ -978,6 +978,452 @@ tabla nueva — son metadatos de una fila que ya existía) resuelven esto:
   tenía su DDL escrito a mano), pero sí a cualquier migración futura generada
   con `--autogenerate`. Corregido agregando el import que faltaba.
 
+### 5.16 "Dentia": asistente de voz conversacional — 13.1 "Base de voz" (Fase 13, Parte C)
+Diseño completo en `docs/05_ASISTENTE_DENTIA_VOZ_CONVERSACIONAL.md` y decisiones
+fijadas en `docs/06_INSTRUCCIONES_CLAUDE_CODE_CORRECCIONES_Y_FASE13.md` sec. C.
+Esta es la primera de seis etapas (13.1–13.6); el alcance de **esta** etapa es
+deliberadamente angosto, tal como lo fija su propio criterio de aceptación:
+decir "Dentia" enciende el orbe y Dentia responde "¿Sí?" con voz. **Todavía no
+hay diálogo ni intenciones** — eso es 13.2 en adelante.
+
+- **Backend `app/voice/`:** WebSocket `/api/v1/voice/ws`. El primer
+  mensaje debe ser `{"type": "auth", "token", "clinic_id"}` (el navegador no
+  puede mandar el header `Authorization` en un WebSocket); se valida con el
+  mismo `decode_token` del resto de la API y se exige `voice.use` o
+  `voice.clinical` en esa sucursal — Dentia nunca puede hacer nada que el
+  usuario no pueda hacer a mano (sec. 9 del diseño). El endpoint usa
+  `websocket.app.state.db_sessionmaker` en vez de `Depends(get_db)` (un
+  WebSocket no vuelve a correr sus dependencias en cada mensaje — mismo patrón
+  que `AccessDeniedAuditMiddleware`).
+- **Detección de "Dentia" (etapa 1 del diseño, `app/voice/wake.py`):** filtro
+  de energía barato primero (evita transcribir silencio puro en escucha
+  pasiva) y, si hay voz, Whisper `tiny` (modelo propio, separado del que usa
+  `app/ai/stt.py` para dictados completos) sobre un buffer circular de ~2.5 s;
+  se acepta si la frase **empieza** por "Dentia" (normalizado sin acentos ni
+  mayúsculas) — nunca una coincidencia difusa amplia, para no despertar con
+  "dentista". La etapa 2 (modelo propio entrenado, openWakeWord/
+  livekit-wakeword) queda para la 13.6; el interruptor (`VOICE_WAKE_ENGINE`)
+  ya existe.
+- **`VoiceCommandLog`** (tabla propia, append-only, sin `AuditedMixin`): texto
+  de las órdenes dirigidas a Dentia — nunca el audio, nunca la conversación
+  con el paciente (sec. 9 del diseño). En 13.1 solo registra el evento
+  `wake_detected`; 13.2+ añadirá intención/resultado sin tocar columnas.
+- **`VOICE_FAKE_MODE`** (mismo patrón que `AI_FAKE_MODE`, Fase 8/12): el
+  mensaje de cliente `{"type": "fake_wake"}` dispara la misma secuencia que
+  detectar "Dentia" de verdad, sin VAD ni Whisper — así es como se prueba el
+  WebSocket de punta a punta sin audio real (`tests/integration/voice/`).
+- **Permisos nuevos `voice.use`/`voice.clinical`** (migración incremental):
+  asignados exactamente como la tabla de la sec. C1 del doc 06 —
+  odontólogo/especialista con ambos, recepción solo con `voice.use`,
+  caja/admin_clinica/superadmin sin ninguno (activable después). `asistente`
+  no está en esa tabla; se dejó **sin** el permiso por defecto en vez de
+  asumírselo por similitud con otros permisos de odontólogo (ver
+  `docs/PENDIENTES_CLINICOS.md` #36).
+- **Frontend `modules/voice/`:** `useVoiceSession` (hook de orquestación:
+  conecta el WebSocket, arranca la captura de audio en cuanto llega el primer
+  mensaje del servidor, maneja mute/`Alt+M`) + `DentiaOrb` (orbe fijo esquina
+  inferior derecha, colores por estado vía variables de tema — gris pasivo,
+  azul escuchando/despierto, verde hablando, rojo muteado/desconectado).
+  `audioCapture.ts`: `getUserMedia` + `AudioWorklet` (procesador cargado desde
+  un Blob URL, no un archivo estático aparte) a 16 kHz mono, frames PCM16 de
+  ~30 ms. Una sola pestaña tiene el micrófono a la vez, coordinado por
+  `BroadcastChannel` con una elección simple (reclamar, esperar 200 ms por un
+  líder existente, promoverse si nadie responde); las demás pestañas quedan
+  en gris "activo en otra pestaña". `ttsPlayer.ts`: reproduce audio si el
+  backend lo manda, o cae a `speechSynthesis` del navegador (voz
+  `es-MX` si el navegador ofrece una) — siempre hay respuesta hablada, nunca
+  se queda muda.
+- **Voz de salida (Piper, instalado):** se evaluaron Piper y Kokoro TTS (ambos
+  gratuitos). Decisión del usuario: **Piper**, invocado como subproceso aparte
+  — nunca `import piper` en el proceso del backend. Motivo: el repo activo del
+  motor (`OHF-Voice/piper1-gpl`, lo que instala `piper-tts` desde oct. 2025) es
+  **GPL-3.0** — el repo MIT original (`rhasspy/piper`) quedó archivado sin
+  mantenimiento — y este sistema se *distribuye* instalado en cada clínica (no
+  se opera como SaaS propio), así que importar esa librería directamente en el
+  backend incorporaría esa licencia al programa que la llama. Invocarla como
+  proceso aparte (igual que ya se hace con Ollama) evita eso — mismo
+  razonamiento que usar `ffmpeg` por subproceso en vez de enlazarlo; no es una
+  garantía legal absoluta (ver `docs/PENDIENTES_CLINICOS.md` #37). Kokoro
+  (Apache 2.0, sin esa ambigüedad) se descartó por ahora: sin voz mexicana
+  dedicada (español "neutro") y con una dependencia mucho más pesada (PyTorch +
+  `espeak-ng`) frente a Piper (solo `onnxruntime`, ya instalado por
+  `faster-whisper`).
+  - **`app/voice/piper_worker.py`** es el único archivo de todo el proyecto que
+    hace `import piper` — y aun así sigue siendo un proceso aparte (`tts.py` lo
+    arranca con `subprocess_exec`). Se queda vivo entre llamadas: medido real,
+    un `python -m piper` nuevo por frase tardaba **~3 s** (sobre todo cargar el
+    modelo de 63 MB), muy por encima del presupuesto de latencia de Dentia
+    (sec. 5.1 del diseño: < 1.5 s en la ruta rápida); con el proceso caliente,
+    cada frase nueva tarda del orden de décimas de segundo. Protocolo propio
+    por stdin/stdout: una línea de texto por petición, un frame binario con
+    longitud + PCM16 crudo por respuesta (nunca `readline()` para el audio —
+    unos pocos segundos de PCM en base64 superan el límite de línea por
+    defecto de `asyncio.StreamReader`). El proceso se apaga limpio al cerrar el
+    backend (`lifespan` de FastAPI en `main.py`).
+  - Modelo descargado con `python -m piper.download_voices es_MX-claude-high
+    --download-dir ../voices` (63 MB) — **no se versiona** (`.gitignore`,
+    mismo patrón que `storage/`); cada clínica/entorno lo descarga una vez.
+  - `tts.synthesize()` sigue devolviendo `None` si `VOICE_TTS_ENGINE` no es
+    `"piper"` o el modelo no está descargado — el cliente cae a
+    `speechSynthesis`, nunca se queda muda.
+- **Lo que queda explícitamente pendiente de esta etapa** (ver
+  `docs/PENDIENTES_CLINICOS.md` #37 y comentarios en el código):
+  - **`getUserMedia` no se solicita en el mismo clic de "Iniciar sesión"**
+    como pide la sec. 7.1 del diseño — se solicita un poco después, cuando
+    `useVoiceSession` arranca la captura tras el primer mensaje del servidor.
+    Es una desviación de UX menor (el usuario ve el prompt del navegador un
+    instante más tarde), no un bloqueo técnico; conectar el permiso al clic
+    exacto de login queda para cuando se afine el arranque automático (13.6).
+  - **No hay verificación real con micrófono/bocinas** en este entorno de
+    desarrollo: la tubería completa (WebSocket, detección, voz de vuelta) está
+    cubierta por pruebas automatizadas con `VOICE_FAKE_MODE`, pero el criterio
+    de aceptación literal ("decir Dentia enciende el orbe en < 400 ms") solo
+    se puede confirmar probando en un navegador con hardware real.
+  - El `AudioContext({ sampleRate: 16000 })` de `audioCapture.ts` depende de
+    que el navegador honre esa tasa de muestreo (Chrome/Firefox sí; Safari
+    puede ignorarlo) — remuestreo manual si se necesita soportar Safari.
+
+### 5.17 "Dentia" — 13.2 "Navegación" (Fase 13, Parte C)
+Segunda etapa: Dentia ya entiende órdenes simples (sin LLM, sin diálogo
+clínico todavía — eso es 13.3+) y puede navegar la interfaz por el usuario.
+Sigue siendo "ruta rápida" declarativa (sec. 5.1 y 8 del diseño); el enrutado
+por LLM queda explícitamente para 13.5.
+
+- **Captura de la orden tras despertar (`app/voice/session.py`):** en vez de
+  descartar el audio del buffer de detección de "Dentia" al confirmarse la
+  palabra clave, se usa como semilla del buffer de la orden — en el habla
+  natural, la orden suele venir en la misma respiración que "Dentia" ("Dentia,
+  abre el odontograma"). El cierre de la captura es por silencio final
+  (`_ORDER_SILENCE_S = 0.8 s`, medido con el mismo filtro de energía barato de
+  13.1, no con VAD completo) o por un tope de seguridad
+  (`_ORDER_MAX_S = 8.0 s`). La orden completa se transcribe con el modelo
+  Whisper principal (`app/ai/stt.py::transcribe_pcm16`, configurable —
+  separado del Whisper `tiny` que solo detecta la palabra clave).
+- **`app/voice/nlu_fast.py`:** emparejador declarativo (regex/palabras clave,
+  sin LLM) de 7 intenciones: `ayuda`, `repetir`, `silencio`, `ir_a`,
+  `abrir_expediente`, `leer_alertas`, `citas_hoy`. **Orden de los patrones
+  importa:** `ir_a` (vocabulario cerrado de destinos: "agenda", "pacientes",
+  "odontograma"...) se revisa *antes* que `abrir_expediente` (patrón abierto
+  "abre/busca `<nombre>`") — si no, "abre el odontograma" se clasificaba mal
+  como `abrir_expediente` con `query="el odontograma"`, porque ambos aceptan
+  "abre" como disparador y la cláusula intermedia de `abrir_expediente` es
+  opcional. Encontrado por una prueba de integración fallando, no por
+  inspección manual.
+- **`app/voice/dialogue.py` (`handle_order`):** despacha por intención, sin
+  LLM. `leer_alertas` exige `has_clinical` (permiso `voice.clinical`) —
+  recepción con solo `voice.use` recibe una negativa hablada en vez de las
+  alertas del paciente. `citas_hoy` usa `agenda_service` para la siguiente
+  cita no terminada/cancelada del profesional que corresponde al usuario
+  autenticado.
+- **`app/voice/context.py` (`ScreenContext`):** el frontend manda
+  `{"type": "context", route, patient_id, encounter_id, tab}` cada vez que
+  cambia de pantalla; así "lee las alertas" no necesita repetir el nombre del
+  paciente si ya se está viendo su expediente. Vive en un store de Zustand
+  propio (`modules/voice/screenContext.ts`), separado de `useVoiceStore`
+  (estado del orbe) — una pantalla lo declara con el hook
+  `useReportScreenContext({ patientId, tab })` (p. ej. `PatientDetailPage`) y
+  se limpia sola al desmontar.
+- **Navegación por voz (`ui_action`):** el backend contesta una orden como
+  "abre el odontograma de Pérez" con `{"type": "ui_action", "action":
+  "navigate", "payload": {"path": "/pacientes/<id>", "tab": "odontograma"}}`.
+  `useVoiceSession.ts` llama a `useNavigate()` de React Router. La pestaña
+  del expediente (`PatientDetailPage`) es estado local (`useState`), no parte
+  de la URL — se manda por `location.state` y la pantalla la lee al montar
+  (`isTab()` como guarda de tipo sobre `location.state?.tab`).
+- **`VoiceCommandLog`:** ahora también registra `event="order"` con el
+  transcript, el resultado (`intent` reconocido o `unrecognized`) y la
+  latencia — sin tocar columnas, tal como se previó en 13.1.
+- **Pendiente explícito:** el rol `asistente` sigue sin `voice.use`/
+  `voice.clinical` por defecto (`docs/PENDIENTES_CLINICOS.md` #36, sin
+  cambios en esta etapa).
+
+### 5.18 "Dentia" — 13.3 "Captura en consulta" (Fase 13, Parte C)
+Tercera etapa: Dentia ya puede iniciar la consulta y capturar hallazgos del
+odontograma por voz, con los niveles de confirmación de la sec. 3 del diseño
+y la ventana de seguimiento de la sec. 2.1 — sigue siendo ruta rápida
+declarativa, sin LLM (13.5 sigue pendiente). Criterio de aceptación del plan
+(doc 06, sec. 13.3): "20 hallazgos seguidos dictados en el odontograma sin
+tocar el teclado; 'cancela' y 'deshaz' funcionan" — cubierto por
+`tests/integration/voice/test_voice_ws.py::test_full_capture_flow_start_consulta_20_findings_cancela_and_deshaz`.
+
+- **Niveles de confirmación (`app/voice/dialogue.py::PendingCapture`,
+  `app/voice/session.py`):** una intención de captura ya no ejecuta de
+  inmediato — devuelve un `PendingCapture` (nivel 2 o 3) con la frase de
+  vista previa y un `execute()` (closure async) que de verdad aplica el
+  cambio. `dialogue.py` nunca usa temporizadores; es `session.py` quien
+  decide CUÁNDO llamar a `execute()`:
+  - **Nivel 2 (`hallazgo`):** dice la vista previa ("Coloco caries en la 18,
+    oclusal.") y arranca una cuenta regresiva (`VOICE_CAPTURE_COUNTDOWN_S`,
+    3 s por defecto) en una tarea de fondo (`asyncio.create_task`). "Cancela"
+    la cancela. Cualquier otra orden que llegue ANTES de que la cuenta
+    termine ejecuta la pendiente de inmediato (no espera el resto de los 3 s)
+    y procesa la orden nueva a continuación — así se puede dictar rápido, una
+    tras otra, sin perder ninguna (`session.py::_handle_pending_reply`).
+  - **Nivel 3 (`iniciar_consulta`):** dice la vista previa + "¿Confirmas?" y
+    espera "sí"/"no" explícito (sin temporizador); un tercer tipo de
+    respuesta reintenta una vez ("¿Sí o no?").
+  - `app/voice/nlu_fast.py::match_confirmation()` reconoce las frases de la
+    sec. 3 del diseño (sí/correcto/adelante/confirmo/ok ·
+    no/cancela/cancélalo/olvídalo/espera/alto) por **coincidencia exacta de
+    toda la frase**, no por palabra suelta — para que un "no" dicho de paso
+    en otra conversación (con el paciente, por ejemplo) no cancele nada.
+- **Ventana de seguimiento (sec. 2.1, `VOICE_FOLLOWUP_S`, 8 s por defecto):**
+  tras resolver cualquier orden, la sesión entra a un modo `follow_up` (orbe
+  en "escuchando", igual que capturando una orden) en el que la siguiente
+  voz ya es el principio de una orden nueva, sin repetir "Dentia". Se
+  implementa con el mismo mecanismo que la cuenta regresiva (tarea de fondo
+  cancelable), nunca bloqueando el bucle principal del WebSocket.
+- **`iniciar_consulta`:** reutiliza al paciente activo de `ScreenContext`;
+  si ya hay una atención de hoy la retoma (misma idea que
+  `useEncounterPicker.ts` del frontend, pero resuelta del lado del servidor
+  porque Dentia no puede esperar a que alguien elija en un menú), si no crea
+  una (`encounters_service.create_encounter`). Al confirmarse, lee las
+  alertas críticas del paciente y las dice (sec. 3: "antes de acciones
+  relevantes"). El `encounter_id` resultante se guarda en
+  `VoiceSession.active_encounter_id` — **no** en `ScreenContext` (ese es el
+  que manda el navegador; este lo decide Dentia).
+- **`hallazgo`:** `app/voice/nlu_fast.py` combina `app/ai/dental_parser.py`
+  (ya existía, Fase 8) para la pieza FDI y las superficies, con un mapa de
+  palabras de hallazgo propio (`_FINDING_KEYWORDS`) para el código del
+  catálogo. Si el catálogo de la sucursal marca ese hallazgo como
+  "requiere superficie" y no se dio ninguna, Dentia pide que se repita la
+  orden completa con la superficie — **sin conversación de varios turnos**
+  (ver pendiente abajo). La ejecución crea una `AiSuggestion` (igual que la
+  Fase 8) y la aplica con `app/ai/applier.py::accept_suggestion(...,
+  confirmation_mode="voice_implicit")` — se reusa toda la validación,
+  servicios de dominio y auditoría existentes, no se duplica lógica (sec.
+  6.4 del diseño).
+- **`app/ai/applier.py::accept_suggestion`** ahora acepta
+  `confirmation_mode` (`"touch"` por defecto, el panel de la Fase 8;
+  `"voice_implicit"`/`"voice_explicit"` desde Dentia) y lo guarda en el
+  `AuditEvent ai.suggestion_accepted` (sec. 9 del diseño) — también devuelve
+  el id de la entidad creada, que Dentia necesita para la pila de deshacer.
+- **Deshacer (`deshaz`, sec. 6.5):** cada sesión de voz guarda una pila (máx.
+  10) de las últimas capturas aplicadas, en memoria — **no sobrevive una
+  reconexión** (es la sesión del WebSocket, no la atención en la BD; ver
+  pendiente abajo). `odontogram_service.retire_finding` (nuevo, mismo patrón
+  que `retire_planned` de la Fase 7): marca el hallazgo como no vigente y, si
+  remplazaba a uno anterior, lo reactiva — nunca borra (regla 2 de
+  CLAUDE.md).
+- **Pendiente explícito de esta etapa** (ver `docs/PENDIENTES_CLINICOS.md`):
+  - **Sin conversación de varios turnos:** si falta un dato obligatorio
+    (p.ej. la superficie), Dentia pide que se repita la orden completa en
+    vez de recordar lo ya dicho y solo preguntar lo que falta (la "ASKING"
+    de la sec. 6.2 del diseño). Igual para una respuesta de nivel 3 no
+    reconocida dos veces: no hay todavía una tarjeta con opciones en
+    pantalla.
+  - **La pila de deshacer no persiste:** vive en la instancia de
+    `VoiceSession`; una reconexión (recargar la página, perder la red) la
+    vacía. El historial real del odontograma (regla 5) nunca se pierde —
+    solo el atajo de voz para deshacer lo último.
+  - **Sin "barge-in" de audio real:** "cancela" interrumpe la cuenta
+    regresiva (una tarea de fondo), pero no interrumpe el audio de Piper ya
+    en reproducción en el navegador (sec. 7 del diseño) — no verificable sin
+    micrófono/bocinas reales en este entorno.
+  - Solo `iniciar_consulta` y `hallazgo` de las intenciones de la sec. 4.2/4.3
+    del diseño; `signos_vitales`, `motivo_consulta`, `nota`, `alergia`,
+    `medicamento` y `diagnostico` quedan para una etapa futura (agenda por voz
+    ya se cubrió en 13.4, ver sec. 5.19).
+  - Resaltado visual (`ui_action: "highlight_tooth"`) se manda pero el
+    frontend todavía no lo pinta en el odontograma — sec. 7 del diseño
+    ("resaltado en contexto").
+
+### 5.19 "Dentia" — 13.4 "Diagnóstico, plan y agenda" (Fase 13, Parte C)
+Cuarta etapa, **completa**: agenda por voz para recepción (C2 del doc 06) —
+`agendar_cita`, `confirmar_cita`, `registrar_llegada`, `reprogramar_cita`,
+`huecos_libres`, `cancelar_cita`, `no_show`, `lista_espera` y
+`alta_rapida_paciente` — disponibles para cualquiera con `voice.use` (no
+exigen `voice.clinical`, a diferencia de lo de abajo: es justo lo que
+recepción puede hacer por rol), más la mitad clínica (`diagnostico`,
+`procedimiento_planeado`, `procedimiento_realizado`), que sí exige
+`voice.clinical`, igual que `iniciar_consulta`/`hallazgo` de 13.3.
+
+- **`app/voice/datetime_parse.py` (nuevo):** fecha/hora relativas dichas en
+  voz, funciones puras igual que `dental_parser.py` — "hoy"/"mañana"/un día
+  de la semana/"en N días" para la fecha, "a las 10"/"a las diez y media"
+  para la hora. Deliberadamente no cubre fechas explícitas ("el 21 de
+  octubre") ni distingue a.m./p.m. — una ruta rápida cubre lo frecuente, no
+  todo (sec. 5 del diseño); la frase libre cae en "no te entendí" y espera a
+  la ruta LLM de la 13.5.
+- **`app/voice/nlu_fast.py`:** las órdenes de agenda se reconocen por
+  **anclas de palabra clave** ("con", "el"/"al", "a las"), no una gramática
+  libre — `_segment_by_anchors()` encuentra cada ancla y corta el texto entre
+  una y la siguiente, en cualquier orden en que aparezcan ("agenda a María
+  López el jueves a las 11 con la doctora Ruiz" funciona igual que "...a las
+  11 con la doctora Ruiz el jueves"). Antes de buscar la siguiente ancla se
+  "enmascara" (se sustituye por espacios) lo que ya consumió la anterior —
+  si no, el "el" de "con **el** doctor Gómez" se confundía también con el
+  ancla de fecha ("el"/"al"). "mañana"/"hoy" son anclas de ancho cero (no
+  llevan ninguna palabra delante en el habla natural, a diferencia de "el
+  jueves").
+- **Emparejamiento por nombre (`dialogue.py`):** profesional y tipo de cita
+  se buscan por **palabras en común** contra la lista de profesionales
+  (corta por sucursal, no necesita búsqueda tolerante como pacientes) y el
+  **código** del catálogo de tipos de cita (no el nombre para mostrar: nombres
+  como "Consulta / valoracion" o "Restauracion (resina/amalgama)" traen
+  puntuación y varias palabras que nadie diría completas en voz; el código es
+  un identificador corto y limpio, CLAUDE.md sec. 6).
+- **Huecos libres reales (gabinete/profesional predeterminados, B2/B3):**
+  `agendar_cita` usa el `default_resource_id` del profesional automáticamente
+  si no se menciona un gabinete — no hace falta preguntarlo. **Proponer
+  horarios libres** cuando falta la hora (sec. 4.5 del diseño: "El jueves
+  tienes libre a las 10:00 y a las 12:30, ¿cuál?") ya está resuelto (ver
+  siguiente punto).
+- **`agenda_service.find_free_slots` (nuevo, resto de 13.4):** candidatos cada
+  15 minutos dentro de cada ventana de horario laboral del día de la semana
+  pedido, descartando lo que choque con un bloqueo o una cita activa del
+  profesional — las mismas reglas que `create_appointment`, solo que
+  explorando en vez de reservar. `_handle_agendar_cita` lo usa cuando falta
+  la hora (en vez de solo pedirla) y la nueva intención `huecos_libres`
+  ("¿cuándo hay espacio con la doctora Ruiz esta semana?", nivel 0, igual que
+  `citas_hoy`) lo usa para responder disponibilidad sin agendar nada. Sin
+  continuidad entre turnos (mismo criterio que el resto de la ruta rápida,
+  pendiente #38 de `docs/PENDIENTES_CLINICOS.md`): Dentia propone horarios y
+  el usuario repite la orden completa con la hora elegida, no hay un "sí, esa"
+  que recuerde la propuesta.
+- **`cancelar_cita`/`no_show` (nuevo):** `cancelar_cita` reusa la misma
+  búsqueda por paciente-u-hora de `confirmar_cita` (`_find_todays_appointment`)
+  y exige el motivo en la misma frase ("cancela la cita de las 12, motivo:
+  enfermedad") — regla 2 de CLAUDE.md, igual que la anulación de cualquier
+  registro clínico. `no_show` no pide motivo por voz (usa "No se presentó"
+  por defecto) porque el diseño (C2 del doc 06) no lo pide en su ejemplo;
+  ambas son nivel 3 (cambian el estado de una cita, igual que `agendar_cita`).
+- **`lista_espera` (nuevo):** admite nombre explícito ("agrega a María López a
+  la lista de espera") o el pronombre del ejemplo del doc 06 ("agrégala a la
+  lista de espera"), que se resuelve contra `VoiceSession.last_patient_ref`
+  — el último paciente que **cualquier** intención de agenda de esta misma
+  conexión resolvió (`DialogueResult.patient_ref`, nuevo campo que
+  `session.py` recuerda igual que ya hacía con `encounter_id`). Reusa
+  `agenda_service.create_waitlist_entry` de la Fase 6 tal cual.
+- **`alta_rapida_paciente` (nuevo):** nivel 1, sin confirmación de voz (igual
+  que `ir_a`/`abrir_expediente`) — Dentia **nunca crea el paciente
+  directamente** (regla 9 de CLAUDE.md): solo manda un `ui_action navigate` a
+  `/pacientes/nuevo` con el nombre y teléfono dictados como query params;
+  `NewPatientPage.tsx` los lee con `useSearchParams` para prellenar el paso 1,
+  y el alta se termina a mano en pantalla con la detección de duplicados
+  obligatoria de siempre. El nombre se separa con una heurística fija (última
+  palabra = apellido paterno) — ver limitación en
+  `docs/PENDIENTES_CLINICOS.md` #45.
+- **Nunca "sin querer" se traslapan citas:** `agendar_cita`/`reprogramar_cita`
+  llaman a los mismos `create_appointment`/`reschedule_appointment` que ya
+  usa la pantalla de Agenda (Fase 6) — el traslape se rechaza exactamente
+  igual (`AppError APPOINTMENT_CONFLICT`), Dentia solo lo convierte en una
+  frase hablada ("Ese horario ya está ocupado. Dime otra hora.") en vez de
+  dejar que la excepción tumbe la sesión de voz.
+- **Red de seguridad en `session.py`:** `_execute_pending` ahora atrapa
+  cualquier `AppError` que una captura futura olvide manejar dentro de su
+  propio `execute()` — nunca debería dispararse si cada intención atrapa lo
+  suyo (como hacen todas las de esta etapa), pero evita que un error nuevo
+  tumbe la conexión completa de voz.
+- **`diagnostico`, `procedimiento_planeado`/`procedimiento_realizado`
+  (mitad clínica, nuevo):** a diferencia de `hallazgo`, el diagnóstico es
+  texto libre por naturaleza — `nlu_fast` solo reconoce el VERBO que
+  introduce la orden ("pon un diagnóstico de...", "diagnóstico:") y la pieza,
+  si se menciona; el texto en sí nunca se normaliza a un catálogo cerrado.
+  Revisados **antes** que `_match_hallazgo` (orden del `for` en `match()`):
+  sin eso, "planea una resina en la 36" se confundiría con un hallazgo
+  porque "resina" también es palabra clave de hallazgo (→ "restauracion").
+  Los procedimientos sí resuelven contra el catálogo real
+  (`treatment_service.list_procedure_catalog`, Fase 7) por **código**
+  (`_find_procedure_code`, mismo criterio que `_find_appointment_type`); si
+  no reconoce ninguno, lo dice en vez de adivinar. Las tres reusan
+  `app/ai/applier.py::_apply_action` tal cual (misma `AiSuggestion` +
+  `accept_suggestion` que `hallazgo`) — `add_planned_procedure` ya sabe
+  crear el plan/fase borrador si no existe uno
+  (`_get_or_create_draft_plan_and_phase`), así que no se duplicó esa lógica
+  aquí. Nivel 3 (no 2 como `hallazgo`): son decisiones puntuales, no una
+  captura repetitiva fila tras fila, y `procedimiento_realizado` además
+  genera un `Charge` "SUGERIDO" (regla 4 de CLAUDE.md: un procedimiento
+  realizado no es un pago).
+- **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
+  - La fecha solo se reconoce en el formato cerrado de
+    `datetime_parse.extract_relative_date` (hoy/mañana/día de la semana/"en N
+    días") — una fecha explícita ("el 21 de octubre") no se reconoce.
+  - La hora dicha no distingue a.m./p.m. — se toma tal como se dice.
+  - `cancelar_cita` sin motivo en la misma frase pide repetir la orden
+    completa (no recuerda la cita mencionada para el siguiente turno, #43).
+  - `lista_espera` por pronombre solo recuerda al último paciente de una
+    intención de agenda de la misma conexión, en memoria (#44).
+  - `find_free_slots` usa la duración por defecto, no la del tipo de cita
+    dictado, al proponer horarios (#40, ya resuelto en lo demás).
+  - `diagnostico` no admite superficie (ni por voz ni por la ruta LLM: el
+    esquema `AddDiagnosisAction` de la Fase 8 tampoco la tiene) — solo pieza.
+    Los procedimientos sí la admiten (vía `dental_parser.extract_surfaces`,
+    igual que `hallazgo`).
+  - **Bug real encontrado al probar esta etapa** (no de esta etapa misma):
+    `_handle_citas_hoy` (13.2), `_find_or_create_todays_encounter` (13.3) y
+    `_find_todays_appointment`/`_find_upcoming_appointment_for_patient` (13.4)
+    usan `date.today()` (hora local del servidor) junto con columnas
+    `TIMESTAMPTZ` en UTC — en una zona horaria detrás de UTC (México,
+    UTC-6), entre que el reloj local marca la tarde y la medianoche,
+    `date.today()` ya no coincide con `datetime.now(UTC).date()`, y Dentia
+    puede no encontrar una cita/atención "de hoy" que sí lo es para la
+    clínica. Ver `docs/PENDIENTES_CLINICOS.md` #42 — no se corrigió aquí
+    porque requiere una zona horaria de sucursal configurable, no un parche
+    puntual en estas tres funciones.
+
+### 5.20 "Dentia" — 13.5 "Ruta LLM y dictado" (Fase 13, Parte C)
+Quinta etapa: cuando la ruta rápida (nlu_fast, sin LLM) no reconoce una orden,
+Dentia ya no se rinde directo con "no te entendí" — intenta la ruta LLM antes,
+reutilizando **el mismo intérprete de la Fase 8** (`app/ai/interpreter.py`:
+texto → Ollama → `AiSuggestion` validada contra catálogos reales) en vez de
+construir un esquema de voz aparte. También se implementó `modo_dictado`
+completo (sec. 4.2 del diseño).
+
+- **Una orden suelta (`dialogue.py::_try_llm_fallback`):** solo si hay una
+  atención activa y el usuario tiene `voice.clinical` (recepción y cualquier
+  pantalla sin consulta siguen cayendo directo en "no te entendí" — el
+  esquema de agenda para la ruta LLM queda pendiente). Si el intérprete
+  devuelve **exactamente una** acción reconocida y nada sin reconocer, Dentia
+  la convierte en una vista previa hablada (`_describe_action`, genérica por
+  tipo de acción — el detalle completo queda en el panel de Propuestas) y
+  pide confirmar. **Siempre nivel 3** (sec. 3 del diseño: "baja certeza sube
+  de nivel" — una orden de la ruta libre nunca tiene la confianza de un
+  patrón reconocido, nunca se aplica con cuenta regresiva implícita). Cero
+  acciones, más de una, o algo sin reconocer → `None` → cae en "no te
+  entendí" (más de una acción es exactamente lo que `modo_dictado` resuelve).
+- **`modo_dictado` (sec. 4.2 del diseño):** "Dentia, dictado" → nuevo modo de
+  sesión `dictating` — cada frase se acumula tal cual (sin pasar por
+  `nlu_fast.match`, para no perder acentos/puntuación que le sirven al
+  intérprete) y se manda un mensaje `transcript` por frase para que la
+  pantalla muestre el avance en vivo (sec. 6.1 del diseño). Solo "fin del
+  dictado" (y variantes, `nlu_fast.is_dictation_end`) termina el modo: el
+  texto completo acumulado va al intérprete de la Fase 8, que puede devolver
+  varias `AiSuggestion` de una vez — Dentia dice "Tengo N propuestas, ¿las
+  acepto todas?" (nivel 3). "Sí" las acepta todas
+  (`confirmation_mode="voice_explicit"`); "no" las deja **PENDING** en el
+  panel de Propuestas de la Fase 8 en vez de perderlas (`PendingCapture.
+  cancel_say` personalizado).
+- **Aviso "Un momento..." (C4 del doc 06):** `session.py::
+  _handle_order_with_stall_notice` envuelve CUALQUIER llamada a
+  `dialogue.handle_order` con un temporizador de 2 s — si no ha terminado,
+  manda "Un momento..." y sigue esperando. Vive en `session.py` (no en
+  `dialogue.py`, que no conoce el websocket) y es genérico: no le importa si
+  la orden acabó siendo lenta por la ruta LLM o por cualquier otra razón.
+- **`AI_FAKE_MODE`/`ollama_client.chat` siguen siendo el punto de mock de
+  siempre:** las pruebas de 13.5 reusan el mismo patrón de
+  `tests/integration/ai/test_ai.py` (`monkeypatch.setattr(ollama_client,
+  "chat", ...)`), no uno nuevo para voz. Importante: cualquier prueba de voz
+  con `has_clinical=True` **y** una atención activa que mande una frase que
+  la ruta rápida no reconozca ahora sí puede llegar a intentar un Ollama
+  real si no se mockea — un caso real apareció en la prueba de 20 hallazgos
+  de 13.3 (el "gracias" de relleno) y tuvo que agregarse el mock ahí también.
+- **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
+  - El esquema de intenciones **por pantalla y rol** que describe la sec. 5
+    del diseño (JSON Schema dinámico de Ollama limitado a lo permitido en la
+    pantalla actual) no se construyó — en su lugar, la ruta LLM reusa
+    directamente el esquema ya existente de acciones clínicas de la Fase 8,
+    que no varía por pantalla. Suficiente para esta etapa; no cubre agenda
+    ni otras intenciones no clínicas por voz libre.
+  - Vocabulario odontológico desde `docs/Diccionario_odontológico_2023.pdf`
+    (C3 del doc 06: extracción de términos, `hotwords` de faster-whisper,
+    corrección con `rapidfuzz`) no implementado todavía.
+  - `OLLAMA_KEEP_ALIVE`/`OLLAMA_INTENT_MODEL` (variables mencionadas en la
+    sec. 8 del diseño) no se agregaron — la ruta LLM de voz usa la misma
+    configuración de Ollama que ya tenía la Fase 8
+    (`ollama_model`/`ollama_timeout_s`), sin un modelo/`keep_alive` dedicado
+    para voz.
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -1027,6 +1473,7 @@ tabla nueva — son metadatos de una fila que ya existía) resuelven esto:
 | 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
 | 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
 | 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
+| 13 (13.1–13.5) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**: agenda por voz de recepción — `agendar_cita`/`confirmar_cita`/`registrar_llegada`/`reprogramar_cita`/`huecos_libres`/`cancelar_cita`/`no_show`/`lista_espera`/`alta_rapida_paciente`, con propuesta real de horarios libres — y la mitad clínica — `diagnostico`/`procedimiento_planeado`/`procedimiento_realizado`) y 13.5 "Ruta LLM y dictado" (una orden suelta que la ruta rápida no reconoce intenta la ruta LLM reusando el intérprete de la Fase 8; `modo_dictado` completo; aviso "Un momento…") — ver secciones 5.16 a 5.20. Sin esquema LLM por pantalla/rol, vocabulario odontológico (C3) ni ajuste fino todavía (resto de 13.5, 13.6) | En curso |
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

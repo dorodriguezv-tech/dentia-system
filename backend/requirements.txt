@@ -30,6 +30,15 @@ faster-whisper==1.1.1
 # truena con TypeError al transcribir. 13.1.0 es la version mas reciente que aun lo acepta
 # y tiene wheel para Windows/cp313.
 av==13.1.0
+# Dentia (Fase 13), voz de salida. El repo activo (OHF-Voice/piper1-gpl, lo que
+# publica este paquete desde oct. 2025) es GPL-3.0 -- el repo MIT original
+# (rhasspy/piper) quedo archivado. Por eso app/voice/tts.py SIEMPRE lo invoca
+# como subproceso aparte (`python -m piper`), nunca `import piper` en el
+# proceso del backend -- igual que Ollama ya corre como servidor aparte. El
+# modelo de voz (es_MX-claude-high, ~63 MB) se descarga con
+# `python -m piper.download_voices es_MX-claude-high --download-dir ../voices`,
+# no se versiona (ver .gitignore y docs/PENDIENTES_CLINICOS.md).
+piper-tts==1.8.0
 requests==2.34.2
 # Windows: python-requests/httpx no usan el almacen de certificados del sistema, asi que
 # si la red tiene un proxy con inspeccion TLS (comun en redes corporativas), la descarga

@@ -50,6 +50,8 @@ PERMISSIONS: dict[str, str] = {
     "catalogs.manage": (
         "Administrar catalogos de la clinica (tipos de cita, hallazgos, diagnosticos...)"
     ),
+    "voice.use": "Usar el asistente de voz Dentia (navegacion, agenda y pacientes)",
+    "voice.clinical": "Usar Dentia para capturar datos clinicos (odontograma, diagnosticos...)",
 }
 
 ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -99,6 +101,8 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "agenda.read",
         "agenda.write",
         "ai.use",
+        "voice.use",
+        "voice.clinical",
     ),
     "especialista": (
         "patients.read",
@@ -119,6 +123,8 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "agenda.read",
         "agenda.write",
         "ai.use",
+        "voice.use",
+        "voice.clinical",
     ),
     "asistente": (
         "patients.read",
@@ -133,6 +139,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "agenda.read",
         "agenda.write",
         "billing.read",
+        "voice.use",
     ),
     "caja": (
         "patients.read",

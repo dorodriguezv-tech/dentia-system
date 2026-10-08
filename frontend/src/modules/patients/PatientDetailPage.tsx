@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import {
   canReadBilling,
   canReadDocuments,
@@ -16,6 +16,7 @@ import { ConsentsTab } from '../documents/ConsentsTab'
 import { ImagesTab } from '../imaging/ImagesTab'
 import { OdontogramaTab } from '../odontogram/OdontogramaTab'
 import { TreatmentTab } from '../treatment/TreatmentTab'
+import { useReportScreenContext } from '../voice/useReportScreenContext'
 import * as api from './api'
 import { ExpedienteTab } from './ExpedienteTab'
 import styles from './PatientDetailPage.module.css'
@@ -31,11 +32,27 @@ type Tab =
   | 'imagenes'
   | 'cuenta'
 
+function isTab(value: unknown): value is Tab {
+  return (
+    typeof value === 'string' &&
+    ['resumen', 'expediente', 'odontograma', 'tratamientos', 'consentimientos', 'imagenes', 'cuenta'].includes(
+      value,
+    )
+  )
+}
+
 export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
   const patientId = id as string
-  const [tab, setTab] = useState<Tab>('resumen')
+  const location = useLocation()
+  // Fase 13 ("Dentia"), 13.2: si se navego aqui por una orden de voz
+  // ("abre el odontograma de..."), el backend manda la pestaña destino por
+  // location.state en vez de la URL (ver useVoiceSession.ts::handleUiAction).
+  const requestedTab = (location.state as { tab?: unknown } | null)?.tab
+  const [tab, setTab] = useState<Tab>(isTab(requestedTab) ? requestedTab : 'resumen')
   const activeRole = useActiveRole()
+
+  useReportScreenContext({ patientId, tab })
 
   const summaryQuery = useQuery({
     queryKey: ['patient-summary', patientId],

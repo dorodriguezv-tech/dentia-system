@@ -22,6 +22,12 @@ frontend/.vite/
 storage/*
 !storage/.gitkeep
 
+# Modelo(s) de voz de Piper (Fase 13, "Dentia") -- se descargan con
+# `python -m piper.download_voices <voz> --download-dir voices/`, no se versionan
+# (63 MB+ cada uno, y cada voz tiene su propia licencia -- ver docs/PENDIENTES_CLINICOS.md).
+voices/*
+!voices/.gitkeep
+
 # Respaldos generados por scripts/backup.ps1 y scripts/backup.sh (nunca en git)
 backups/
 

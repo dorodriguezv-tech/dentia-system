@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -366,6 +366,75 @@ async def _warnings_for_slot(
             "La cita coincide con un bloqueo (vacaciones, permiso, etc.) del profesional."
         )
     return warnings
+
+
+_FREE_SLOT_STEP_MINUTES = 15
+
+
+async def find_free_slots(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    day: date,
+    duration_minutes: int,
+    limit: int = 3,
+) -> list[time]:
+    """Huecos libres reales de un profesional en un dia (Fase 13, 13.4, sec. 4.5
+    del diseno: Dentia propone horarios reales en vez de solo pedir la hora).
+    Candidatos cada 15 minutos dentro de cada ventana de horario laboral de ese
+    dia de la semana, descartando lo que choque con un bloqueo o una cita activa
+    -- las mismas reglas de `create_appointment`, solo explorando en vez de
+    reservar. Sin horario laboral ese dia, no hay huecos que proponer (es
+    informativo igual que `_warnings_for_slot`, pero aqui no hay nada que
+    inventar)."""
+    provider = await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    hours_stmt = select(ProviderWorkingHours).where(
+        ProviderWorkingHours.provider_id == provider_id,
+        ProviderWorkingHours.weekday == day.weekday(),
+    )
+    working_hours = list((await db.execute(hours_stmt)).scalars().all())
+    if not working_hours:
+        return []
+
+    day_start = datetime.combine(day, time.min, tzinfo=UTC)
+    day_end = datetime.combine(day, time.max, tzinfo=UTC)
+    busy_appointments = await _find_conflicts(
+        db,
+        clinic_id=clinic_id,
+        provider_id=provider_id,
+        resource_id=provider.default_resource_id,
+        starts_at=day_start,
+        ends_at=day_end,
+    )
+    blocks_stmt = select(ProviderBlock).where(
+        ProviderBlock.provider_id == provider_id,
+        ProviderBlock.starts_at < day_end,
+        ProviderBlock.ends_at > day_start,
+    )
+    blocks = list((await db.execute(blocks_stmt)).scalars().all())
+    busy_ranges = [(a.starts_at, a.ends_at) for a in busy_appointments] + [
+        (b.starts_at, b.ends_at) for b in blocks
+    ]
+
+    now = datetime.now(UTC)
+    step = timedelta(minutes=_FREE_SLOT_STEP_MINUTES)
+    duration = timedelta(minutes=duration_minutes)
+    slots: list[time] = []
+    for working_hour in sorted(working_hours, key=lambda wh: wh.start_time):
+        candidate = datetime.combine(day, working_hour.start_time, tzinfo=UTC)
+        window_end = datetime.combine(day, working_hour.end_time, tzinfo=UTC)
+        while candidate + duration <= window_end:
+            free = candidate >= now and not any(
+                candidate < busy_end and candidate + duration > busy_start
+                for busy_start, busy_end in busy_ranges
+            )
+            if free:
+                slots.append(candidate.time())
+                if len(slots) >= limit:
+                    return slots
+            candidate += step
+    return slots
 
 
 def _conflict_error(conflicts: list[Appointment]) -> AppError:

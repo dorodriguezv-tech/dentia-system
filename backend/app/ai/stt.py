@@ -7,6 +7,7 @@ segundos, asi que se hace una sola vez por proceso, no en cada peticion.
 
 import io
 
+import numpy as np
 from faster_whisper import WhisperModel
 
 from app.core.config import get_settings
@@ -41,6 +42,21 @@ def transcribe(audio_bytes: bytes) -> str:
     model = get_model()
     segments, _info = model.transcribe(
         io.BytesIO(audio_bytes),
+        language="es",
+        vad_filter=True,
+        initial_prompt=DENTAL_VOCABULARY,
+    )
+    return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+def transcribe_pcm16(audio: np.ndarray) -> str:
+    """Igual que `transcribe()`, pero para PCM16 mono crudo ya convertido a
+    float32 en [-1, 1] (ver app/voice/wake.py::pcm16_to_float32) -- lo usa
+    Dentia (Fase 13) para transcribir la orden completa tras detectar la
+    palabra de activacion, sin pasar por un contenedor de audio comprimido."""
+    model = get_model()
+    segments, _info = model.transcribe(
+        audio,
         language="es",
         vad_filter=True,
         initial_prompt=DENTAL_VOCABULARY,
