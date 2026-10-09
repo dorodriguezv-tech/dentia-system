@@ -1105,11 +1105,19 @@ async def test_reprogramar_cita_moves_the_appointment_keeping_the_time(
     )
     # reschedule_appointment nunca muta la cita en el lugar (regla 2 de
     # CLAUDE.md): marca la vieja como REPROGRAMADA y crea una fila nueva en
-    # RESERVADA -- la del viernes es esa fila nueva.
-    assert len(appointments) == 1
-    assert appointments[0]["starts_at"].hour == 10
-    assert appointments[0]["status"] == "RESERVADA"
-    assert appointments[0]["patient_id"] == uuid.UUID(patient_id)
+    # RESERVADA. "al viernes" cuando hoy mismo ya es viernes (datetime_parse.py:
+    # "si hoy mismo es ese dia, es hoy", deliberado) hace que la cita vieja
+    # tambien caiga en el rango de este query -- no se filtra list_appointments
+    # por status a proposito (el calendario real muestra "Reprogramada" en su
+    # lugar original en vez de ocultarla, agenda/catalog.ts), asi que no hay
+    # que asumir cuantas filas hay en total, solo que la nueva (RESERVADA) esta
+    # y que ninguna otra fila del mismo paciente quedo mutada en el lugar.
+    reserved = [a for a in appointments if a["status"] == "RESERVADA"]
+    assert len(reserved) == 1
+    assert reserved[0]["starts_at"].hour == 10
+    assert reserved[0]["patient_id"] == uuid.UUID(patient_id)
+    others = [a for a in appointments if a["id"] != reserved[0]["id"]]
+    assert all(a["status"] != "RESERVADA" for a in others)
 
 
 async def test_reprogramar_cita_without_a_matching_appointment_says_so(

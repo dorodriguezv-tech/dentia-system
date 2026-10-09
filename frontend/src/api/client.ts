@@ -57,6 +57,28 @@ export function setSessionHooks(hooks: SessionHooks): void {
   sessionHooks = hooks
 }
 
+// Bug real visto en vivo: cuando el access token expira, varias peticiones
+// concurrentes (p.ej. el tablero de inicio pidiendo pacientes/agenda/cobranza
+// a la vez) reciben 401 casi al mismo tiempo y, sin esto, cada una llamaba a
+// su propio refreshSession() -- con el refresh token siendo de un solo uso,
+// las llamadas de mas colisionaban y se quedaban colgadas, dejando pantallas
+// enteras en "Cargando..." para siempre (distinto del bug de StrictMode que
+// ya corrigio AppProviders con un useRef: aqui pasa con cualquier numero de
+// peticiones en vuelo, no solo al montar la app). Un solo refresh en curso se
+// comparte entre todas las peticiones que lo disparen mientras dure.
+let refreshPromise: Promise<boolean> | null = null
+
+function refreshSessionOnce(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (sessionHooks as SessionHooks)
+      .refreshSession()
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
 async function doFetch(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
 
@@ -79,7 +101,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   let response = await doFetch(path, options)
 
   if (response.status === 401 && options.auth !== false && sessionHooks) {
-    const refreshed = await sessionHooks.refreshSession()
+    const refreshed = await refreshSessionOnce()
     if (refreshed) {
       response = await doFetch(path, options)
     } else {

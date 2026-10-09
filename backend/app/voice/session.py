@@ -37,7 +37,7 @@ from app.core.deps import user_has_any_permission
 from app.core.errors import AppError
 from app.core.security import TokenError, decode_token
 from app.modules.iam.models import User
-from app.voice import dialogue, nlu_fast, tts, wake
+from app.voice import dialogue, nlu_fast, tts, vocab_context, wake
 from app.voice import service as voice_service
 from app.voice.context import ScreenContext
 
@@ -52,6 +52,15 @@ _WAKE_CHUNK_BYTES = int(wake.SAMPLE_RATE * 1.5) * 2
 # guarda ni se registra" -- aqui ademas nunca se persiste, solo vive en memoria
 # mientras la conexion esta abierta).
 _MAX_BUFFER_BYTES = int(wake.SAMPLE_RATE * 2.5) * 2
+
+# Minimo entre dos intentos de deteccion de "Dentia" (bug real visto en vivo,
+# no en el diseno original: el AudioWorklet manda un frame PCM16 cada ~30 ms
+# -- frontend/src/modules/voice/audioCapture.ts -- y sin este limite, cada uno
+# de esos frames volvia a transcribir con Whisper el bufer completo en cuanto
+# pasaba el umbral de 1.5 s. Con voz/ruido de consultorio de por medio eso
+# disparaba Whisper decenas de veces por segundo mientras la sesion siguiera
+# abierta y sin silenciar -- el proceso de uvicorn llegaba a ~400% CPU).
+_WAKE_CHECK_MIN_INTERVAL_S = 0.5
 
 # Captura de la orden (13.2, sec. 2.1 y 6 del diseno): termina al detectar este
 # tanto de silencio al final del bufer ("~0.8 s" en el diseno).
@@ -94,6 +103,7 @@ class VoiceSession:
     last_patient_ref: tuple[str, str] | None = None
     _buffer: bytearray = field(default_factory=bytearray)
     _order_buffer: bytearray = field(default_factory=bytearray)
+    _last_wake_check_at: float = field(default=0.0, repr=False)
     # 13.5 "Ruta LLM y dictado": texto acumulado mientras `mode == "dictating"`
     # (ver `_handle_dictation_utterance`) -- una frase por elemento, unidas con
     # espacio al terminar el dictado.
@@ -226,6 +236,10 @@ class VoiceSession:
             return
 
         started_at = time.monotonic()
+        if started_at - self._last_wake_check_at < _WAKE_CHECK_MIN_INTERVAL_S:
+            return
+        self._last_wake_check_at = started_at
+
         audio = wake.pcm16_to_float32(bytes(self._buffer))
         transcript = wake.transcribe_wake_candidate(audio)
         if wake.is_wake_phrase(transcript):
@@ -265,7 +279,24 @@ class VoiceSession:
         self._buffer = bytearray()
 
         audio = wake.pcm16_to_float32(audio_bytes)
-        transcript = stt.transcribe_pcm16(audio) if audio.size else ""
+        if audio.size:
+            # Pendiente #47 (resto de C3): vocabulario por contexto -- los
+            # catalogos administrables de la sucursal (B1) y los nombres de
+            # pacientes de hoy ayudan a Whisper con lo que el vocabulario
+            # fijo nunca puede traer (lo define cada clinica).
+            extra_hotwords = await vocab_context.contextual_terms(
+                self.db, clinic_id=self.clinic_id, context=self.context
+            )
+            # Mismo cuidado que en authenticate() (ver handle_connection): son
+            # puras lecturas, nada de lo que devuelven sigue vivo en la sesion
+            # despues de esta linea (contextual_terms ya extrajo todo a str
+            # planos) -- sin este rollback, la transaccion que abrieron se
+            # quedaria colgada si la orden no termina en una escritura propia
+            # (p.ej. "citas hoy" o una orden no reconocida).
+            await self.db.rollback()
+            transcript = stt.transcribe_pcm16(audio, extra_hotwords=extra_hotwords)
+        else:
+            transcript = ""
         if was_dictating:
             await self._handle_dictation_utterance(transcript)
         else:
@@ -586,12 +617,30 @@ async def handle_connection(websocket: WebSocket, db: AsyncSession) -> None:
     try:
         user, clinic_id, has_clinical = await authenticate(websocket, db)
     except VoiceAuthError as exc:
+        await db.rollback()
         await websocket.send_json({"type": "error", "code": exc.code, "message": exc.message})
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.close()
         return
     except WebSocketDisconnect:
+        await db.rollback()
         return
+
+    # `authenticate()` solo hace lecturas (autobegin de SQLAlchemy), pero sin
+    # cerrar esa transaccion se queda abierta ("idle in transaction" en
+    # Postgres) mientras `session.run()` espera el siguiente mensaje -- en
+    # escucha pasiva eso puede durar horas (docs/05... sec. 5), y si el
+    # cliente desaparece sin un cierre limpio de WebSocket (pestana cerrada,
+    # red caida), queda abierta para siempre: con varias sesiones de voz
+    # abandonadas el pool de conexiones se agota y toda la app empieza a
+    # colgarse (visto en vivo con `pg_stat_activity`). `expunge(user)` antes
+    # del rollback porque este expira todo lo que siga en la sesion -- el
+    # resto del codigo solo usa `user.id` (ya cargado), pero sin expulsarlo
+    # primero esa misma expiracion forzaria una recarga perezosa mas tarde,
+    # desde una tarea en segundo plano (recordatorio/seguimiento) sin el
+    # contexto async correcto para hacerla (MissingGreenlet).
+    db.expunge(user)
+    await db.rollback()
 
     session = VoiceSession(
         websocket=websocket,

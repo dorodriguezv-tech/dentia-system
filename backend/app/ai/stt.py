@@ -6,6 +6,7 @@ segundos, asi que se hace una sola vez por proceso, no en cada peticion.
 """
 
 import io
+from collections.abc import Sequence
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -27,8 +28,12 @@ DENTAL_VOCABULARY = (
 )
 
 
-def _hotwords() -> str:
-    return " ".join(vocab_terms.combined_vocabulary())
+def _hotwords(extra_terms: Sequence[str] = ()) -> str:
+    # `extra_terms` (pendiente #47, resto de C3): catalogos administrables de
+    # la sucursal (B1) y nombres de pacientes relevantes -- vocabulario que
+    # `vocab_terms.combined_vocabulary()` no puede traer porque es fijo y no
+    # sabe de que clinica/pantalla se trata (ver app/voice/vocab_context.py).
+    return " ".join((*vocab_terms.combined_vocabulary(), *extra_terms))
 
 
 def _correct(text: str) -> str:
@@ -50,22 +55,24 @@ def get_model() -> WhisperModel:
     return _model
 
 
-def transcribe(audio_bytes: bytes) -> str:
+def transcribe(audio_bytes: bytes, *, extra_hotwords: Sequence[str] = ()) -> str:
     """Transcribe un fragmento de audio (webm/opus u otro formato que ffmpeg/PyAV pueda
-    decodificar) a texto en espanol. VAD activado para recortar silencios."""
+    decodificar) a texto en espanol. VAD activado para recortar silencios.
+    `extra_hotwords` opcional (pendiente #47): vocabulario por contexto, ver
+    app/voice/vocab_context.py -- sin el, el comportamiento no cambia."""
     model = get_model()
     segments, _info = model.transcribe(
         io.BytesIO(audio_bytes),
         language="es",
         vad_filter=True,
         initial_prompt=DENTAL_VOCABULARY,
-        hotwords=_hotwords(),
+        hotwords=_hotwords(extra_hotwords),
     )
     text = " ".join(segment.text.strip() for segment in segments).strip()
     return _correct(text)
 
 
-def transcribe_pcm16(audio: np.ndarray) -> str:
+def transcribe_pcm16(audio: np.ndarray, *, extra_hotwords: Sequence[str] = ()) -> str:
     """Igual que `transcribe()`, pero para PCM16 mono crudo ya convertido a
     float32 en [-1, 1] (ver app/voice/wake.py::pcm16_to_float32) -- lo usa
     Dentia (Fase 13) para transcribir la orden completa tras detectar la
@@ -76,7 +83,7 @@ def transcribe_pcm16(audio: np.ndarray) -> str:
         language="es",
         vad_filter=True,
         initial_prompt=DENTAL_VOCABULARY,
-        hotwords=_hotwords(),
+        hotwords=_hotwords(extra_hotwords),
     )
     text = " ".join(segment.text.strip() for segment in segments).strip()
     return _correct(text)

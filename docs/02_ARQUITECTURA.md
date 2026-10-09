@@ -990,6 +990,26 @@ tabla nueva — son metadatos de una fila que ya existía) resuelven esto:
   tenía su DDL escrito a mano), pero sí a cualquier migración futura generada
   con `--autogenerate`. Corregido agregando el import que faltaba.
 
+**Verificación en vivo de Parte B (2026-10-09):** B1, B2 y B3 se reprodujeron contra el
+sistema corriendo de verdad (no solo pytest): catálogo nuevo de tipo de cita visible de
+inmediato al agendar y desaparece del selector al desactivarlo (B1); alta de odontólogo con
+gabinete por defecto confirmada en `Provider.default_resource_id` (B2); filtro "Mis
+pacientes" filtrando correctamente por `primary_provider_id` (B3). Los tres funcionan sin
+corregir nada de Parte B en sí. De paso se encontró y corrigió un bug real de infraestructura
+(no específico de B1/B2/B3, pero es lo que explicaba pantallas colgadas en "Cargando..."):
+
+- **`apiRequest` (`frontend/src/api/client.ts`) no deduplicaba `refreshSession()`:** cuando
+  el access token expira con varias peticiones en vuelo a la vez (p. ej. el tablero de inicio
+  pidiendo pacientes/agenda/cobranza simultáneamente), cada una recibía 401 y llamaba a su
+  propio `refreshSession()` — con el refresh token de un solo uso, las llamadas de más
+  colisionaban y la petición original se quedaba esperando para siempre (visto en vivo: el
+  checkbox "Mis pacientes" se quedó en "Cargando pacientes..." indefinidamente tras un rato
+  de inactividad de la pestaña). Distinto del bug de doble-bootstrap de StrictMode que ya
+  corrigió `AppProviders` (commit `68ea22a`): ese es solo al montar la app una vez; este pasa
+  con cualquier número de peticiones concurrentes, en cualquier momento de la sesión.
+  Corregido compartiendo una sola promesa de refresh entre todas las peticiones que lo
+  disparen mientras dure (`refreshSessionOnce()`); prueba nueva `frontend/src/api/client.test.ts`.
+
 ### 5.16 "Dentia": asistente de voz conversacional — 13.1 "Base de voz" (Fase 13, Parte C)
 Diseño completo en `docs/05_ASISTENTE_DENTIA_VOZ_CONVERSACIONAL.md` y decisiones
 fijadas en `docs/06_INSTRUCCIONES_CLAUDE_CODE_CORRECCIONES_Y_FASE13.md` sec. C.
@@ -1499,9 +1519,31 @@ herramienta de código puede generar esas grabaciones de forma honesta.
   diccionario externo no trae todo: "pulpitis reversible" (el ejemplo
   literal del diseño, sec. 3 del doc 05) no es una entrada del PDF, sino una
   etiqueta de `app/modules/diagnosis/rules.py`. Los catálogos
-  ADMINISTRABLES por sucursal (B1) quedan fuera — exigirían pasar
-  `clinic_id`/pantalla a `stt.py`, que hoy son funciones puras sobre audio
-  (pendiente #47).
+  ADMINISTRABLES por sucursal (B1) y los nombres de pacientes quedan fuera a
+  propósito — `stt.transcribe()`/`transcribe_pcm16()` siguen siendo funciones
+  puras sobre audio, sin sesión de BD; ese vocabulario por contexto lo arma
+  un módulo aparte, ver más abajo.
+- **`app/voice/vocab_context.py` (nuevo, resuelve el pendiente #47):**
+  `contextual_terms(db, clinic_id=..., context=...)` junta, en cada orden,
+  las ETIQUETAS de los 6 tipos de catálogo administrable de la sucursal
+  (`catalogs_service.list_items`, B1), los nombres de los pacientes con cita
+  **hoy** en esa sucursal (reutiliza `agenda_service.list_appointments` +
+  `dialogue._clinic_zoneinfo`/`_local_day_bounds_utc` — misma zona horaria de
+  la sucursal que ya corrigió el bug #42, no `date.today()` del servidor) y
+  el nombre del paciente de la pantalla actual (`ScreenContext.patient_id`,
+  si el cliente lo mandó). `app/ai/stt.py::transcribe()`/`transcribe_pcm16()`
+  ahora aceptan `extra_hotwords` opcional (sin romper al único otro llamador,
+  `app/ai/router.py` de la Fase 8, que sigue sin pasarlo) y lo suman al
+  `hotwords` fijo de siempre. `VoiceSession._finalize_order`
+  (`app/voice/session.py`) es el único punto que lo conecta — llama a
+  `contextual_terms()` y, como son puras lecturas sin nada que necesite
+  seguir vivo en la sesión, hace `db.rollback()` antes de transcribir (mismo
+  cuidado que el bug real de fuga de conexión de `authenticate()`, ver más
+  arriba: sin este rollback, una orden que no termina en una escritura propia
+  — "citas hoy", una orden no reconocida — dejaría la transacción abierta).
+  Pruebas: `tests/integration/voice/test_vocab_context.py` (la función
+  aislada) y `test_finalize_order_vocab_context.py` (el cableado real en
+  `session.py`, incluido el rollback).
 - **`app/ai/vocab/correct.py` (nuevo):** corrige la transcripción contra el
   vocabulario combinado con `rapidfuzz` — el ejemplo literal del diseño
   ("pulpitis reversibe" → "pulpitis reversible") ya funciona. Revisa pares
@@ -1543,12 +1585,26 @@ herramienta de código puede generar esas grabaciones de forma honesta.
   podría no alcanzar a verlo entre un sondeo del DOM y el siguiente — habría
   sido una prueba inestable sin aportar nada que el resto no confirme ya.
 - **Pendiente explícito** (ver `docs/PENDIENTES_CLINICOS.md`):
-  - #47: vocabulario por contexto dinámico (pantalla/catálogos de sucursal/
-    pacientes del día) no implementado — solo el vocabulario fijo.
+  - #47: **resuelto** — vocabulario por contexto dinámico (pantalla/catálogos
+    de sucursal/pacientes del día), ver `app/voice/vocab_context.py` arriba.
   - #48: el corpus de 13.6 es autovalidado, no una medición independiente.
   - #49: pruebas de ruido real y entrenamiento de un modelo propio de
     palabra de activación — **bloqueado**, necesita grabaciones reales de
     la clínica que no existen todavía.
+
+**Verificación en vivo de Parte C (2026-10-09):** `python -m app.voice.eval` sigue dando
+234/234 (100%, ≥90% exigido); `npx playwright test tests/voice.spec.ts` pasa contra el
+backend/frontend reales de E2E. En el navegador real (no solo el E2E con `VOICE_FAKE_MODE`):
+el orbe aparece tras el login con el título "Dentia escuchando en segundo plano", clic y
+`Alt+M` lo silencian/reactivan correctamente (`_orb_.../_passive_.../_muted_...` con el
+`title`/`aria-label` esperado en cada estado). Los dos bugs reales de 13.1 encontrados
+verificando Parte A/B en vivo (CPU al 400% por el detector de "Dentia" sin cooldown en
+`_process_wake_audio`, y la fuga de conexión de BD por no cerrar la transacción tras
+`authenticate()`, ambos en `app/voice/session.py`) ya están corregidos — ver el apartado
+"Verificación en vivo de Parte B" más arriba. El pendiente #47 (vocabulario por contexto)
+se implementó en esta misma sesión — ver `app/voice/vocab_context.py` arriba. #48 y #49
+siguen abiertos tal como están documentados arriba; #49 sigue bloqueado por falta de
+grabaciones reales de la clínica.
 
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
@@ -1599,7 +1655,29 @@ herramienta de código puede generar esas grabaciones de forma honesta.
 | 12 | E2E con Playwright (flujo completo, accesibilidad con `axe-core`, rendimiento p95 ≤ 2 s), revisión de seguridad OWASP (cabeceras, docs deshabilitados en producción, `JWT_SECRET` obligatorio, `pip-audit`/`npm audit`) y documentación (`docs/SEGURIDAD.md`, `docs/MANUAL_USUARIO.md`, `docs/MANUAL_TECNICO.md`) | Hecho |
 | 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
 | 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
-| 13 (13.1–13.5, C3) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**), 13.5 "Ruta LLM y dictado" (**completa**: ruta LLM clínica + ruta LLM de agenda — `app/voice/agenda_llm.py` — antes de rendirse; `modo_dictado`; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) y C3 "Vocabulario odontológico" (**completo**: `app/ai/vocab/build.py` extrae ~1100 términos del diccionario + catálogos clínicos fijos hacia `hotwords`/corrección con `rapidfuzz` de `app/ai/stt.py`) — ver secciones 5.16 a 5.21. De 13.6 "Afinación": corpus de regresión (`tests/voice/commands.jsonl`, `app/voice/eval.py`) y primer E2E de voz (`e2e/tests/voice.spec.ts`, `VOICE_FAKE_MODE`) **hechos**; pruebas con audio con ruido real y entrenamiento de un modelo propio de palabra de activación **bloqueados** (necesitan grabaciones reales de la clínica que no existen — ver `docs/PENDIENTES_CLINICOS.md` #49); esquema LLM dinámico por pantalla/rol y vocabulario por contexto (pantalla/catálogos de sucursal/pacientes del día, #47) tampoco | En curso |
+| 13 (13.1–13.5, C3) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**), 13.5 "Ruta LLM y dictado" (**completa**: ruta LLM clínica + ruta LLM de agenda — `app/voice/agenda_llm.py` — antes de rendirse; `modo_dictado`; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) y C3 "Vocabulario odontológico" (**completo**: `app/ai/vocab/build.py` extrae ~1100 términos del diccionario + catálogos clínicos fijos hacia `hotwords`/corrección con `rapidfuzz` de `app/ai/stt.py`) — ver secciones 5.16 a 5.21. De 13.6 "Afinación": corpus de regresión (`tests/voice/commands.jsonl`, `app/voice/eval.py`) y primer E2E de voz (`e2e/tests/voice.spec.ts`, `VOICE_FAKE_MODE`) **hechos**; pruebas con audio con ruido real y entrenamiento de un modelo propio de palabra de activación **bloqueados** (necesitan grabaciones reales de la clínica que no existen — ver `docs/PENDIENTES_CLINICOS.md` #49); vocabulario por contexto (pantalla/catálogos de sucursal/pacientes del día, #47) **resuelto** — ver `app/voice/vocab_context.py`, sec. 5.21; esquema LLM dinámico por pantalla/rol (sec. 5.20) sigue sin hacerse | En curso |
+
+**Verificación en vivo de Parte A (2026-10-09):** los 7 puntos de la sección 5.13 se
+reprodujeron de nuevo contra el sistema corriendo de verdad (backend/frontend/Postgres/Ollama
+reales, no solo pytest) y siguen funcionando — no hizo falta corregir nada de Parte A. De paso
+se encontraron y corrigieron dos bugs reales de Fase 13 (Parte C, ya implementada), ninguno
+reportado en `docs/06_INSTRUCCIONES...`:
+- **Lentitud generalizada:** `VoiceSession._process_wake_audio` (`app/voice/session.py`)
+  volvía a transcribir con Whisper el búfer completo en cada frame de audio que llegaba (el
+  `AudioWorklet` real manda uno cada ~30 ms) una vez pasado el umbral de 1.5 s, sin ningún
+  límite — con voz/ruido de consultorio de por medio, eso disparaba Whisper decenas de veces
+  por segundo mientras la sesión de voz siguiera abierta y sin silenciar (visto en vivo: el
+  proceso de `uvicorn` al ~400 % CPU). Corregido con un intervalo mínimo de 0.5 s entre
+  intentos (`_WAKE_CHECK_MIN_INTERVAL_S`); prueba nueva
+  `tests/unit/voice/test_session_wake_throttle.py`.
+- **Prueba intermitente de `reprogramar_cita`:** `test_reprogramar_cita_moves_the_appointment_keeping_the_time`
+  fallaba cualquier viernes (como el día en que se corrió esta verificación) porque
+  `datetime_parse.py` resuelve "el viernes" a *hoy* cuando hoy mismo ya es viernes (deliberado:
+  "si hoy mismo es ese día, es hoy"), así que la cita vieja (ahora REPROGRAMADA) cae en el mismo
+  rango de fecha que se consulta — y el calendario real no oculta las citas reprogramadas, las
+  muestra con otro color en su lugar original (`agenda/catalog.ts`), así que `list_appointments`
+  no debe filtrarlas. No era un bug de producción: se corrigió la prueba para que verifique la
+  fila RESERVADA nueva específicamente, no la cantidad total de filas del día.
 
 El módulo `reports` de la sección 2 ya existe, sin tablas propias (es deliberadamente solo
 consultas de lectura). `patients`, `records`/`encounters`, `odontogram`, `agenda`, `diagnosis`,

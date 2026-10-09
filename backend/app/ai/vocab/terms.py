@@ -13,11 +13,13 @@ Combina DOS fuentes, a proposito (ninguna sola basta):
    "pulpitis reversible" (el ejemplo del diseno, sec. 3 del doc 05) es una
    etiqueta de `app/modules/diagnosis/rules.py`, no una entrada del PDF.
 
-Los catalogos ADMINISTRABLES por sucursal (B1: tipos de cita, procedimientos
-del catalogo de precios...) viven en la base de datos -- agregarlos exige
-contexto de clinica/pantalla en cada transcripcion, que hoy no tienen
-`stt.transcribe()`/`transcribe_pcm16()` (funciones puras sobre audio, sin
-sesion de BD). Queda pendiente, ver docs/PENDIENTES_CLINICOS.md.
+Los catalogos ADMINISTRABLES por sucursal (B1) y los nombres de pacientes
+viven en la base de datos -- este modulo sigue sin ellos a proposito (son
+funciones puras sobre audio, sin sesion de BD, cacheadas con `lru_cache`
+porque el vocabulario fijo no cambia dentro de un proceso). Ese vocabulario
+por CONTEXTO (antes pendiente #47) lo arma `app/voice/vocab_context.py` y se
+suma aparte, como `extra_hotwords` de `app/ai/stt.py` -- solo en la ruta de
+voz de Dentia (`app/voice/session.py`), que sí tiene `clinic_id`/pantalla.
 """
 
 from __future__ import annotations
