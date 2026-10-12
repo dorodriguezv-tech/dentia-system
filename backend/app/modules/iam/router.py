@@ -95,8 +95,11 @@ async def me(
 async def my_clinics(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[MyClinicOut]:
-    pairs = await service.get_my_clinics(db, user_id=current_user.id)
-    return [MyClinicOut(clinic=clinic, role=role) for clinic, role in pairs]
+    triples = await service.get_my_clinics(db, user_id=current_user.id)
+    return [
+        MyClinicOut(clinic=clinic, role=role, clinic_name=clinic.name, permissions=permissions)
+        for clinic, role, permissions in triples
+    ]
 
 
 @router.patch("/clinics/current", response_model=ClinicOut)

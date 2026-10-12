@@ -23,7 +23,15 @@ from app.core.security import (
 from app.modules.agenda import rules as agenda_rules
 from app.modules.agenda import service as agenda_service
 from app.modules.iam import rules
-from app.modules.iam.models import Clinic, RefreshToken, Role, User, UserClinic
+from app.modules.iam.models import (
+    Clinic,
+    Permission,
+    RefreshToken,
+    Role,
+    RolePermission,
+    User,
+    UserClinic,
+)
 from app.modules.iam.schemas import ClinicUpdateRequest, UserCreateRequest, UserUpdateRequest
 
 settings = get_settings()
@@ -177,7 +185,9 @@ async def mfa_setup_required(db: AsyncSession, *, user: User) -> bool:
     return any(rules.role_requires_mfa(code) for code in role_codes)
 
 
-async def get_my_clinics(db: AsyncSession, *, user_id: uuid.UUID) -> list[tuple[Clinic, Role]]:
+async def get_my_clinics(
+    db: AsyncSession, *, user_id: uuid.UUID
+) -> list[tuple[Clinic, Role, list[str]]]:
     stmt = (
         select(Clinic, Role)
         .join(UserClinic, UserClinic.clinic_id == Clinic.id)
@@ -185,7 +195,29 @@ async def get_my_clinics(db: AsyncSession, *, user_id: uuid.UUID) -> list[tuple[
         .where(UserClinic.user_id == user_id)
         .order_by(Clinic.name)
     )
-    return [(clinic, role) for clinic, role in (await db.execute(stmt)).all()]
+    pairs = [(clinic, role) for clinic, role in (await db.execute(stmt)).all()]
+
+    role_ids = {role.id for _clinic, role in pairs}
+    permissions_by_role = await _permission_codes_by_role(db, role_ids=role_ids)
+    return [
+        (clinic, role, sorted(permissions_by_role.get(role.id, set()))) for clinic, role in pairs
+    ]
+
+
+async def _permission_codes_by_role(
+    db: AsyncSession, *, role_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, set[str]]:
+    if not role_ids:
+        return {}
+    stmt = (
+        select(RolePermission.role_id, Permission.code)
+        .join(Permission, Permission.id == RolePermission.permission_id)
+        .where(RolePermission.role_id.in_(role_ids))
+    )
+    result: dict[uuid.UUID, set[str]] = {role_id: set() for role_id in role_ids}
+    for role_id, code in (await db.execute(stmt)).all():
+        result[role_id].add(code)
+    return result
 
 
 async def update_current_clinic(
@@ -223,7 +255,7 @@ async def setup_mfa(db: AsyncSession, *, user: User) -> tuple[str, str]:
     secret = pyotp.random_base32()
     user.mfa_secret = secret
     await db.commit()
-    otpauth_url = pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="DentalCare")
+    otpauth_url = pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="DENT-IA")
     return secret, otpauth_url
 
 

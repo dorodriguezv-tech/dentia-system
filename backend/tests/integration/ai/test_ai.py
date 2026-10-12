@@ -377,3 +377,26 @@ async def test_status_and_settings_require_ai_configure_permission(
 
 async def _async_true():
     return True
+
+
+async def test_transcribe_accepts_android_m4a_audio(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    # B2 (docs/05_APP_MOVIL.md Sec. 7): Android grava AAC en contenedor MP4, no
+    # webm/opus como el navegador. El endpoint no filtra por content-type (lo
+    # decodifica faster-whisper/PyAV sin cambios), pero esta prueba lo fija para
+    # que una validacion futura no excluya sin querer el formato de la app movil.
+    headers, _patient_id, _encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    from app.ai import stt as stt_module
+
+    monkeypatch.setattr(stt_module, "transcribe", lambda audio_bytes, **_: "caries en 36 oclusal")
+
+    response = await client.post(
+        "/api/v1/ai/transcribe",
+        headers=headers,
+        files={"audio": ("dictado.m4a", b"fake-m4a-bytes", "audio/mp4")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["text"] == "caries en 36 oclusal"

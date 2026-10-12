@@ -91,6 +91,47 @@ async def test_logout_revokes_refresh_token(client: AsyncClient, make_user) -> N
     assert refresh_response.status_code == 401
 
 
+async def test_login_with_mfa_required_returns_mfa_token_shape(
+    client: AsyncClient, make_user, monkeypatch
+) -> None:
+    # B5 (docs/05_APP_MOVIL.md Sec. 7): la app movil espera exactamente estos
+    # nombres de campo para el segundo paso ({"mfa_required": true, "mfa_token":
+    # "..."} y luego POST /auth/login/mfa con {mfa_token, code}); ya es lo que
+    # produce el backend, esta prueba lo fija activando MFA_ENABLED (rules.py
+    # lo trae en False globalmente mientras no se termina el flujo completo).
+    from app.modules.iam import rules as iam_rules
+
+    monkeypatch.setattr(iam_rules, "MFA_ENABLED", True)
+    secret = pyotp.random_base32()
+    await make_user(
+        email="admin@example.com",
+        password="Contrasena123",
+        role_code="admin_clinica",
+        mfa_enabled=True,
+        mfa_secret=secret,
+    )
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": "Contrasena123"},
+    )
+    assert login_response.status_code == 200
+    body = login_response.json()
+    assert body["mfa_required"] is True
+    assert body["mfa_token"]
+    assert "access_token" not in body
+
+    code = pyotp.TOTP(secret).now()
+    mfa_response = await client.post(
+        "/api/v1/auth/login/mfa",
+        json={"mfa_token": body["mfa_token"], "code": code},
+    )
+    assert mfa_response.status_code == 200
+    mfa_body = mfa_response.json()
+    assert mfa_body["access_token"]
+    assert mfa_body["refresh_token"]
+
+
 async def test_login_skips_mfa_step_while_globally_disabled(client: AsyncClient, make_user) -> None:
     # rules.MFA_ENABLED esta en False temporalmente (ver ese archivo): incluso una
     # cuenta que ya tiene mfa_enabled/mfa_secret en la base entra directo, sin pedir
@@ -113,6 +154,27 @@ async def test_login_skips_mfa_step_while_globally_disabled(client: AsyncClient,
     body = login_response.json()
     assert body["access_token"]
     assert "mfa_token" not in body
+
+
+async def test_my_clinics_includes_clinic_name_and_permissions(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    # B4 (docs/05_APP_MOVIL.md Sec. 7): la app movil necesita saber que botones
+    # mostrar sin adivinar el rol; el backend sigue autorizando cada peticion.
+    await make_user(email="odonto@example.com", password="Contrasena123", role_code="odontologo")
+    token = await _access_token_for(client, "odonto@example.com", "Contrasena123")
+
+    response = await client.get("/api/v1/me/clinics", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    item = body[0]
+    assert item["clinic_name"] == clinic.name
+    assert item["clinic"]["id"] == str(clinic.id)
+    assert item["role"]["code"] == "odontologo"
+    assert "agenda.write" in item["permissions"]
+    assert "patients.write" not in item["permissions"]  # RBAC real: el odontologo no lo tiene
 
 
 async def _access_token_for(client: AsyncClient, email: str, password: str) -> str:

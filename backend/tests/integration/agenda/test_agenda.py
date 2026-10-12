@@ -612,3 +612,38 @@ async def test_exclude_constraint_is_a_backup_against_overlap(
     with pytest.raises(IntegrityError, match="ux_appointments_no_overlap_provider"):
         await db_session.commit()
     await db_session.rollback()
+
+
+async def test_list_appointments_accepts_range_and_includes_full_names(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """B3 (docs/05_APP_MOVIL.md Sec. 7): la app movil pinta la agenda sin una
+    peticion por cita. El contrato ya existe tal cual lo necesita (query
+    `starts_from`/`starts_to`, `patient_full_name`/`provider_full_name` en cada
+    cita): esta prueba lo fija para que no se rompa sin darse cuenta."""
+    headers, provider_id, patient_id, odonto = await _setup(client, make_user, clinic, db_session)
+    await client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "consulta",
+            "starts_at": _iso(MONDAY_9AM),
+        },
+    )
+
+    response = await client.get(
+        "/api/v1/appointments",
+        headers=headers,
+        params={
+            "starts_from": _iso(MONDAY_9AM - timedelta(hours=1)),
+            "starts_to": _iso(MONDAY_9AM + timedelta(hours=1)),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["patient_full_name"] == "Jose Perez"
+    assert body[0]["provider_full_name"] == odonto.full_name

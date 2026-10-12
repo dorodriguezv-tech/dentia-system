@@ -93,6 +93,11 @@ class TokenResponse(BaseModel):
 class MyClinicOut(BaseModel):
     clinic: ClinicOut
     role: RoleOut
+    # B4 (docs/05_APP_MOVIL.md Sec. 7): la app movil oculta botones segun el permiso,
+    # pero el backend sigue siendo quien autoriza cada peticion. Campos planos
+    # agregados sin tocar `clinic`/`role` (el frontend web ya los usa anidados).
+    clinic_name: str
+    permissions: list[str]
 
 
 class MfaSetupResponse(BaseModel):
