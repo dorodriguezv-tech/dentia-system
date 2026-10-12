@@ -1,4 +1,4 @@
-# Manual técnico — DentalCare
+# Manual técnico — DENT-IA
 
 Para quien instala, despliega o mantiene el sistema (no es un manual de usuario — ese
 es [`docs/MANUAL_USUARIO.md`](./MANUAL_USUARIO.md), ni el diseño detallado del sistema —

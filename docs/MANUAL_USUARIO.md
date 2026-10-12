@@ -1,4 +1,4 @@
-# Manual de usuario — DentalCare
+# Manual de usuario — DENT-IA
 
 Guía para el personal de la clínica (no para desarrolladores: la parte técnica está en
 [`docs/MANUAL_TECNICO.md`](./MANUAL_TECNICO.md)). Las capturas son de los datos de

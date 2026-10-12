@@ -6,7 +6,7 @@ de manejar datos reales de pacientes — ver "Alcance y límites" al final.
 
 ## 1. OWASP Top 10 — qué aplica y qué se hizo
 
-| Categoría OWASP | Situación en DentalCare |
+| Categoría OWASP | Situación en DENT-IA |
 |---|---|
 | A01 Control de acceso roto | RBAC + ABAC por sucursal desde la Fase 1 (`require_permission`, `X-Clinic-Id`); catálogo en `docs/MATRIZ_PERMISOS.md`. El superadmin no tiene acceso automático a contenido clínico (CLAUDE.md sec. 5). Probado con pruebas de integración por módulo (p. ej. `tests/integration/*/test_*.py` con un usuario sin el permiso esperado). |
 | A02 Fallas criptográficas | Contraseñas con Argon2id (`argon2-cffi`), JWT de corta duración + refresh token (`app/core/security.py`). Fase 12: `Settings` ya **no arranca** con `ENVIRONMENT=production` si `JWT_SECRET` se quedó en el valor de ejemplo (`change-me`) — antes era posible desplegar firmando tokens con un secreto público (este mismo repositorio). |

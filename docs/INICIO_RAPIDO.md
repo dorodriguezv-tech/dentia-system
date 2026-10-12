@@ -1,11 +1,18 @@
 # Inicio rápido (PowerShell, Windows)
 
-Comandos para levantar DentalCare en esta máquina, donde la base de datos, el entorno
+.\scripts/stop-dentia.ps1
+.\scripts\stop-dentia.ps1
+
+Comandos para levantar DENT-IA en esta máquina, donde la base de datos, el entorno
 virtual (`backend/.venv`) y las dependencias de Node (`node_modules`) ya están
 instalados. Para una instalación desde cero (otra máquina, sin nada previo) usa en su
 lugar el paso a paso completo del [`README`](../README.md).
 
 Abre **tres ventanas de PowerShell** (una por proceso) y deja cada una corriendo.
+
+> Atajo: `scripts\start-dentia.ps1` hace los pasos 1-3 por ti (detecta lo que ya
+> esté corriendo y no lo duplica) y `scripts\stop-dentia.ps1` los apaga. Ver
+> [scripts/README.md](../scripts/README.md).
 
 ## 1. Base de datos
 
@@ -80,12 +87,12 @@ Los crea `python -m app.seed` (organización **Clínica Dental Demo**, sucursal
 
 **Contraseña: `Dentia2025!`**
 
-| Correo | Rol | Notas |
-|---|---|---|
-| `admin@dentalcare-demo.mx` | Administrador de la clínica | MFA deshabilitada temporalmente (ver `docs/SEGURIDAD.md`) — entra directo, sin pedir configurar TOTP |
-| `odontologo@dentalcare-demo.mx` | Odontólogo | Expediente, odontograma, diagnóstico, tratamiento, consentimientos, IA |
-| `recepcion@dentalcare-demo.mx` | Recepción | Alta de pacientes y agenda |
-| `caja@dentalcare-demo.mx` | Caja | Pagos, corte de caja y reportes |
+| Correo                          | Rol                         | Notas                                                                                                |
+| ------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `admin@dentalcare-demo.mx`      | Administrador de la clínica | MFA deshabilitada temporalmente (ver `docs/SEGURIDAD.md`) — entra directo, sin pedir configurar TOTP |
+| `odontologo@dentalcare-demo.mx` | Odontólogo                  | Expediente, odontograma, diagnóstico, tratamiento, consentimientos, IA                               |
+| `recepcion@dentalcare-demo.mx`  | Recepción                   | Alta de pacientes y agenda                                                                           |
+| `caja@dentalcare-demo.mx`       | Caja                        | Pagos, corte de caja y reportes                                                                      |
 
 Los nombres de las personas (p. ej. "Ing. Wilfrido Gaytán") son generados al azar por
 Faker en cada corrida de `python -m app.seed` sobre una base nueva — solo el correo, la

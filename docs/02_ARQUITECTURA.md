@@ -208,27 +208,55 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   Windows (fijado en `requirements.txt`: el sistema no trae la base IANA,
   a diferencia de Linux/Mac).
 
-### 5.2 Tema y marca (Fase 2)
+### 5.2 Tema y marca (Fase 2; marca DENT-IA: docs/CAMBIOS_WEB_MARCA.md W1–W7)
 - **Catálogo único:** `backend/app/modules/branding/presets.py` es la fuente de verdad de los
-  6 presets y de los colores compartidos (`frontend/src/theme/presets.ts` es su copia para la
-  UI, igual que el patrón ya usado con el catálogo de permisos de IAM).
+  7 presets (`dentia` primero y por defecto, luego los 6 originales) y de los colores
+  compartidos (`frontend/src/theme/presets.ts` es su copia para la UI, igual que el patrón ya
+  usado con el catálogo de permisos de IAM). Un preset puede traer su propio
+  `surface`/`border`/`text`/`text_muted` (el preset `dentia` lo hace); si no los trae,
+  `full_palette()`/`fullPalette()` usan los compartidos. `DEFAULT_PRESET = "dentia"` es solo el
+  valor por defecto para sucursales **nuevas**: no hay migración que reescriba el preset de una
+  sucursal que ya eligió otro (`clinic_branding.preset` nunca tuvo `server_default` en la base,
+  es un `default` de SQLAlchemy a nivel aplicación).
 - **`GET /branding` es público** (lo necesita la pantalla de login antes de autenticar) y
   resuelve "la" sucursal como la más antigua (`clinics.created_at`); ver pendiente #12 en
-  `docs/PENDIENTES_CLINICOS.md` para multi-sucursal.
+  `docs/PENDIENTES_CLINICOS.md` para multi-sucursal. Sin branding configurado, `display_name`/
+  `subtitle` son **"DENT-IA"** / **"Sistema Inteligente de Gestión Odontológica"** (ya no el
+  nombre de la sucursal): es la identidad de producto por defecto hasta que el admin la
+  personaliza en Configuración → Apariencia.
+- **`has_custom_logo`:** `GET /branding/logo` y `/branding/favicon` ya no responden 404 — sin
+  logo propio sirven `branding/default_assets/dentia-{logo,favicon}.png`. `has_custom_logo`
+  (en `BrandingOut`) es la única forma de saber si el logo mostrado es el de la sucursal o el de
+  DENT-IA; el frontend (`<ClinicLogo>`/`<PoweredByDentia>`, `src/components/brand/Brand.tsx`) y
+  la app móvil (`src/components/Brand.tsx`) lo usan para decidir si mostrar "con tecnología
+  DENT-IA" debajo del logo propio.
 - **Derivación de color:** `--color-primary-hover`/`-soft` (y `-danger-soft`) nunca se guardan;
   se calculan en el cliente (`theme/colorUtils.ts`) cada vez que se aplica el tema, con la misma
   fórmula HSL que el backend (`color_utils.py`) usa para sugerir ajustes de contraste.
 - **Contraste WCAG:** `PUT /branding` siempre guarda lo que mandó el admin (no lo rechaza) pero
   devuelve `contrast_warnings` con el color sugerido si texto/fondo o texto-de-boton/primario
-  bajan de 4.5:1; la pantalla de Apariencia calcula lo mismo en vivo mientras se edita.
+  bajan de 4.5:1; la pantalla de Apariencia calcula lo mismo en vivo mientras se edita. El preset
+  `dentia` pasa este chequeo sin advertencias (primario ≥4.5:1 contra blanco y contra su `bg`).
 - **Modo oscuro:** no hay una paleta oscura dibujada a mano por preset; se usa una base neutra
-  oscura fija (`DARK_OVERRIDES` en el frontend) y se conservan primary/secondary/accent/
-  success/warning/danger del preset.
+  oscura fija (`DARK_OVERRIDES` en el frontend) y se conservan secondary/accent/success/warning/
+  danger del preset. El primario SÍ cambia: si el preset trae `dark_primary` (opcional, el
+  preset `dentia` lo trae: `#4FC3D9`) se usa ese; si no, `theme/store.ts` lo deriva con
+  `suggestContrastingColor` hasta 4.5:1 contra la superficie oscura — mismo criterio que usa
+  `mobile/src/theme/theme.tsx` (`DENTIA_BRAND.primaryDark`).
 - **Logo:** PNG/JPG/SVG, máximo 1 MB. El SVG se sanea con `xml.etree` (quita `<script>`,
   `<foreignObject>`, `<style>`, atributos `on*` y `javascript:`) en vez de rechazarse. El favicon
   se genera con Pillow (PNG/JPG a 64×64) o reutiliza el SVG saneado. Los archivos se sirven por
   `GET /branding/logo` y `/branding/favicon`, publicos a propósito (son la imagen de marca, no
   datos clínicos) — a diferencia de `storage/` en general, que nunca se sirve como estático.
+- **PDF de marca (W3):** los tres generadores (`treatment/pdf.py` presupuesto,
+  `billing/pdf.py` recibo, `documents/pdf.py` consentimiento) agregan el pie "Generado con
+  DENT-IA · Sistema Inteligente de Gestión Odontológica" (gris `#4F6676`, 7 pt) en cada página;
+  en presupuesto/recibo es un callback de canvas de reportlab (`onFirstPage`/`onLaterPages`), en
+  el consentimiento es un `@frame` estático de xhtml2pdf **fuera** de `<div>{body}</div>` (el
+  contenido que se hashea) para no mezclarse con lo que el paciente/tutor firmó — aunque en la
+  práctica `content_hash` se calcula sobre el PDF ya renderizado y un consentimiento firmado
+  nunca se regenera (`get_consent_pdf` solo lee los bytes guardados), así que esto no afecta
+  documentos ya firmados (regla 7).
 
 ### 5.3 Pacientes (Fase 3)
 - **Expediente:** `clinics.next_patient_number` es un contador por sucursal (se incrementa con
@@ -1656,6 +1684,8 @@ grabaciones reales de la clínica.
 | 12.1 | Parte A de `docs/06_INSTRUCCIONES...`: 7 errores reportados corregidos de raíz (profesionales sin `Provider`, búsqueda de pacientes por palabra, selector de atención compartido + red de seguridad global de errores de mutación, plantillas de consentimiento sembradas, logo como enlace a inicio), puertos de E2E dedicados (8011/5185) y contraste WCAG corregido en los 4 presets de marca que faltaban — ver sección 5.13 | Hecho |
 | 12.2 | Parte B completa de `docs/06_INSTRUCCIONES...`: **B1** catálogos de tipos de cita, hallazgos, diagnósticos, categorías de antecedentes y palabras clave de alerta administrables por sucursal (tabla genérica `clinic_catalog_items`, permiso `catalogs.manage`), pantalla Configuración → Catálogos (sección 5.14); **B2** gabinete por defecto del profesional (`Provider.default_resource_id`) y alta de usuario en varias sucursales a la vez; **B3** gabinete/profesional tratante por defecto del paciente (`Patient.default_resource_id`/`primary_provider_id`, edición controlada con motivo) y filtro "Mis pacientes" — ver sección 5.15 | Hecho |
 | 13 (13.1–13.5, C3) | Parte C de `docs/06_INSTRUCCIONES...`: "Dentia" — 13.1 "Base de voz", 13.2 "Navegación", 13.3 "Captura en consulta", 13.4 "Diagnóstico, plan y agenda" (**completa**), 13.5 "Ruta LLM y dictado" (**completa**: ruta LLM clínica + ruta LLM de agenda — `app/voice/agenda_llm.py` — antes de rendirse; `modo_dictado`; `OLLAMA_INTENT_MODEL`/`OLLAMA_KEEP_ALIVE` dedicados) y C3 "Vocabulario odontológico" (**completo**: `app/ai/vocab/build.py` extrae ~1100 términos del diccionario + catálogos clínicos fijos hacia `hotwords`/corrección con `rapidfuzz` de `app/ai/stt.py`) — ver secciones 5.16 a 5.21. De 13.6 "Afinación": corpus de regresión (`tests/voice/commands.jsonl`, `app/voice/eval.py`) y primer E2E de voz (`e2e/tests/voice.spec.ts`, `VOICE_FAKE_MODE`) **hechos**; pruebas con audio con ruido real y entrenamiento de un modelo propio de palabra de activación **bloqueados** (necesitan grabaciones reales de la clínica que no existen — ver `docs/PENDIENTES_CLINICOS.md` #49); vocabulario por contexto (pantalla/catálogos de sucursal/pacientes del día, #47) **resuelto** — ver `app/voice/vocab_context.py`, sec. 5.21; esquema LLM dinámico por pantalla/rol (sec. 5.20) sigue sin hacerse | En curso |
+| 14 | App móvil DENT-IA (`mobile/`, Expo SDK 57 + React Native 0.86 + TS estricto, cliente puro de `/api/v1`): dependencias alineadas (`npm install` + `expo install --fix`, `react`/`react-dom`/`react-native` pineados entre sí vía `overrides`), `npm run typecheck`/`npm test`/`npx expo-doctor` en verde. Contrato contra el backend verificado generando `src/api/schema.d.ts` con `openapi-typescript` y comparando cada tipo/endpoint a mano: varios mismatches reales corregidos en la app (query `starts_from`/`starts_to` de `/appointments`, `patient_full_name`/`provider_full_name`, `/ai/interpret` esperaba `transcript` no `text`, `/patients/.../odontogram` es un arreglo sin envolver, `expediente_number`/`date_of_birth`, alertas como `string[]` sin `severity` estructurada, forma real de `/branding` y `/ai/status`, `edits` no `payload` en aceptar sugerencia). Cambios B1–B5 del backend (docs/05_APP_MOVIL.md §7) verificados con pytest: B1/B2/B3/B5 ya los cumplía el backend tal cual (tokens siempre en el cuerpo, sin content-type gate en `/ai/transcribe`, nombres de campo de MFA ya correctos); **B4** sí requirió cambio real — `GET /me/clinics` ahora incluye `clinic_name` y `permissions` (aditivo, sin tocar `clinic`/`role` anidados que ya usa el frontend web) | Hecho |
+| 15 | Marca DENT-IA en el sistema web (`docs/CAMBIOS_WEB_MARCA.md` W1–W7, misma paleta que `DENTIA_BRAND` de `mobile/src/theme/theme.tsx`): preset `dentia` nuevo y por defecto para sucursales nuevas (W1), `GET /branding/logo`\|`/favicon` ya no 404 — sirven el logo/favicon de DENT-IA por defecto, `has_custom_logo` distingue cuál se muestra (W2), pie de página de marca en los tres PDF (presupuesto, recibo, consentimiento — fuera del contenido firmado, W3), "DentalCare"/"DENTIA" → "DENT-IA" en textos visibles del backend y frontend (W4), `index.html`/favicon/manifest PWA (W5), tokens de marca fijos (`--brand-dentia-*`) y tipografía Montserrat en encabezados, más `dark_primary` opcional por preset derivado en `theme/store.ts` si falta (W6), componentes `src/components/brand/Brand.tsx` (`DentiaLogo`, `ClinicLogo`, `DentiaIsotipo`, `PoweredByDentia`, `BrandStripe`) usados en login y barra lateral (W7). Verificado en vivo: `pytest` completo, `ruff`/`black`/`mypy`, `npm run build`/`lint`/`test` del frontend, y la suite completa de Playwright (incluida `accessibility.spec.ts`, sin violaciones nuevas) contra el sistema corriendo de verdad; capturas de `docs/manual/` regeneradas con `CAPTURE_SCREENSHOTS=1` | Hecho |
 
 **Verificación en vivo de Parte A (2026-10-09):** los 7 puntos de la sección 5.13 se
 reprodujeron de nuevo contra el sistema corriendo de verdad (backend/frontend/Postgres/Ollama

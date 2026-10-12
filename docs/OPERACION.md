@@ -1,6 +1,6 @@
 # Operación: respaldos y continuidad (CLAUDE.md Fase 11)
 
-Este documento explica cómo respaldar DentalCare, cómo probar que un respaldo
+Este documento explica cómo respaldar DENT-IA, cómo probar que un respaldo
 realmente sirve para recuperar el sistema, y cómo programar ambas cosas en Windows
 y en Linux. Los scripts viven en `scripts/` (`.ps1` para Windows, `.sh` para
 Linux/Mac — hacen exactamente lo mismo).
@@ -125,7 +125,7 @@ temporal ya no existe después de la corrida).
 ### Windows (Programador de tareas)
 
 1. Abre el **Programador de tareas** → *Crear tarea básica...*
-2. Nombre: `DentalCare - Respaldo diario`. Desencadenador: diario, a una hora de
+2. Nombre: `DENT-IA - Respaldo diario`. Desencadenador: diario, a una hora de
    baja actividad (p. ej. 2:00 a.m.).
 3. Acción: *Iniciar un programa*.
    - Programa/script: `powershell.exe`
