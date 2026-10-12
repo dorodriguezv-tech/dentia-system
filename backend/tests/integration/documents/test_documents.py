@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import uuid
 
@@ -109,6 +110,14 @@ async def test_create_consent_generates_pdf_with_hash(
     assert pdf_resp.status_code == 200
     assert pdf_resp.headers["content-type"] == "application/pdf"
     assert pdf_resp.content.startswith(b"%PDF")
+
+    # W3 (docs/CAMBIOS_WEB_MARCA.md): un consentimiento firmado no se regenera al
+    # leerlo (regla 7: los documentos firmados no se sobrescriben); el pie de pagina
+    # de marca se agrega solo al firmar, nunca despues. Dos lecturas devuelven el
+    # mismo PDF, y su hash coincide con el que quedo guardado al firmar.
+    pdf_resp_again = await client.get(f"/api/v1/consents/{body['id']}/pdf", headers=headers)
+    assert pdf_resp_again.content == pdf_resp.content
+    assert hashlib.sha256(pdf_resp.content).hexdigest() == body["content_hash"]
 
 
 async def test_create_consent_without_a_configured_template_fails(

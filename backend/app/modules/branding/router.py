@@ -6,7 +6,6 @@ from starlette.responses import Response
 
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
-from app.core.errors import AppError
 from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.branding import service
 from app.modules.branding.schemas import BrandingOut, BrandingUpdateRequest
@@ -54,10 +53,8 @@ async def upload_logo(
 async def get_logo(
     db: AsyncSession = Depends(get_db), storage: StorageBackend = Depends(get_storage_backend)
 ) -> Response:
-    asset = await service.read_logo(db, storage)
-    if asset is None:
-        raise AppError("NOT_FOUND", "No hay logo configurado", status_code=404)
-    data, content_type = asset
+    # W2: siempre hay algo que mostrar (el propio o el de DENT-IA por defecto).
+    data, content_type = await service.read_logo(db, storage)
     return Response(content=data, media_type=content_type)
 
 
@@ -65,8 +62,5 @@ async def get_logo(
 async def get_favicon(
     db: AsyncSession = Depends(get_db), storage: StorageBackend = Depends(get_storage_backend)
 ) -> Response:
-    asset = await service.read_favicon(db, storage)
-    if asset is None:
-        raise AppError("NOT_FOUND", "No hay favicon configurado", status_code=404)
-    data, content_type = asset
+    data, content_type = await service.read_favicon(db, storage)
     return Response(content=data, media_type=content_type)

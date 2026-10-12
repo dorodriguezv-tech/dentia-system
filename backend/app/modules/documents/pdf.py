@@ -16,6 +16,12 @@ class PdfRenderError(Exception):
     """xhtml2pdf no pudo generar el PDF (HTML invalido en la plantilla)."""
 
 
+# W3 (docs/CAMBIOS_WEB_MARCA.md): pie de pagina de marca. Va en un @frame estatico de
+# xhtml2pdf, fuera de `<div>{body}</div>` (el contenido firmado que se hashea), para
+# no mezclarse visualmente con lo que el paciente/tutor efectivamente firmo.
+FOOTER_TEXT = "Generado con DENT-IA · Sistema Inteligente de Gestión Odontológica"
+
+
 def build_consent_pdf(
     *,
     html_content: str,
@@ -42,8 +48,25 @@ def build_consent_pdf(
 
     document = f"""
     <html>
-    <head><meta charset="utf-8" /></head>
+    <head>
+    <meta charset="utf-8" />
+    <style>
+        @page {{
+            size: letter;
+            @frame content_frame {{
+                top: 15mm; left: 20mm; right: 20mm; bottom: 22mm;
+            }}
+            @frame footer_frame {{
+                -pdf-frame-content: footer_content;
+                bottom: 10mm; left: 20mm; right: 20mm; height: 10mm;
+            }}
+        }}
+    </style>
+    </head>
     <body style="font-family: Helvetica, Arial, sans-serif; font-size: 11pt;">
+        <div id="footer_content" style="text-align:center;color:#4F6676;font-size:7pt;">
+            {FOOTER_TEXT}
+        </div>
         <div style="text-align:center;margin-bottom:12px;">
             {logo_html}
             <h2>{clinic_name}</h2>

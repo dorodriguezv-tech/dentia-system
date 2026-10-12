@@ -1,8 +1,9 @@
 import io
 
 from PIL import Image
+from pypdf import PdfReader
 
-from app.modules.documents.pdf import build_consent_pdf
+from app.modules.documents.pdf import FOOTER_TEXT, build_consent_pdf
 
 
 def _png_bytes() -> bytes:
@@ -24,6 +25,9 @@ def test_build_consent_pdf_returns_valid_pdf_bytes() -> None:
     )
     assert pdf.startswith(b"%PDF")
     assert len(pdf) > 500
+    # W3 (docs/CAMBIOS_WEB_MARCA.md): pie de pagina de marca, fuera del contenido firmado.
+    text = PdfReader(io.BytesIO(pdf)).pages[0].extract_text()
+    assert FOOTER_TEXT in text
 
 
 def test_build_consent_pdf_without_logo_does_not_crash() -> None:

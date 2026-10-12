@@ -10,6 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
@@ -32,6 +33,19 @@ class BudgetPhaseRow:
 
 def _money(value: Decimal) -> str:
     return f"${value:,.2f}"
+
+
+# W3 (docs/CAMBIOS_WEB_MARCA.md): pie de pagina de marca en todos los PDF generados.
+FOOTER_TEXT = "Generado con DENT-IA · Sistema Inteligente de Gestión Odontológica"
+_FOOTER_COLOR = colors.HexColor("#4F6676")
+
+
+def _draw_footer(canvas: Canvas, doc: SimpleDocTemplate) -> None:
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(_FOOTER_COLOR)
+    canvas.drawCentredString(doc.pagesize[0] / 2, 12 * mm, FOOTER_TEXT)
+    canvas.restoreState()
 
 
 def build_budget_pdf(
@@ -108,5 +122,5 @@ def build_budget_pdf(
         story.append(Spacer(1, 6 * mm))
         story.append(Paragraph(acceptance_label, styles["Normal"]))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return buffer.getvalue()

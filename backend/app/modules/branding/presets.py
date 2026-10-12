@@ -4,11 +4,13 @@ Fuente de verdad unica: frontend/src/theme/presets.ts es una copia para la UI
 (selector de presets), igual que el catalogo de permisos de IAM.
 """
 
-DEFAULT_PRESET = "menta_clinica"
+DEFAULT_PRESET = "dentia"
 
 # Colores comunes a todos los presets: el preset solo cambia primary/secondary/accent/bg
 # (ver la tabla de docs/04, que no varia el resto). Los semanticos (success/warning/danger)
-# se mantienen fijos para que signifiquen siempre lo mismo sin importar la marca.
+# se mantienen fijos para que signifiquen siempre lo mismo sin importar la marca. Un preset
+# puede traer su propio surface/border/text/text_muted (el preset "dentia" lo hace); si no
+# los trae, full_palette() usa estos.
 _SHARED_DEFAULTS = {
     "surface": "#FFFFFF",
     "border": "#DCE6E5",
@@ -20,6 +22,22 @@ _SHARED_DEFAULTS = {
 }
 
 PRESETS: dict[str, dict[str, str]] = {
+    "dentia": {
+        "name": "DENT-IA (institucional)",
+        "primary": "#0A5A8C",
+        "secondary": "#1690B6",
+        "accent": "#22AAC2",
+        "bg": "#F5F9FC",
+        "surface": "#FFFFFF",
+        "border": "#D3E2EC",
+        "text": "#0E2A3B",
+        "text_muted": "#4F6676",
+        # Primario en modo oscuro (el frontend lo usa en vez de aclarar "primary" en
+        # tiempo de ejecucion -- docs/CAMBIOS_WEB_MARCA.md W1/W6). Opcional: un preset sin
+        # esta clave se deriva en el frontend (theme/colorUtils.ts) aclarando "primary"
+        # hasta 4.5:1 sobre la superficie oscura.
+        "dark_primary": "#4FC3D9",
+    },
     "menta_clinica": {
         "name": "Menta clinica",
         # #2BB3A3 (el teal original) no pasa el propio chequeo de contraste WCAG de
@@ -109,5 +127,11 @@ def full_palette(preset_code: str) -> dict[str, str]:
         "secondary": preset["secondary"],
         "accent": preset["accent"],
         "bg": preset["bg"],
-        **_SHARED_DEFAULTS,
+        "surface": preset.get("surface", _SHARED_DEFAULTS["surface"]),
+        "border": preset.get("border", _SHARED_DEFAULTS["border"]),
+        "text": preset.get("text", _SHARED_DEFAULTS["text"]),
+        "text_muted": preset.get("text_muted", _SHARED_DEFAULTS["text_muted"]),
+        "success": _SHARED_DEFAULTS["success"],
+        "warning": _SHARED_DEFAULTS["warning"],
+        "danger": _SHARED_DEFAULTS["danger"],
     }

@@ -6,6 +6,7 @@ from app.modules.branding.color_utils import is_valid_hex
 from app.modules.branding.presets import COLOR_KEYS
 
 PresetCode = Literal[
+    "dentia",
     "menta_clinica",
     "azul_sereno",
     "aqua_suave",
@@ -63,6 +64,11 @@ class BrandingOut(BaseModel):
     radius: RadiusCode
     logo_url: str | None
     favicon_url: str | None
+    # W2 (docs/CAMBIOS_WEB_MARCA.md): logo_url/favicon_url ahora siempre traen algo
+    # que mostrar (el propio o el de DENT-IA por defecto); este campo es la unica
+    # forma de saber si es el logo propio de la sucursal, para mostrar o no
+    # "con tecnologia DENT-IA" debajo.
+    has_custom_logo: bool
     contrast_warnings: list[ContrastWarning] = Field(default_factory=list)
 
 

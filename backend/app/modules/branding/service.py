@@ -1,5 +1,6 @@
 import io
 import uuid
+from pathlib import Path
 
 from PIL import Image
 from sqlalchemy import select
@@ -30,6 +31,14 @@ FAVICON_SIZE = (64, 64)
 
 _LOGO_URL = "/api/v1/branding/logo"
 _FAVICON_URL = "/api/v1/branding/favicon"
+
+# W2 (docs/CAMBIOS_WEB_MARCA.md): logo/favicon de DENT-IA cuando la sucursal no
+# subio uno propio. GET /branding/logo y /branding/favicon ya no responden 404.
+_DEFAULT_ASSETS_DIR = Path(__file__).parent / "default_assets"
+_DEFAULT_LOGO_PATH = _DEFAULT_ASSETS_DIR / "dentia-logo.png"
+_DEFAULT_FAVICON_PATH = _DEFAULT_ASSETS_DIR / "dentia-favicon.png"
+DEFAULT_DISPLAY_NAME = "DENT-IA"
+DEFAULT_SUBTITLE = "Sistema Inteligente de Gestión Odontológica"
 
 
 def _contrast_warnings(colors: ColorPalette) -> list[ContrastWarning]:
@@ -64,25 +73,22 @@ async def get_default_clinic(db: AsyncSession) -> Clinic | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
-def _asset_urls(branding: ClinicBranding | None) -> tuple[str | None, str | None]:
-    if branding is None:
-        return None, None
-    logo_url = _LOGO_URL if branding.logo_path else None
-    favicon_url = _FAVICON_URL if branding.favicon_path else None
-    return logo_url, favicon_url
+def _has_custom_logo(branding: ClinicBranding | None) -> bool:
+    return branding is not None and branding.logo_path is not None
 
 
-def _default_branding_out(display_name: str) -> BrandingOut:
+def _default_branding_out() -> BrandingOut:
     colors = ColorPalette.model_validate(full_palette(DEFAULT_PRESET))
     return BrandingOut(
-        display_name=display_name,
-        subtitle=None,
+        display_name=DEFAULT_DISPLAY_NAME,
+        subtitle=DEFAULT_SUBTITLE,
         preset=DEFAULT_PRESET,
         colors=colors,
         dark_mode=False,
         radius="soft",
-        logo_url=None,
-        favicon_url=None,
+        logo_url=_LOGO_URL,
+        favicon_url=_FAVICON_URL,
+        has_custom_logo=False,
         contrast_warnings=_contrast_warnings(colors),
     )
 
@@ -90,14 +96,13 @@ def _default_branding_out(display_name: str) -> BrandingOut:
 async def get_branding(db: AsyncSession) -> BrandingOut:
     clinic = await get_default_clinic(db)
     if clinic is None:
-        return _default_branding_out("DentalCare")
+        return _default_branding_out()
 
     branding = await db.get(ClinicBranding, clinic.id)
     if branding is None:
-        return _default_branding_out(clinic.name)
+        return _default_branding_out()
 
     colors = ColorPalette.model_validate(branding.colors)
-    logo_url, favicon_url = _asset_urls(branding)
     return BrandingOut(
         display_name=branding.display_name,
         subtitle=branding.subtitle,
@@ -105,8 +110,9 @@ async def get_branding(db: AsyncSession) -> BrandingOut:
         colors=colors,
         dark_mode=branding.dark_mode,
         radius=branding.radius,
-        logo_url=logo_url,
-        favicon_url=favicon_url,
+        logo_url=_LOGO_URL,
+        favicon_url=_FAVICON_URL,
+        has_custom_logo=_has_custom_logo(branding),
         contrast_warnings=_contrast_warnings(colors),
     )
 
@@ -153,7 +159,6 @@ async def update_branding(
     )
     await db.commit()
 
-    logo_url, favicon_url = _asset_urls(branding)
     return BrandingOut(
         display_name=branding.display_name,
         subtitle=branding.subtitle,
@@ -161,8 +166,9 @@ async def update_branding(
         colors=palette,
         dark_mode=branding.dark_mode,
         radius=branding.radius,
-        logo_url=logo_url,
-        favicon_url=favicon_url,
+        logo_url=_LOGO_URL,
+        favicon_url=_FAVICON_URL,
+        has_custom_logo=_has_custom_logo(branding),
         contrast_warnings=_contrast_warnings(palette),
     )
 
@@ -253,34 +259,31 @@ async def upload_logo(
         radius=branding.radius,
         logo_url=_LOGO_URL,
         favicon_url=_FAVICON_URL,
+        has_custom_logo=True,
         contrast_warnings=_contrast_warnings(colors),
     )
 
 
-async def read_logo(db: AsyncSession, storage: StorageBackend) -> tuple[bytes, str] | None:
+async def read_logo(db: AsyncSession, storage: StorageBackend) -> tuple[bytes, str]:
     return await _read_asset(db, storage, favicon=False)
 
 
-async def read_favicon(db: AsyncSession, storage: StorageBackend) -> tuple[bytes, str] | None:
+async def read_favicon(db: AsyncSession, storage: StorageBackend) -> tuple[bytes, str]:
     return await _read_asset(db, storage, favicon=True)
 
 
 async def _read_asset(
     db: AsyncSession, storage: StorageBackend, *, favicon: bool
-) -> tuple[bytes, str] | None:
+) -> tuple[bytes, str]:
     clinic = await get_default_clinic(db)
-    if clinic is None:
-        return None
-    branding = await db.get(ClinicBranding, clinic.id)
-    if branding is None:
-        return None
+    branding = await db.get(ClinicBranding, clinic.id) if clinic else None
+    key = (branding.favicon_path if favicon else branding.logo_path) if branding else None
 
-    key = branding.favicon_path if favicon else branding.logo_path
-    if not key:
-        return None
+    if key:
+        return storage.read(key), _guess_content_type(key)
 
-    content_type = _guess_content_type(key)
-    return storage.read(key), content_type
+    default_path = _DEFAULT_FAVICON_PATH if favicon else _DEFAULT_LOGO_PATH
+    return default_path.read_bytes(), "image/png"
 
 
 def _guess_content_type(key: str) -> str:

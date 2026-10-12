@@ -1,6 +1,9 @@
+import io
 from decimal import Decimal
 
-from app.modules.treatment.pdf import BudgetItemRow, BudgetPhaseRow, build_budget_pdf
+from pypdf import PdfReader
+
+from app.modules.treatment.pdf import FOOTER_TEXT, BudgetItemRow, BudgetPhaseRow, build_budget_pdf
 
 
 def test_build_budget_pdf_returns_a_valid_pdf_document() -> None:
@@ -34,6 +37,9 @@ def test_build_budget_pdf_returns_a_valid_pdf_document() -> None:
 
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500
+    # W3 (docs/CAMBIOS_WEB_MARCA.md): pie de pagina de marca en todos los PDF.
+    text = PdfReader(io.BytesIO(pdf_bytes)).pages[0].extract_text()
+    assert FOOTER_TEXT in text
 
 
 def test_build_budget_pdf_skips_unreadable_logo_without_crashing() -> None:

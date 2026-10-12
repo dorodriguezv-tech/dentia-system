@@ -20,13 +20,19 @@ def _png_bytes(size: tuple[int, int] = (20, 20)) -> bytes:
 async def test_get_branding_without_data_returns_default_preset(
     client: AsyncClient, clinic
 ) -> None:
+    # W1 (docs/CAMBIOS_WEB_MARCA.md): "dentia" es el preset por defecto para
+    # sucursales nuevas desde la Fase de marca DENT-IA.
     response = await client.get("/api/v1/branding")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["preset"] == "menta_clinica"
-    assert body["colors"]["primary"] == "#1E7D72"
-    assert body["logo_url"] is None
+    assert body["preset"] == "dentia"
+    assert body["colors"]["primary"] == "#0A5A8C"
+    # W2: siempre hay una URL que mostrar (el logo de DENT-IA por defecto, no 404).
+    assert body["logo_url"] == "/api/v1/branding/logo"
+    assert body["has_custom_logo"] is False
+    assert body["display_name"] == "DENT-IA"
+    assert body["subtitle"] == "Sistema Inteligente de Gestión Odontológica"
 
 
 async def test_put_branding_requires_authentication(client: AsyncClient, clinic) -> None:
@@ -202,6 +208,38 @@ async def test_svg_logo_with_script_is_sanitized(client: AsyncClient, make_user,
     logo_response = await client.get("/api/v1/branding/logo")
     assert b"<script" not in logo_response.content
     assert b"onclick" not in logo_response.content
+
+
+async def test_logo_and_favicon_fall_back_to_dentia_default(client: AsyncClient, clinic) -> None:
+    # W2 (docs/CAMBIOS_WEB_MARCA.md): antes respondian 404 sin logo propio.
+    logo_response = await client.get("/api/v1/branding/logo")
+    assert logo_response.status_code == 200
+    assert logo_response.headers["content-type"] == "image/png"
+
+    favicon_response = await client.get("/api/v1/branding/favicon")
+    assert favicon_response.status_code == 200
+    assert favicon_response.headers["content-type"] == "image/png"
+
+
+async def test_has_custom_logo_becomes_true_after_upload(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    await make_user(email="admin@example.com", role_code="admin_clinica")
+    token = await _login(client, "admin@example.com")
+    headers = {"Authorization": f"Bearer {token}", "X-Clinic-Id": str(clinic.id)}
+
+    before = await client.get("/api/v1/branding")
+    assert before.json()["has_custom_logo"] is False
+
+    upload = await client.post(
+        "/api/v1/branding/logo",
+        headers=headers,
+        files={"file": ("logo.png", _png_bytes(), "image/png")},
+    )
+    assert upload.json()["has_custom_logo"] is True
+
+    after = await client.get("/api/v1/branding")
+    assert after.json()["has_custom_logo"] is True
 
 
 async def test_logo_without_authentication_is_rejected(client: AsyncClient, clinic) -> None:
