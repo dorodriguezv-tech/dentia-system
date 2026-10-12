@@ -1,35 +1,35 @@
 /*
-  Valores por defecto (preset "Menta clinica"), usados mientras carga GET /branding
-  y como respaldo si la API no responde. ThemeProvider sobreescribe estas variables
-  en document.documentElement.style con lo que devuelva /branding (docs/04_TEMAS_Y_MARCA.md).
-  Ningun componente debe usar colores fijos: siempre var(--color-...).
+  Valores por defecto (preset "dentia"), usados mientras carga GET /branding y
+  como respaldo si la API no responde. ThemeProvider sobreescribe estas variables
+  en document.documentElement.style con lo que devuelva /branding (docs/04_TEMAS_Y_MARCA.md,
+  docs/CAMBIOS_WEB_MARCA.md W6). Ningun componente debe usar colores fijos: siempre
+  var(--color-...); la unica excepcion son las variables --brand-dentia-* de abajo
+  (marca del producto, fijas, no las cambia la clinica).
 */
 :root {
-  /* #1E7D72, no el teal original #2BB3A3: ese no pasaba el chequeo de contraste
-     WCAG 4.5:1 del propio sistema (docs/04_TEMAS_Y_MARCA.md sec. 4) como texto
-     sobre blanco/bg ni como texto blanco sobre el boton primario -- encontrado
-     con una auditoria automatica (axe-core) en la Fase 12 (el primer ajuste,
-     #1F8276, llegaba justo a 4.43:1 contra --color-bg, por debajo del minimo;
-     este deja margen: >=4.7:1 contra blanco y contra --color-bg). Hover/soft
-     recalculados con backend/app/modules/branding/color_utils.py
-     (derive_hover/derive_soft) a partir del nuevo primary, igual que hace el
-     servicio con un preset guardado. */
-  --color-primary: #1e7d72;
-  --color-primary-hover: #124c45;
-  --color-primary-soft: #ecfaf9;
-  --color-secondary: #4a90c2;
-  --color-accent: #f2a65a;
+  --color-primary: #0a5a8c;
+  --color-primary-hover: #124c45; /* recalculado por theme/store.ts (deriveHover) en runtime */
+  --color-primary-soft: #ecfaf9; /* idem (deriveSoft) */
+  --color-secondary: #1690b6;
+  --color-accent: #22aac2;
 
-  --color-bg: #f7fafa;
+  --color-bg: #f5f9fc;
   --color-surface: #ffffff;
-  --color-border: #dce6e5;
-  --color-text: #1f2d2b;
-  --color-text-muted: #5e6e6c;
+  --color-border: #d3e2ec;
+  --color-text: #0e2a3b;
+  --color-text-muted: #4f6676;
 
   --color-success: #3ba55c;
   --color-warning: #e0a100;
   --color-danger: #d64545;
   --color-danger-soft: #fbe9e9;
+
+  /* Marca del producto DENT-IA: fijos, no los cambia la clinica (preset "dentia" en
+     backend/app/modules/branding/presets.py, mobile/src/theme/theme.tsx DENTIA_BRAND). */
+  --brand-dentia-navy: #004a73;
+  --brand-dentia-cyan: #22aac2;
+  --brand-dentia-gradient: linear-gradient(90deg, #22aac2 0%, #0a5a8c 100%);
+  --font-heading: 'Montserrat', 'Inter', 'Segoe UI', system-ui, sans-serif;
 
   /* Colores del catalogo de hallazgos del odontograma (Fase 5): semanticos y fijos,
      igual que success/warning/danger, independientes de la marca de la clinica.
@@ -67,4 +67,11 @@
   --radius: 10px;
   --font-family:
     'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.brand-title {
+  font-family: var(--font-heading);
 }

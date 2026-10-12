@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { resolveApiAssetUrl } from '../api/client'
+import { ClinicLogo, PoweredByDentia } from '../components/brand/Brand'
 import {
   canConfigureAi,
   canConfigureBilling,
@@ -29,6 +29,7 @@ export function Layout() {
 
   const activeClinic = clinics.find((c) => c.clinic.id === activeClinicId)
   const activeRole = activeClinic?.role.code ?? null
+  const hasCustomLogo = branding?.has_custom_logo ?? false
 
   async function handleLogout() {
     await logout()
@@ -41,11 +42,12 @@ export function Layout() {
         {/* A7: logo (o nombre de la clinica, sin logo) arriba a la izquierda, visible
             en toda la app, que lleve a la pagina de inicio al hacer clic. */}
         <NavLink to="/" className={styles.brand}>
-          {branding?.logo_url ? (
-            <img className={styles.brandLogo} src={resolveApiAssetUrl(branding.logo_url)} alt="" />
-          ) : (
-            <span>{branding?.display_name ?? 'DentalCare'}</span>
-          )}
+          <ClinicLogo
+            logoUrl={branding?.logo_url ?? null}
+            hasCustomLogo={hasCustomLogo}
+            clinicName={branding?.display_name ?? 'DENT-IA'}
+            width={160}
+          />
         </NavLink>
         <ul className={styles.nav}>
           <li>
@@ -115,6 +117,11 @@ export function Layout() {
             </li>
           )}
         </ul>
+        {hasCustomLogo && (
+          <div className={styles.sidebarFooter}>
+            <PoweredByDentia />
+          </div>
+        )}
       </aside>
       <header className={styles.header}>
         <button className={styles.searchButton} type="button" onClick={() => openSearch(true)}>

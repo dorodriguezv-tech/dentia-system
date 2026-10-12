@@ -29,6 +29,7 @@ const initialBranding: BrandingOut = {
   radius: 'soft',
   logo_url: null,
   favicon_url: null,
+  has_custom_logo: false,
   contrast_warnings: [],
 }
 

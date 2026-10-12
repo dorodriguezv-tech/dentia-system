@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiRequestError, resolveApiAssetUrl } from '../../api/client'
+import { ApiRequestError } from '../../api/client'
+import { BrandStripe, ClinicLogo, PoweredByDentia } from '../../components/brand/Brand'
 import { useThemeStore } from '../../theme/store'
 import styles from './AuthForm.module.css'
 import * as api from './api'
@@ -61,18 +62,33 @@ export function LoginPage() {
     }
   }
 
+  const hasCustomLogo = branding?.has_custom_logo ?? false
+
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        {branding?.logo_url && (
-          <img className={styles.brandLogo} src={resolveApiAssetUrl(branding.logo_url)} alt="" />
-        )}
-        <p className={styles.brand}>{branding?.display_name ?? 'DentalCare'}</p>
-        {branding?.subtitle && <p className={styles.hint}>{branding.subtitle}</p>}
+        <BrandStripe />
+        <div className={styles.cardBody}>
+          <div className={styles.brandLogoWrap}>
+            <ClinicLogo
+              logoUrl={branding?.logo_url ?? null}
+              hasCustomLogo={hasCustomLogo}
+              clinicName={branding?.display_name ?? 'DENT-IA'}
+              width={240}
+            />
+          </div>
+          {/* El logo DENT-IA ya incluye nombre y lema; solo se repite el texto cuando
+              la clinica usa su propio logo (que normalmente no los trae). */}
+          {hasCustomLogo && (
+            <>
+              <p className={styles.brand}>{branding?.display_name}</p>
+              {branding?.subtitle && <p className={styles.hint}>{branding.subtitle}</p>}
+            </>
+          )}
 
-        {error && <div className={styles.error}>{error}</div>}
+          {error && <div className={styles.error}>{error}</div>}
 
-        {mfaToken === null ? (
+          {mfaToken === null ? (
           <form onSubmit={handleCredentialsSubmit}>
             <div className={styles.field}>
               <label htmlFor="email">Correo</label>
@@ -120,7 +136,9 @@ export function LoginPage() {
               {loading ? 'Verificando...' : 'Verificar'}
             </button>
           </form>
-        )}
+          )}
+          {hasCustomLogo && <PoweredByDentia />}
+        </div>
       </div>
     </div>
   )

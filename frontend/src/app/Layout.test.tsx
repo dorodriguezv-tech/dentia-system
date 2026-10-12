@@ -23,26 +23,29 @@ describe('Layout', () => {
   it('muestra la marca y el titulo del encabezado', () => {
     renderLayout()
 
-    expect(screen.getByText('DentalCare')).toBeInTheDocument()
     expect(screen.getByText('Buscar paciente...')).toBeInTheDocument()
   })
 
-  it('A7: sin logo configurado, el nombre de la marca es un enlace a inicio', () => {
+  it('A7/W7: sin logo propio, el enlace a inicio muestra el logo DENT-IA', () => {
     renderLayout()
 
-    const brandLink = screen.getByRole('link', { name: 'DentalCare' })
+    const brandLink = screen.getByRole('link', {
+      name: 'DENT-IA · Sistema Inteligente de Gestión Odontológica',
+    })
     expect(brandLink).toHaveAttribute('href', '/')
+    expect(brandLink.querySelector('img')).toBeInTheDocument()
   })
 
-  it('A7: con logo configurado, se muestra el logo (no el nombre) como enlace a inicio', () => {
+  it('A7/W7: con logo propio, se muestra el logo de la clinica (no el de DENT-IA)', () => {
     useThemeStore.setState({
       branding: {
         display_name: 'Clinica Dental Demo',
         subtitle: null,
         logo_url: '/branding/logo',
         favicon_url: null,
+        has_custom_logo: true,
         contrast_warnings: [],
-        preset: 'menta_clinica',
+        preset: 'dentia',
         colors: {
           primary: '#000',
           secondary: '#000',
@@ -63,8 +66,7 @@ describe('Layout', () => {
 
     renderLayout()
 
-    expect(screen.queryByText('Clinica Dental Demo')).not.toBeInTheDocument()
-    const brandLink = screen.getByRole('link', { name: '' })
+    const brandLink = screen.getByRole('link', { name: 'Logo de Clinica Dental Demo' })
     expect(brandLink).toHaveAttribute('href', '/')
     expect(brandLink.querySelector('img')).toBeInTheDocument()
   })

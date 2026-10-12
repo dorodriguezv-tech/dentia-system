@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { resolveApiAssetUrl } from '../../api/client'
+import { DentiaIsotipo } from '../../components/brand/Brand'
 import { useAuthStore } from '../auth/store'
 import { useThemeStore } from '../../theme/store'
 import { BUTTON_TEXT_COLOR, meetsContrast } from '../../theme/colorUtils'
@@ -46,8 +47,8 @@ function AppearanceForm({ initial }: { initial: BrandingOut }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    applyPreview(colors, darkMode, radius)
-  }, [colors, darkMode, radius, applyPreview])
+    applyPreview(colors, darkMode, radius, preset)
+  }, [colors, darkMode, radius, preset, applyPreview])
 
   useEffect(() => resetPreviewToSaved, [resetPreviewToSaved])
 
@@ -190,11 +191,15 @@ function AppearanceForm({ initial }: { initial: BrandingOut }) {
                   className={`${styles.presetButton} ${preset === p.code ? styles.active : ''}`}
                   onClick={() => handlePresetSelect(p.code)}
                 >
-                  <div className={styles.swatches}>
-                    {[p.primary, p.secondary, p.accent].map((c) => (
-                      <span key={c} className={styles.swatch} style={{ backgroundColor: c }} />
-                    ))}
-                  </div>
+                  {p.code === 'dentia' ? (
+                    <DentiaIsotipo size={20} />
+                  ) : (
+                    <div className={styles.swatches}>
+                      {[p.primary, p.secondary, p.accent].map((c) => (
+                        <span key={c} className={styles.swatch} style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  )}
                   {p.name}
                 </button>
               ))}
@@ -272,7 +277,7 @@ function AppearanceForm({ initial }: { initial: BrandingOut }) {
           <p className={styles.previewHeading}>Vista previa</p>
           <div className={styles.previewGrid}>
             <div className={styles.previewSidebar}>
-              <div className={styles.previewBrand}>{displayName || 'DentalCare'}</div>
+              <div className={styles.previewBrand}>{displayName || 'DENT-IA'}</div>
               <div className={styles.previewNavItem}>Inicio</div>
               <div className={styles.previewNavItem}>Pacientes</div>
             </div>

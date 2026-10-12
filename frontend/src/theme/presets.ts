@@ -12,11 +12,35 @@ export interface Preset {
   secondary: string
   accent: string
   bg: string
+  // Un preset puede traer su propio surface/border/text/text_muted (el preset
+  // "dentia" lo hace, igual que backend/app/modules/branding/presets.py); si no
+  // los trae, fullPalette() usa SHARED_DEFAULTS.
+  surface?: string
+  border?: string
+  text?: string
+  text_muted?: string
+  // Primario en modo oscuro (docs/CAMBIOS_WEB_MARCA.md W1/W6): si el preset no lo
+  // trae, se deriva en theme/colorUtils.ts aclarando "primary" hasta 4.5:1 sobre
+  // la superficie oscura (ver theme/store.ts).
+  dark_primary?: string
 }
 
-export const DEFAULT_PRESET = 'menta_clinica'
+export const DEFAULT_PRESET = 'dentia'
 
 export const PRESETS: Preset[] = [
+  {
+    code: 'dentia',
+    name: 'DENT-IA (institucional)',
+    primary: '#0A5A8C',
+    secondary: '#1690B6',
+    accent: '#22AAC2',
+    bg: '#F5F9FC',
+    surface: '#FFFFFF',
+    border: '#D3E2EC',
+    text: '#0E2A3B',
+    text_muted: '#4F6676',
+    dark_primary: '#4FC3D9',
+  },
   {
     code: 'menta_clinica',
     name: 'Menta clinica',
@@ -113,6 +137,12 @@ export function fullPalette(presetCode: string): ColorPalette {
     secondary: preset.secondary,
     accent: preset.accent,
     bg: preset.bg,
-    ...SHARED_DEFAULTS,
+    surface: preset.surface ?? SHARED_DEFAULTS.surface,
+    border: preset.border ?? SHARED_DEFAULTS.border,
+    text: preset.text ?? SHARED_DEFAULTS.text,
+    text_muted: preset.text_muted ?? SHARED_DEFAULTS.text_muted,
+    success: SHARED_DEFAULTS.success,
+    warning: SHARED_DEFAULTS.warning,
+    danger: SHARED_DEFAULTS.danger,
   }
 }

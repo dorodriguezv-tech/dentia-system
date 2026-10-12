@@ -13,15 +13,17 @@
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cardBody {
   padding: 2rem;
 }
 
-.brandLogo {
-  display: block;
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-  margin: 0 auto 0.75rem;
+.brandLogoWrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
 }
 
 .brand {

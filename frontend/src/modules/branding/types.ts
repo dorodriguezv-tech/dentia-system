@@ -29,6 +29,9 @@ export interface BrandingOut {
   radius: RadiusCode
   logo_url: string | null
   favicon_url: string | null
+  // W2 (docs/CAMBIOS_WEB_MARCA.md): logo_url ahora siempre trae algo que mostrar
+  // (el propio o el de DENT-IA); este campo distingue si es el propio de verdad.
+  has_custom_logo: boolean
   contrast_warnings: ContrastWarning[]
 }
 
