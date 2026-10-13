@@ -307,13 +307,16 @@ async def _seed_agenda(
         db, clinic_id=clinic_id, data=ResourceCreateRequest(name="Gabinete 1"), actor_id=admin_id
     )
 
+    # Horario de la clinica: lunes a viernes 08:00-19:00 con hora de comida de
+    # 14:00 a 15:00 (dos ventanas), sabado 08:00-15:00, domingo no se labora (sin
+    # filas ese weekday).
     for weekday in range(5):  # lunes (0) a viernes (4)
         await agenda_service.create_working_hours(
             db,
             clinic_id=clinic_id,
             provider_id=provider.id,
             data=WorkingHoursCreateRequest(
-                weekday=weekday, start_time=time(9, 0), end_time=time(14, 0)
+                weekday=weekday, start_time=time(8, 0), end_time=time(14, 0)
             ),
         )
         await agenda_service.create_working_hours(
@@ -321,9 +324,15 @@ async def _seed_agenda(
             clinic_id=clinic_id,
             provider_id=provider.id,
             data=WorkingHoursCreateRequest(
-                weekday=weekday, start_time=time(16, 0), end_time=time(20, 0)
+                weekday=weekday, start_time=time(15, 0), end_time=time(19, 0)
             ),
         )
+    await agenda_service.create_working_hours(
+        db,
+        clinic_id=clinic_id,
+        provider_id=provider.id,
+        data=WorkingHoursCreateRequest(weekday=5, start_time=time(8, 0), end_time=time(15, 0)),
+    )
 
     # .astimezone() (no UTC) para que .replace(hour=...) fije la hora de pared local
     # de la maquina, no 10:00 UTC (que seria la madrugada en America/Mexico_City).
