@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
-import { dayRange, hhmm } from '@/api/dates';
+import { addDays, dateKey, dayRange, hhmm } from '@/api/dates';
 import { listAppointments, setAppointmentStatus, startEncounter } from '@/api/endpoints';
 import type { Appointment } from '@/api/types';
+import { AppointmentActionsSheet } from '@/agenda/AppointmentActionsSheet';
 import { Badge, Body, Button, Card, Empty, ErrorBox, Loading, Row, Title } from '@/components/ui';
 import { hasPermission } from '@/store/session';
 import { STATUS_COLORS, useTheme } from '@/theme/theme';
@@ -27,6 +28,7 @@ export default function AgendaScreen() {
   const qc = useQueryClient();
   const params = useLocalSearchParams<{ dia?: string }>();
   const [offset, setOffset] = useState(0);
+  const [actionsFor, setActionsFor] = useState<Appointment | null>(null);
 
   // Dentia puede abrir la agenda de mañana con /?dia=1
   useEffect(() => {
@@ -57,12 +59,38 @@ export default function AgendaScreen() {
   const canStart = hasPermission('records.write');
   const items = (q.data ?? []).filter((a) => a.status !== 'REPROGRAMADA').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
+  // M3: vista semana simple (7 chips tocables) — no hay una cuadrícula de horas como
+  // en la web todavía, pero permite ver y saltar a cualquier día de la semana sin
+  // tocar ◀/▶ repetidas veces.
+  const today = addDays(new Date(), 0); // medianoche local de hoy
+  const weekStart = addDays(today, -((today.getDay() + 6) % 7)); // lunes de esta semana
+
   return (
+    <>
     <ScrollView
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} />}
     >
+      {hasPermission('agenda.write') ? (
+        <Button title="+ Nueva cita" onPress={() => router.push('/cita/nueva')} />
+      ) : null}
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {Array.from({ length: 7 }, (_, i) => {
+          const day = addDays(weekStart, i);
+          const dayOffset = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+          return (
+            <Button
+              key={dateKey(day)}
+              title={day.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' })}
+              variant={dayOffset === offset ? 'secondary' : 'ghost'}
+              onPress={() => setOffset(dayOffset)}
+            />
+          );
+        })}
+      </ScrollView>
+
       <Row style={{ justifyContent: 'space-between' }}>
         <Button title="◀" variant="ghost" onPress={() => setOffset((o) => o - 1)} />
         <Title>{range.label}</Title>
@@ -84,7 +112,10 @@ export default function AgendaScreen() {
               <Body style={{ fontWeight: '800', fontSize: 18 }}>
                 {hhmm(a.starts_at)}–{hhmm(a.ends_at)}
               </Body>
-              <Badge label={STATUS_LABEL[a.status] ?? a.status} color={STATUS_COLORS[a.status] ?? t.colors.textMuted} />
+              <Row>
+                <Badge label={STATUS_LABEL[a.status] ?? a.status} color={STATUS_COLORS[a.status] ?? t.colors.textMuted} />
+                <Button title="Más" variant="ghost" accessibilityHint="Más acciones de esta cita" onPress={() => setActionsFor(a)} />
+              </Row>
             </Row>
             <Body style={{ fontWeight: '600' }}>{a.patient_full_name}</Body>
             {a.appointment_type || a.provider_full_name ? (
@@ -104,5 +135,7 @@ export default function AgendaScreen() {
         );
       })}
     </ScrollView>
+    <AppointmentActionsSheet appointment={actionsFor} onClose={() => setActionsFor(null)} />
+    </>
   );
 }

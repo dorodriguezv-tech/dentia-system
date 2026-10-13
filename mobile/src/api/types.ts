@@ -167,6 +167,61 @@ export interface Encounter {
   chief_complaint?: string | null;
 }
 
+/** M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): crear/reprogramar cita, disponibilidad. */
+export interface Provider {
+  id: Uuid;
+  user_id: Uuid;
+  full_name: string;
+  color: string;
+  is_active: boolean;
+}
+
+export interface AppointmentTypeCatalogItem {
+  code: string;
+  name: string;
+  default_minutes: number;
+}
+
+/** Forma real de GET /catalogs/{tipo} (backend/app/modules/catalogs/schemas.py). */
+export interface RawCatalogItem {
+  code: string;
+  name: string;
+  is_active: boolean;
+  extra: Record<string, unknown>;
+}
+
+export interface AppointmentCreateInput {
+  patient_id: Uuid;
+  provider_id: Uuid;
+  appointment_type: string;
+  starts_at: string;
+  notes?: string | null;
+}
+
+export interface RescheduleInput {
+  starts_at: string;
+  reason?: string | null;
+}
+
+/** B8: huecos libres reales de un profesional en un día. */
+export interface AvailableSlots {
+  slots: string[];
+}
+
+export interface PatientDetail {
+  id: Uuid;
+  full_name: string;
+  phone: string | null;
+}
+
+export interface PatientCreateInput {
+  first_name: string;
+  last_name_paternal: string;
+  last_name_maternal?: string;
+  date_of_birth: string;
+  phone?: string;
+}
+
 // ---------- IA (Fase 8) ----------
 export interface TranscribeResponse {
   text: string;

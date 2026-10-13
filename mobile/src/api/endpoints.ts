@@ -3,7 +3,10 @@ import type {
   AiStatus,
   AiSuggestion,
   Appointment,
+  AppointmentCreateInput,
   AppointmentStatus,
+  AppointmentTypeCatalogItem,
+  AvailableSlots,
   Branding,
   ClinicMembership,
   Encounter,
@@ -11,9 +14,14 @@ import type {
   LoginResponse,
   Me,
   OdontogramResponse,
+  PatientCreateInput,
+  PatientDetail,
   PatientListItem,
   PatientSummary,
+  Provider,
+  RawCatalogItem,
   RawMyClinic,
+  RescheduleInput,
   Surface,
   TokenPair,
   TranscribeResponse,
@@ -83,6 +91,12 @@ export const createToothFinding = (input: {
 
 export const getPatientEncounters = (id: Uuid) => api<Encounter[]>(`/patients/${id}/encounters`);
 
+export const getPatient = (id: Uuid) => api<PatientDetail>(`/patients/${id}`);
+
+// M3: "Crear paciente rápido" desde Nueva cita (requiere patients.write).
+export const createPatientQuick = (input: PatientCreateInput) =>
+  api<PatientDetail>('/patients', { method: 'POST', body: input });
+
 // Fotografías clínicas (Fase 9). encounter_id es obligatorio para el backend
 // (regla 6: todo hallazgo/imagen va ligado a una atención).
 export async function uploadPatientImages(
@@ -111,6 +125,30 @@ export const setAppointmentStatus = (id: Uuid, status: AppointmentStatus, reason
 
 export const startEncounter = (appointmentId: Uuid) =>
   api<Encounter>(`/appointments/${appointmentId}/start-encounter`, { method: 'POST' });
+
+// M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): mismos endpoints que
+// frontend/src/modules/agenda/api.ts.
+export const listProviders = () => api<Provider[]>('/providers');
+
+export const listAppointmentTypes = async (): Promise<AppointmentTypeCatalogItem[]> => {
+  const raw = await api<RawCatalogItem[]>('/catalogs/appointment_type');
+  return raw
+    .filter((i) => i.is_active)
+    .map((i) => ({
+      code: i.code,
+      name: i.name,
+      default_minutes: typeof i.extra?.default_minutes === 'number' ? (i.extra.default_minutes as number) : 30,
+    }));
+};
+
+export const getAvailability = (provider_id: Uuid, day: string, duration_minutes: number) =>
+  api<AvailableSlots>('/appointments/availability', { query: { provider_id, day, duration_minutes } });
+
+export const createAppointment = (input: AppointmentCreateInput) =>
+  api<Appointment>('/appointments', { method: 'POST', body: input });
+
+export const rescheduleAppointment = (id: Uuid, input: RescheduleInput) =>
+  api<Appointment>(`/appointments/${id}/reschedule`, { method: 'POST', body: input });
 
 // ---------- Asistente de IA ----------
 export const getAiStatus = () => api<AiStatus>('/ai/status');
