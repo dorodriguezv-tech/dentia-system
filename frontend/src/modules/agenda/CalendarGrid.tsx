@@ -1,7 +1,7 @@
 import { STATUS_COLORS } from './catalog'
 import styles from './CalendarGrid.module.css'
 import { formatTime, toDateKey } from './dateUtils'
-import type { AppointmentListItemOut } from './types'
+import type { AppointmentListItemOut, WorkingHoursOut } from './types'
 
 const DAY_START_HOUR = 7
 const DAY_END_HOUR = 21
@@ -15,9 +15,32 @@ function minutesFromGridStart(d: Date): number {
   return (d.getHours() - DAY_START_HOUR) * 60 + d.getMinutes()
 }
 
+// Date.getDay() da 0=domingo..6=sabado; el backend usa 0=lunes..6=domingo
+// (ProviderWorkingHours.weekday, docs/02_ARQUITECTURA.md).
+function toBackendWeekday(jsWeekday: number): number {
+  return (jsWeekday + 6) % 7
+}
+
+/** Minutos no laborales (comida, fuera de horario, domingo) se muestran
+ * sombrados pero siguen siendo clicables -- el odontologo puede agendar una
+ * urgencia fuera de horario a propósito; lo que no existe es un horario
+ * laboral que la app invente por su cuenta. */
+function isWorkingMinute(workingHours: WorkingHoursOut[], date: Date, minuteOfDay: number): boolean {
+  const weekday = toBackendWeekday(date.getDay())
+  return workingHours.some((wh) => {
+    if (wh.weekday !== weekday) return false
+    const [startH, startM] = wh.start_time.split(':').map(Number)
+    const [endH, endM] = wh.end_time.split(':').map(Number)
+    const startMin = startH * 60 + startM
+    const endMin = endH * 60 + endM
+    return minuteOfDay >= startMin && minuteOfDay < endMin
+  })
+}
+
 interface CalendarGridProps {
   dates: Date[]
   appointments: AppointmentListItemOut[]
+  workingHours: WorkingHoursOut[]
   onSlotClick: (date: Date, hour: number, minute: number) => void
   onDropAppointment: (appointmentId: string, date: Date, hour: number, minute: number) => void
   onAppointmentClick: (appointment: AppointmentListItemOut) => void
@@ -26,6 +49,7 @@ interface CalendarGridProps {
 export function CalendarGrid({
   dates,
   appointments,
+  workingHours,
   onSlotClick,
   onDropAppointment,
   onAppointmentClick,
@@ -70,18 +94,21 @@ export function CalendarGrid({
               const totalMin = i * SLOT_MINUTES
               const hour = DAY_START_HOUR + Math.floor(totalMin / 60)
               const minute = totalMin % 60
-              const label = `Agendar cita: ${date.toLocaleDateString('es-MX', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-              })}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+              // Sin horario cargado (p. ej. agrupando por gabinete, sin un solo
+              // profesional) no se sombrea nada -- "no se sabe" no es "cerrado".
+              const isOffHours =
+                workingHours.length > 0 && !isWorkingMinute(workingHours, date, hour * 60 + minute)
+              const label = `Agendar cita${isOffHours ? ' (fuera de horario laboral, solo urgencias)' : ''}: ${date.toLocaleDateString(
+                'es-MX',
+                { weekday: 'long', day: 'numeric', month: 'long' },
+              )}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
               return (
                 <div
                   key={i}
                   role="button"
                   tabIndex={0}
                   aria-label={label}
-                  className={styles.slot}
+                  className={isOffHours ? `${styles.slot} ${styles.slotOffHours}` : styles.slot}
                   style={{ height: SLOT_PX }}
                   onClick={() => onSlotClick(date, hour, minute)}
                   onKeyDown={(e) => {

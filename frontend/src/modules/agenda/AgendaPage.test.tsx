@@ -70,6 +70,7 @@ describe('AgendaPage', () => {
     vi.mocked(api.listProviders).mockReset().mockResolvedValue([provider])
     vi.mocked(api.listResources).mockReset().mockResolvedValue([resource])
     vi.mocked(api.listAppointments).mockReset().mockResolvedValue([appointment])
+    vi.mocked(api.listWorkingHours).mockReset().mockResolvedValue([])
     vi.mocked(api.changeAppointmentStatus).mockReset()
     vi.mocked(api.createAppointment).mockReset()
     vi.mocked(api.rescheduleAppointment).mockReset()

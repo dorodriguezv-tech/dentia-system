@@ -44,6 +44,16 @@ export function AgendaPage() {
 
   const effectiveProviderId = selectedProviderId || providersQuery.data?.[0]?.id || ''
 
+  // Para sombrear en la cuadricula lo que esta fuera del horario laboral del
+  // profesional (comida, antes/despues de la jornada, domingo). Agrupando por
+  // gabinete no hay un solo profesional al que preguntarle, asi que no se pide.
+  const workingHoursQuery = useQuery({
+    queryKey: ['working-hours', effectiveProviderId],
+    queryFn: () => api.listWorkingHours(effectiveProviderId),
+    enabled: groupBy === 'profesional' && !!effectiveProviderId,
+  })
+  const workingHours = groupBy === 'profesional' ? workingHoursQuery.data ?? [] : []
+
   const dates = useMemo(() => {
     if (viewMode === 'dia') return [anchorDate]
     if (viewMode === 'semana') {
@@ -228,6 +238,7 @@ export function AgendaPage() {
             <CalendarGrid
               dates={dates}
               appointments={appointments}
+              workingHours={workingHours}
               onSlotClick={(date, hour, minute) => {
                 if (canWrite) setPanel({ type: 'new', date, hour, minute })
               }}

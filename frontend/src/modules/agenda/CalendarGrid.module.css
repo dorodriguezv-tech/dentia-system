@@ -51,6 +51,24 @@
   background-color: var(--color-primary-soft);
 }
 
+/* Fuera de horario laboral (comida, antes/despues de la jornada, domingo):
+   sigue siendo clicable para agendar una urgencia, pero se distingue con un
+   sombreado a rayas -- distinto del color solido de una cita ocupada. */
+.slotOffHours {
+  background-color: var(--color-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-border) 0,
+    var(--color-border) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.slotOffHours:hover {
+  background-color: var(--color-danger-soft);
+}
+
 .slot:focus-visible,
 .appointment:focus-visible {
   outline: 2px solid var(--color-primary);
