@@ -1,8 +1,11 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.models import AiSuggestion
+from app.modules.agenda.models import Appointment
 from app.modules.encounters.models import Encounter
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
@@ -338,4 +341,189 @@ async def test_current_encounter_requires_records_write(
 
     response = await client.get("/api/v1/encounters/current", headers=_headers(token, clinic.id))
 
+    assert response.status_code == 403
+
+
+# --------------------------------------------- B11 (M6): POST /encounters/{id}/close
+
+
+async def _finalize_a_note(client: AsyncClient, headers: dict, encounter_id: str) -> None:
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Bien"}
+        )
+    ).json()
+    finalized = await client.post(
+        f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={"alerts_acknowledged": True}
+    )
+    assert finalized.status_code == 200, finalized.text
+
+
+async def test_close_encounter_succeeds_with_a_finalized_note_and_no_pending_suggestions(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    await _finalize_a_note(client, headers, encounter_id)
+
+    response = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ended_at"] is not None
+
+
+async def test_close_encounter_rejects_pending_ai_suggestions(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    encounter = (await client.get(f"/api/v1/encounters/{encounter_id}", headers=headers)).json()
+    await _finalize_a_note(client, headers, encounter_id)
+
+    db_session.add(
+        AiSuggestion(
+            clinic_id=clinic.id,
+            patient_id=uuid.UUID(encounter["patient_id"]),
+            encounter_id=uuid.UUID(encounter_id),
+            batch_id=uuid.uuid4(),
+            action_type="add_diagnosis",
+            payload={"text": "Caries"},
+            status="PENDING",
+            model_name="test-model",
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "AI_SUGGESTIONS_PENDING"
+
+
+async def test_close_encounter_requires_acknowledging_alerts(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    encounter = (await client.get(f"/api/v1/encounters/{encounter_id}", headers=headers)).json()
+    patient_id = encounter["patient_id"]
+
+    await client.post(
+        f"/api/v1/patients/{patient_id}/allergies",
+        headers=headers,
+        json={"encounter_id": encounter_id, "substance": "Penicilina", "severity": "severa"},
+    )
+
+    denied = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
+    )
+    assert denied.status_code == 400
+    assert denied.json()["code"] == "ALERTS_NOT_ACKNOWLEDGED"
+
+
+async def test_close_encounter_requires_a_finalized_note(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    # Nota en borrador, nunca finalizada.
+    await client.post(
+        f"/api/v1/encounters/{encounter_id}/notes", headers=headers, json={"soap_s": "Bien"}
+    )
+
+    response = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "NOTE_NOT_FINALIZED"
+
+
+async def test_close_encounter_already_closed_is_a_conflict(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    await _finalize_a_note(client, headers, encounter_id)
+
+    first = await client.post(f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={})
+    assert first.status_code == 200
+
+    second = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
+    )
+    assert second.status_code == 409
+    assert second.json()["code"] == "ENCOUNTER_ALREADY_CLOSED"
+
+
+async def test_close_encounter_marks_its_appointment_as_atendida(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    admin = await make_user(email="admin@example.com", role_code="admin_clinica")
+    admin_token = await _login(client, "admin@example.com")
+    admin_headers = _headers(admin_token, clinic.id)
+
+    odonto = await make_user(email="odonto@example.com", role_code="odontologo")
+    provider = await client.post(
+        "/api/v1/providers", headers=admin_headers, json={"user_id": str(odonto.id)}
+    )
+    provider_id = provider.json()["id"]
+
+    patient_id = await _make_patient(db_session, clinic, admin.id)
+    odonto_token = await _login(client, "odonto@example.com")
+    odonto_headers = _headers(odonto_token, clinic.id)
+
+    appointment = await client.post(
+        "/api/v1/appointments",
+        headers=admin_headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "consulta",
+            "starts_at": "2026-11-02T09:00:00+00:00",
+        },
+    )
+    appointment_id = appointment.json()["id"]
+
+    started = await client.post(
+        f"/api/v1/appointments/{appointment_id}/start-encounter", headers=odonto_headers
+    )
+    assert started.status_code == 200, started.text
+    encounter_id = started.json()["id"]
+
+    await _finalize_a_note(client, odonto_headers, encounter_id)
+    closed = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close", headers=odonto_headers, json={}
+    )
+    assert closed.status_code == 200
+
+    appointment_after = await db_session.get(Appointment, appointment_id)
+    assert appointment_after is not None
+    assert appointment_after.status == "TERMINADA"
+
+
+async def test_close_encounter_requires_records_write(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    odonto_token = await _odontologo_token(client, make_user, clinic)
+    odonto_headers = _headers(odonto_token, clinic.id)
+    encounter_id = await _create_encounter(client, odonto_headers, db_session, clinic, None)
+
+    await make_user(email="recepcion@example.com", role_code="recepcion")
+    recepcion_token = await _login(client, "recepcion@example.com")
+
+    response = await client.post(
+        f"/api/v1/encounters/{encounter_id}/close",
+        headers=_headers(recepcion_token, clinic.id),
+        json={},
+    )
     assert response.status_code == 403

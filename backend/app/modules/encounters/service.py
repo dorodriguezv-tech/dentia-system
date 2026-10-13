@@ -1,11 +1,15 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.models import AiSuggestion
 from app.audit import service as audit_service
 from app.core.errors import AppError
+from app.modules.agenda import rules as agenda_rules
+from app.modules.agenda.models import Appointment
+from app.modules.agenda.schemas import StatusChangeRequest
 from app.modules.encounters import rules
 from app.modules.encounters.models import ClinicalNote, Encounter
 from app.modules.encounters.schemas import (
@@ -116,6 +120,90 @@ async def get_current_encounter(
     )
     row = (await db.execute(stmt)).first()
     return (row[0], row[1]) if row else None
+
+
+async def close_encounter(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    encounter_id: uuid.UUID,
+    alerts_acknowledged: bool,
+    actor_id: uuid.UUID,
+) -> Encounter:
+    """B11 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4, M6): "Cerrar consulta" en el
+    movil. Devuelve un `code` estable por cada validacion para que la app muestre
+    el mensaje adecuado (propuestas de IA pendientes, alertas sin revisar, nota sin
+    finalizar) -- mismo criterio de `code` estable que el resto de AppError.
+
+    No valida "procedimientos sin pieza" (mencionado en el documento de paridad):
+    `ProcedurePerformed.tooth_fdi` es legitimamente nulo para procedimientos
+    generales (ver treatment/router.py, tooth_label "General"), asi que no hay una
+    regla clara de cuando es un error de captura vs. un procedimiento sin pieza a
+    proposito -- pendiente de validar con la clinica (docs/PENDIENTES_CLINICOS.md).
+    """
+    encounter = await get_encounter(db, clinic_id=clinic_id, encounter_id=encounter_id)
+    if encounter.ended_at is not None:
+        raise AppError("ENCOUNTER_ALREADY_CLOSED", "Esta atencion ya esta cerrada", status_code=409)
+
+    pending_stmt = select(func.count()).where(
+        AiSuggestion.encounter_id == encounter_id, AiSuggestion.status == "PENDING"
+    )
+    pending_count = (await db.execute(pending_stmt)).scalar_one()
+    if pending_count:
+        raise AppError(
+            "AI_SUGGESTIONS_PENDING",
+            f"Tienes {pending_count} propuesta(s) del asistente sin revisar",
+            details={"count": pending_count},
+            status_code=400,
+        )
+
+    alerts = await get_patient_alerts(db, clinic_id=clinic_id, patient_id=encounter.patient_id)
+    if alerts and not alerts_acknowledged:
+        raise AppError(
+            "ALERTS_NOT_ACKNOWLEDGED",
+            "El paciente tiene alertas criticas; confirma haberlas revisado antes de cerrar",
+            details={"alerts": alerts},
+            status_code=400,
+        )
+
+    final_note_stmt = select(func.count()).where(
+        ClinicalNote.encounter_id == encounter_id, ClinicalNote.status == "FINAL"
+    )
+    has_final_note = (await db.execute(final_note_stmt)).scalar_one() > 0
+    if not has_final_note:
+        raise AppError(
+            "NOTE_NOT_FINALIZED",
+            "Finaliza la nota de la consulta antes de cerrarla",
+            status_code=400,
+        )
+
+    encounter.ended_at = datetime.now(UTC)
+
+    if encounter.appointment_id is not None:
+        appointment = await db.get(Appointment, encounter.appointment_id)
+        if appointment is not None and agenda_rules.can_transition(appointment.status, "TERMINADA"):
+            # Import diferido (mismo motivo que get_current_encounter): agenda.service
+            # ya importa encounters.service a nivel de modulo.
+            from app.modules.agenda import service as agenda_service
+
+            await agenda_service.change_status(
+                db,
+                clinic_id=clinic_id,
+                appointment_id=appointment.id,
+                data=StatusChangeRequest(status="TERMINADA"),
+                actor_id=actor_id,
+            )
+
+    await audit_service.log(
+        db,
+        action="encounters.closed",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="encounter",
+        entity_id=str(encounter.id),
+    )
+    await db.commit()
+    return encounter
 
 
 async def list_patient_encounters(

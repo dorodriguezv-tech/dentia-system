@@ -13,6 +13,7 @@ from app.modules.encounters.schemas import (
     ClinicalNoteUpdateRequest,
     CorrectNoteRequest,
     CurrentEncounterOut,
+    EncounterCloseRequest,
     EncounterCreateRequest,
     EncounterOut,
     FinalizeNoteRequest,
@@ -63,6 +64,24 @@ async def get_encounter(
     db: AsyncSession = Depends(get_db),
 ) -> EncounterOut:
     encounter = await service.get_encounter(db, clinic_id=clinic_id, encounter_id=encounter_id)
+    return EncounterOut.model_validate(encounter)
+
+
+@router.post("/encounters/{encounter_id}/close", response_model=EncounterOut)
+async def close_encounter(
+    encounter_id: uuid.UUID,
+    payload: EncounterCloseRequest,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("records.write")),
+    db: AsyncSession = Depends(get_db),
+) -> EncounterOut:
+    encounter = await service.close_encounter(
+        db,
+        clinic_id=clinic_id,
+        encounter_id=encounter_id,
+        alerts_acknowledged=payload.alerts_acknowledged,
+        actor_id=actor.id,
+    )
     return EncounterOut.model_validate(encounter)
 
 

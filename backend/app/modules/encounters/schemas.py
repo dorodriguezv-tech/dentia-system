@@ -86,6 +86,14 @@ class TimelineNoteOut(BaseModel):
     finalized_at: datetime | None
 
 
+class EncounterCloseRequest(BaseModel):
+    """B11 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4, M6): mismo criterio que
+    FinalizeNoteRequest -- el frontend debe mostrar el modal de alertas criticas
+    (regla 8) antes de mandar true."""
+
+    alerts_acknowledged: bool = False
+
+
 class CurrentEncounterOut(BaseModel):
     """B10 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): la atencion que el profesional
     dejo abierta, para la barra "En consulta" del movil y recuperarla al reabrir la
