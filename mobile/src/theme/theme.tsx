@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-import type { Branding } from '@/api/types';
+import type { Branding, PreferenceTheme } from '@/api/types';
 
 /**
  * Tema de la app a partir de GET /branding (la misma marca que configura el admin
@@ -157,9 +157,27 @@ export const STATUS_COLORS: Record<string, string> = {
 
 const ThemeContext = createContext<Theme>(buildTheme(undefined, false));
 
-export function ThemeProvider({ branding, fontsLoaded, children }: { branding?: Branding; fontsLoaded?: boolean; children: ReactNode }) {
+/** M2: "Mis preferencias" → Tema. "system" sigue el tema del teléfono; "light"/"dark"
+ * lo fuerzan sin importar el teléfono. Pura (sin RN) para poder probarla. */
+export function resolveDark(themePreference: PreferenceTheme, systemIsDark: boolean): boolean {
+  if (themePreference === 'system') return systemIsDark;
+  return themePreference === 'dark';
+}
+
+export function ThemeProvider({
+  branding,
+  fontsLoaded,
+  themePreference = 'system',
+  children,
+}: {
+  branding?: Branding;
+  fontsLoaded?: boolean;
+  themePreference?: PreferenceTheme;
+  children: ReactNode;
+}) {
   const scheme = useColorScheme();
-  const theme = useMemo(() => buildTheme(branding, scheme === 'dark', fontsLoaded), [branding, scheme, fontsLoaded]);
+  const dark = resolveDark(themePreference, scheme === 'dark');
+  const theme = useMemo(() => buildTheme(branding, dark, fontsLoaded), [branding, dark, fontsLoaded]);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

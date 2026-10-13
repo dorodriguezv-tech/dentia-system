@@ -17,6 +17,8 @@ import type {
   Surface,
   TokenPair,
   TranscribeResponse,
+  UserPreferences,
+  UserPreferencesUpdate,
   Uuid,
 } from './types';
 
@@ -55,6 +57,11 @@ export const getMyClinics = async (): Promise<ClinicMembership[]> => {
     permissions: m.permissions,
   }));
 };
+
+export const getPreferences = () => api<UserPreferences>('/me/preferences');
+
+export const updatePreferences = (patch: UserPreferencesUpdate) =>
+  api<UserPreferences>('/me/preferences', { method: 'PUT', body: patch });
 
 // ---------- Pacientes ----------
 export const searchPatients = (q: string) =>

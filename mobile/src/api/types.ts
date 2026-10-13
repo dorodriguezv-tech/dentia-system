@@ -49,6 +49,22 @@ export interface RawMyClinic {
   permissions: string[];
 }
 
+/** GET/PUT /me/preferences (B7, docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): la
+ * misma preferencia viaja entre web, tablet y teléfono. */
+export type PreferenceTheme = 'system' | 'light' | 'dark';
+
+export interface UserPreferences {
+  language: string;
+  theme: PreferenceTheme;
+  dentia_enabled: boolean;
+  voice_id: string | null;
+  speech_rate: number;
+  speech_volume: number;
+  lock_timeout_minutes: number;
+}
+
+export type UserPreferencesUpdate = Partial<UserPreferences>;
+
 // ---------- Marca (Fase 2) ----------
 export interface ColorPalette {
   primary: string;

@@ -10,6 +10,7 @@ import { getBranding } from '@/api/endpoints';
 import { LockScreen, SecureScreen, useAutoLock } from '@/security/appLock';
 import { useSession } from '@/store/session';
 import { ThemeProvider, useTheme } from '@/theme/theme';
+import { setPreferredVoice, setSpeechRate, setSpeechVolume } from '@/voice/dentiaVoice';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -52,6 +53,7 @@ export default function RootLayout() {
 
 function BrandedTheme({ children, fontsLoaded }: { children: ReactNode; fontsLoaded: boolean }) {
   const serverUrl = useSession((s) => s.serverUrl);
+  const themePreference = useSession((s) => s.preferences?.theme ?? 'system');
   const branding = useQuery({
     queryKey: ['branding', serverUrl],
     queryFn: getBranding,
@@ -59,7 +61,7 @@ function BrandedTheme({ children, fontsLoaded }: { children: ReactNode; fontsLoa
     staleTime: 60 * 60_000,
   });
   return (
-    <ThemeProvider branding={branding.data} fontsLoaded={fontsLoaded}>
+    <ThemeProvider branding={branding.data} fontsLoaded={fontsLoaded} themePreference={themePreference}>
       {children}
     </ThemeProvider>
   );
@@ -69,7 +71,17 @@ function Shell() {
   const t = useTheme();
   const locked = useSession((s) => s.locked);
   const loggedIn = useSession((s) => !!s.accessToken);
+  const preferences = useSession((s) => s.preferences);
   useAutoLock();
+
+  // M2: aplica la voz/velocidad/volumen guardados en cuanto llegan (login, reinicio
+  // de la app o un cambio desde Ajustes), para que Dentia los respete sin reabrir nada.
+  useEffect(() => {
+    if (!preferences) return;
+    setPreferredVoice(preferences.voice_id);
+    setSpeechRate(preferences.speech_rate);
+    setSpeechVolume(preferences.speech_volume);
+  }, [preferences]);
 
   if (locked) return <LockScreen />;
 

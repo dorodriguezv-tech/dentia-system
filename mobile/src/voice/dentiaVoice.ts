@@ -17,9 +17,20 @@ const FEMALE_HINTS = ['esc', 'esf', 'female', 'mujer', 'paulina', 'monica', 'mó
 
 let cachedVoice: string | null | undefined;
 let userVoice: string | null = null;
+let userRate = 1.0;
+let userVolume = 1.0;
 
 export function setPreferredVoice(id: string | null) {
   userVoice = id;
+}
+
+/** M2: "Mis preferencias" → velocidad y volumen de la voz de Dentia. */
+export function setSpeechRate(rate: number) {
+  userRate = rate;
+}
+
+export function setSpeechVolume(volume: number) {
+  userVolume = volume;
 }
 
 export async function listSpanishVoices(): Promise<Speech.Voice[]> {
@@ -53,7 +64,8 @@ export async function say(text: string, onDone?: () => void): Promise<void> {
   Speech.speak(text, {
     language: 'es-MX',
     voice: voice ?? undefined,
-    rate: 1.0,
+    rate: userRate,
+    volume: userVolume,
     pitch: 1.05,
     onDone,
     onStopped: onDone,

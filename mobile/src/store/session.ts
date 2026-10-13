@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
-import type { ClinicMembership, Me } from '@/api/types';
+import type { ClinicMembership, Me, UserPreferences } from '@/api/types';
 
 /**
  * Sesión del usuario.
@@ -25,6 +25,10 @@ interface SessionState {
   clinicId: string | null;
   me: Me | null;
   clinics: ClinicMembership[];
+  /** M2 (docs/06_APP_MOVIL_V1_1_PARIDAD.md): null hasta la primera carga de
+   * GET /me/preferences; varias pantallas (tema, bloqueo, Dentia) la leen fuera
+   * de un componente de React, por eso vive aquí y no solo en TanStack Query. */
+  preferences: UserPreferences | null;
   /** La app se bloqueó por inactividad; requiere biometría o volver a entrar */
   locked: boolean;
 
@@ -34,6 +38,7 @@ interface SessionState {
   setAccessToken: (access: string) => void;
   setProfile: (me: Me, clinics: ClinicMembership[]) => void;
   setClinic: (clinicId: string) => Promise<void>;
+  setPreferences: (preferences: UserPreferences) => void;
   setLocked: (locked: boolean) => void;
   clear: () => Promise<void>;
 }
@@ -46,6 +51,7 @@ export const useSession = create<SessionState>((set) => ({
   clinicId: null,
   me: null,
   clinics: [],
+  preferences: null,
   locked: false,
 
   hydrate: async () => {
@@ -77,6 +83,8 @@ export const useSession = create<SessionState>((set) => ({
     set({ clinicId });
   },
 
+  setPreferences: (preferences) => set({ preferences }),
+
   setLocked: (locked) => set({ locked }),
 
   clear: async () => {
@@ -85,7 +93,15 @@ export const useSession = create<SessionState>((set) => ({
       SecureStore.deleteItemAsync(K_CLINIC),
     ]);
     // serverUrl se conserva: es configuración del dispositivo, no de la sesión
-    set({ accessToken: null, refreshToken: null, clinicId: null, me: null, clinics: [], locked: false });
+    set({
+      accessToken: null,
+      refreshToken: null,
+      clinicId: null,
+      me: null,
+      clinics: [],
+      preferences: null,
+      locked: false,
+    });
   },
 }));
 

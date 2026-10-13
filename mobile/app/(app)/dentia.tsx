@@ -8,7 +8,7 @@ import { dayRange, hhmm } from '@/api/dates';
 import { listAppointments, searchPatients, setAppointmentStatus } from '@/api/endpoints';
 import type { PatientListItem } from '@/api/types';
 import { Body, Button, Card, ErrorBox, Screen, Title } from '@/components/ui';
-import { hasPermission } from '@/store/session';
+import { hasPermission, useSession } from '@/store/session';
 import { BRAND_ASSETS, useTheme } from '@/theme/theme';
 import { say, stopSpeaking } from '@/voice/dentiaVoice';
 import { describeIntent, needsImplicitConfirm, normalize, parseIntent, type Intent } from '@/voice/intents';
@@ -40,6 +40,7 @@ export default function DentiaScreen() {
   const qc = useQueryClient();
   const voice = useVoiceCapture();
   const confirm = useImplicitConfirm(3);
+  const dentiaEnabled = useSession((s) => s.preferences?.dentia_enabled ?? true);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [choices, setChoices] = useState<PatientListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +162,21 @@ export default function DentiaScreen() {
 
   const listening = voice.isRecording;
   const busy = voice.state === 'transcribing';
+
+  if (!dentiaEnabled) {
+    return (
+      <Screen>
+        <View style={{ alignItems: 'center', gap: 16, paddingVertical: 48 }}>
+          <Image source={BRAND_ASSETS.isotipo} style={{ width: 96, height: 96, opacity: 0.5 }} accessible={false} />
+          <Title>Dentia está desactivada</Title>
+          <Body muted style={{ textAlign: 'center' }}>
+            Actívala en Ajustes → Mis preferencias para volver a usar el asistente por voz.
+          </Body>
+          <Button title="Ir a Ajustes" variant="secondary" onPress={() => router.push('/(app)/ajustes')} />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

@@ -12,10 +12,12 @@ import { BRAND_ASSETS, useTheme } from '@/theme/theme';
  * Protección de datos clínicos en el teléfono:
  *  1. Impide capturas y grabación de pantalla (FLAG_SECURE en Android) mientras hay sesión.
  *     También oculta el contenido en la vista de "apps recientes".
- *  2. Si la app pasa más de LOCK_AFTER_MS en segundo plano, se bloquea, borra la caché
+ *  2. Si la app pasa más de X minutos en segundo plano, se bloquea, borra la caché
  *     de datos en memoria y pide huella/rostro/PIN del teléfono para continuar.
+ *     X es "Mis preferencias" → Tiempo de bloqueo (M2, GET /me/preferences); 2 min
+ *     por defecto mientras esa preferencia no ha cargado.
  */
-const LOCK_AFTER_MS = 2 * 60 * 1000;
+const DEFAULT_LOCK_AFTER_MINUTES = 2;
 
 export function SecureScreen() {
   usePreventScreenCapture();
@@ -28,11 +30,12 @@ export function useAutoLock() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      const { accessToken, setLocked } = useSession.getState();
+      const { accessToken, preferences, setLocked } = useSession.getState();
       if (!accessToken) return;
+      const lockAfterMs = (preferences?.lock_timeout_minutes ?? DEFAULT_LOCK_AFTER_MINUTES) * 60 * 1000;
       if (next === 'background') backgroundedAt.current = Date.now();
       if (next === 'active' && backgroundedAt.current) {
-        if (Date.now() - backgroundedAt.current > LOCK_AFTER_MS) {
+        if (Date.now() - backgroundedAt.current > lockAfterMs) {
           qc.clear();
           setLocked(true);
         }

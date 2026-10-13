@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
-import { getMe, getMyClinics, login, loginMfa } from '@/api/endpoints';
+import { getMe, getMyClinics, getPreferences, login, loginMfa } from '@/api/endpoints';
 import { BrandStripe, ClinicLogo, PoweredByDentia } from '@/components/Brand';
 import { Body, Button, ErrorBox, Field, Screen, Title } from '@/components/ui';
 import { useSession } from '@/store/session';
@@ -21,8 +21,9 @@ export default function LoginScreen() {
 
   const finish = async (access: string, refresh: string) => {
     await useSession.getState().setTokens(access, refresh);
-    const [me, clinics] = await Promise.all([getMe(), getMyClinics()]);
+    const [me, clinics, prefs] = await Promise.all([getMe(), getMyClinics(), getPreferences()]);
     useSession.getState().setProfile(me, clinics);
+    useSession.getState().setPreferences(prefs);
     if (clinics.length === 1 && clinics[0]) {
       await useSession.getState().setClinic(clinics[0].clinic_id);
       router.replace('/(app)');

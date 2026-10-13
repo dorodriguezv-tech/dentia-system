@@ -2,7 +2,7 @@ import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { refreshAccessToken } from '@/api/client';
-import { getMe, getMyClinics } from '@/api/endpoints';
+import { getMe, getMyClinics, getPreferences } from '@/api/endpoints';
 import { Loading, Screen } from '@/components/ui';
 import { useSession } from '@/store/session';
 
@@ -25,8 +25,9 @@ export default function Gate() {
       const ok = await refreshAccessToken();
       if (ok) {
         try {
-          const [me, cl] = await Promise.all([getMe(), getMyClinics()]);
+          const [me, cl, prefs] = await Promise.all([getMe(), getMyClinics(), getPreferences()]);
           useSession.getState().setProfile(me, cl);
+          useSession.getState().setPreferences(prefs);
         } catch {
           await useSession.getState().clear();
         }
