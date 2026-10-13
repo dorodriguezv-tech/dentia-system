@@ -32,6 +32,23 @@ se omite y no se abre una ventana duplicada.
 Parámetros: `-SkipDb`, `-SkipBackend`, `-SkipFrontend` (ej.
 `.\scripts\start-dentia.ps1 -SkipDb` si ya la administras aparte).
 
+El cliente **móvil** (Metro/`npx expo start --dev-client`, puerto 8081) no se
+levanta por defecto porque es un cliente aparte del frontend web. Para incluirlo:
+
+```powershell
+.\scripts\start-dentia.ps1 -Mobile
+```
+
+Con `-Mobile`, el backend se arranca con `--host 0.0.0.0` (en vez de solo
+`localhost`): un teléfono real, a diferencia del navegador del frontend web que
+corre en esta misma máquina, necesita que uvicorn escuche en la red
+(`mobile/docs/05_APP_MOVIL.md` §4.1). El script imprime al final la URL de
+Tailscale para pegar en la pantalla "Servidor" de la app. Si el backend ya estaba
+corriendo *sin* `-Mobile` (solo en `localhost`), el teléfono no podrá conectarse
+aunque el script diga que el puerto ya está escuchando — ese caso se avisa por
+separado; cierra el backend (`.\scripts\stop-dentia.ps1`) y vuelve a levantarlo
+con `-Mobile`.
+
 Para apagar:
 
 ```powershell
@@ -41,11 +58,19 @@ Para apagar:
 Cierra el backend y el frontend (localiza el proceso que escucha en cada puerto y
 también su propio árbol de procesos — p. ej. el *reloader* de uvicorn — sin tocar
 nunca la terminal o ventana que los lanzó). Por defecto **no** toca la base de
-datos ni Ollama, porque pueden estar en uso por otra cosa en la máquina. Para
-apagarlos también:
+datos, Ollama ni el móvil, porque pueden estar en uso por otra cosa en la máquina.
+Para apagarlos también:
 
 ```powershell
-.\scripts\stop-dentia.ps1 -StopDb -StopOllama
+.\scripts\stop-dentia.ps1 -StopDb -StopOllama -StopMobile
+```
+
+Si solo quieres cerrar y volver a levantar backend + móvil para probar un cambio
+(el caso típico al desarrollar la app), sin tocar base de datos ni frontend web:
+
+```powershell
+.\scripts\stop-dentia.ps1 -StopMobile
+.\scripts\start-dentia.ps1 -SkipFrontend -Mobile
 ```
 
 ## Respaldo (`backup.ps1` / `backup.sh`, `restore_test.ps1` / `restore_test.sh`)

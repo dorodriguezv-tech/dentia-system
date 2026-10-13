@@ -22,15 +22,20 @@
 .PARAMETER StopOllama
     Tambien cierra Ollama (la app de bandeja de IA local).
 
+.PARAMETER StopMobile
+    Tambien cierra el cliente movil (Metro/expo, puerto 8081), por si se levanto
+    con start-dentia.ps1 -Mobile o a mano con 'npx expo start'.
+
 .EXAMPLE
     .\scripts\stop-dentia.ps1
 
 .EXAMPLE
-    .\scripts\stop-dentia.ps1 -StopDb -StopOllama
+    .\scripts\stop-dentia.ps1 -StopDb -StopOllama -StopMobile
 #>
 param(
     [switch]$StopDb,
-    [switch]$StopOllama
+    [switch]$StopOllama,
+    [switch]$StopMobile
 )
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -104,6 +109,12 @@ function Stop-ByPort([int]$Port, [string]$Name) {
 
 Stop-ByPort -Port 8001 -Name "Backend"
 Stop-ByPort -Port 5174 -Name "Frontend"
+
+if ($StopMobile) {
+    Stop-ByPort -Port 8081 -Name "Movil (Metro)"
+} else {
+    Write-Step "Movil: no se toca (usa -StopMobile para cerrarlo tambien)."
+}
 
 if ($StopDb) {
     $pgService = Get-Service -Name "postgresql*" -ErrorAction SilentlyContinue | Select-Object -First 1
