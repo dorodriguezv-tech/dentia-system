@@ -12,6 +12,7 @@ from app.modules.encounters.schemas import (
     ClinicalNoteOut,
     ClinicalNoteUpdateRequest,
     CorrectNoteRequest,
+    CurrentEncounterOut,
     EncounterCreateRequest,
     EncounterOut,
     FinalizeNoteRequest,
@@ -33,6 +34,25 @@ async def create_encounter(
         db, clinic_id=clinic_id, data=payload, professional_id=actor.id
     )
     return EncounterOut.model_validate(encounter)
+
+
+@router.get("/encounters/current", response_model=CurrentEncounterOut | None)
+async def get_current_encounter(
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("records.write")),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentEncounterOut | None:
+    result = await service.get_current_encounter(db, clinic_id=clinic_id, professional_id=actor.id)
+    if result is None:
+        return None
+    encounter, patient_full_name = result
+    return CurrentEncounterOut(
+        id=encounter.id,
+        patient_id=encounter.patient_id,
+        patient_full_name=patient_full_name,
+        started_at=encounter.started_at,
+        chief_complaint=encounter.chief_complaint,
+    )
 
 
 @router.get("/encounters/{encounter_id}", response_model=EncounterOut)

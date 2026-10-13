@@ -75,6 +75,49 @@ async def create_encounter(
     return encounter
 
 
+async def get_current_encounter(
+    db: AsyncSession, *, clinic_id: uuid.UUID, professional_id: uuid.UUID
+) -> tuple[Encounter, str] | None:
+    """B10 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): la atencion que ese
+    profesional dejo abierta, para la barra "En consulta" del movil y recuperarla
+    al reabrir la app.
+
+    Limitacion conocida (docs/PENDIENTES_CLINICOS.md #51): todavia no existe un
+    "cerrar consulta" real (B11, M6) que marque `Encounter.ended_at`, asi que por
+    ahora esto se limita a las atenciones iniciadas HOY (hora local de la
+    sucursal) -- si no, "la mas reciente con ended_at NULL" seria SIEMPRE la
+    atencion mas reciente de ese profesional sin importar que tan vieja, porque
+    ended_at nunca se escribe en ningun lado todavia. Cuando B11 exista, quitar
+    el limite de "hoy" y dejar solo `ended_at IS NULL` (para poder recuperar una
+    consulta que de verdad quedo abierta de un dia para otro).
+
+    Import diferido de `app.voice.dialogue` (mismo helper de zona horaria que ya
+    usa Dentia) para evitar un import circular: ese modulo ya importa
+    `encounters.service` a nivel de modulo.
+    """
+    from app.voice.dialogue import _clinic_zoneinfo, _local_day_bounds_utc
+
+    tz = await _clinic_zoneinfo(db, clinic_id=clinic_id)
+    today = datetime.now(tz).date()
+    day_start, day_end = _local_day_bounds_utc(tz, today)
+
+    stmt = (
+        select(Encounter, Patient.full_name)
+        .join(Patient, Patient.id == Encounter.patient_id)
+        .where(
+            Encounter.clinic_id == clinic_id,
+            Encounter.professional_id == professional_id,
+            Encounter.ended_at.is_(None),
+            Encounter.started_at >= day_start,
+            Encounter.started_at < day_end,
+        )
+        .order_by(Encounter.started_at.desc())
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).first()
+    return (row[0], row[1]) if row else None
+
+
 async def list_patient_encounters(
     db: AsyncSession, *, clinic_id: uuid.UUID, patient_id: uuid.UUID
 ) -> list[Encounter]:

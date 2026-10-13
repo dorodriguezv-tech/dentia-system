@@ -86,6 +86,18 @@ class TimelineNoteOut(BaseModel):
     finalized_at: datetime | None
 
 
+class CurrentEncounterOut(BaseModel):
+    """B10 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): la atencion que el profesional
+    dejo abierta, para la barra "En consulta" del movil y recuperarla al reabrir la
+    app."""
+
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    patient_full_name: str
+    started_at: datetime
+    chief_complaint: str | None
+
+
 class TimelineEntryOut(BaseModel):
     encounter_id: uuid.UUID
     started_at: datetime

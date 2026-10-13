@@ -1,6 +1,9 @@
+from datetime import UTC, datetime, timedelta
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.encounters.models import Encounter
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
 
@@ -255,3 +258,84 @@ async def test_timeline_includes_encounter_and_notes(
     assert len(entries) == 1
     assert entries[0]["encounter_id"] == encounter_id
     assert len(entries[0]["notes"]) == 1
+
+
+# ------------------------------------------------------------ B10: GET /encounters/current
+
+
+async def test_current_encounter_is_null_without_an_open_encounter(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    await make_user(email="odonto@example.com", role_code="odontologo")
+    token = await _login(client, "odonto@example.com")
+
+    response = await client.get("/api/v1/encounters/current", headers=_headers(token, clinic.id))
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+async def test_current_encounter_returns_the_open_one_started_today(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    odonto = await make_user(email="odonto@example.com", role_code="odontologo")
+    token = await _login(client, "odonto@example.com")
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, odonto.id)
+
+    response = await client.get("/api/v1/encounters/current", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body is not None
+    assert body["id"] == encounter_id
+    assert body["patient_full_name"] == "Jose Perez"
+
+
+async def test_current_encounter_ignores_another_professionals_open_encounter(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    odonto_a = await make_user(email="odonto-a@example.com", role_code="odontologo")
+    token_a = await _login(client, "odonto-a@example.com")
+    await _create_encounter(client, _headers(token_a, clinic.id), db_session, clinic, odonto_a.id)
+
+    await make_user(email="odonto-b@example.com", role_code="odontologo")
+    token_b = await _login(client, "odonto-b@example.com")
+
+    response = await client.get("/api/v1/encounters/current", headers=_headers(token_b, clinic.id))
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+async def test_current_encounter_ignores_one_started_a_previous_day(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    # Limitacion documentada en docs/PENDIENTES_CLINICOS.md #51: hasta que exista
+    # un cierre real (B11), "actual" se limita a hoy, para no mostrar como abierta
+    # una atencion de hace semanas que nadie cerro formalmente.
+    odonto = await make_user(email="odonto@example.com", role_code="odontologo")
+    token = await _login(client, "odonto@example.com")
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, odonto.id)
+
+    encounter = await db_session.get(Encounter, encounter_id)
+    assert encounter is not None
+    encounter.started_at = datetime.now(UTC) - timedelta(days=2)
+    await db_session.commit()
+
+    response = await client.get("/api/v1/encounters/current", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+async def test_current_encounter_requires_records_write(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    await make_user(email="recepcion@example.com", role_code="recepcion")
+    token = await _login(client, "recepcion@example.com")
+
+    response = await client.get("/api/v1/encounters/current", headers=_headers(token, clinic.id))
+
+    assert response.status_code == 403
