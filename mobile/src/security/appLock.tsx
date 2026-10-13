@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { allowScreenCaptureAsync, preventScreenCaptureAsync } from 'expo-screen-capture';
 import { useEffect, useRef } from 'react';
 import { AppState, Image, View } from 'react-native';
 
@@ -20,7 +20,23 @@ import { BRAND_ASSETS, useTheme } from '@/theme/theme';
 const DEFAULT_LOCK_AFTER_MINUTES = 2;
 
 export function SecureScreen() {
-  usePreventScreenCapture();
+  // No se usa el hook `usePreventScreenCapture` de la librería: su limpieza llama
+  // `allowScreenCaptureAsync()` sin capturar el rechazo. En Android, activar la
+  // cámara (p. ej. "Tomar foto" en la ficha del paciente) pausa y reanuda la
+  // actividad con FLAG_SECURE activo, y a veces esa llamada nativa se rechaza
+  // ("ExpoScreenCapture.allowScreenCapture has been rejected"); al no capturarse,
+  // la promesa no manejada bloqueaba la app (reportado al probar en un teléfono
+  // real). Aquí se captura el error de ambas llamadas y solo se registra.
+  useEffect(() => {
+    preventScreenCaptureAsync().catch((error: unknown) => {
+      console.warn(`No se pudo activar la protección contra capturas de pantalla: ${String(error)}`);
+    });
+    return () => {
+      allowScreenCaptureAsync().catch((error: unknown) => {
+        console.warn(`No se pudo desactivar la protección contra capturas de pantalla: ${String(error)}`);
+      });
+    };
+  }, []);
   return null;
 }
 
