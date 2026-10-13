@@ -2,13 +2,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { getAiStatus, logout } from '@/api/endpoints';
 import { DentiaLogo, PoweredByDentia } from '@/components/Brand';
 import { Badge, Body, Button, Card, Row, Screen, Title } from '@/components/ui';
+import { performLogout } from '@/session/logout';
 import { hasPermission, useSession } from '@/store/session';
 import { useTheme } from '@/theme/theme';
-import { listSpanishVoices, say, setPreferredVoice } from '@/voice/dentiaVoice';
+import { listSpanishVoices, say, setPreferredVoice, stopSpeaking } from '@/voice/dentiaVoice';
+import { stopActiveRecording } from '@/voice/activeRecording';
 
 export default function AjustesScreen() {
   const t = useTheme();
@@ -26,11 +29,24 @@ export default function AjustesScreen() {
       .catch(() => setVoices([]));
   }, []);
 
-  const doLogout = async () => {
-    if (refreshToken) await logout(refreshToken);
-    qc.clear();
-    await useSession.getState().clear();
-    router.replace('/login');
+  const doLogout = () =>
+    performLogout({
+      refreshToken,
+      logoutApi: logout,
+      stopVoice: () => {
+        void stopSpeaking();
+        stopActiveRecording();
+      },
+      clearQueryCache: () => qc.clear(),
+      clearSession: () => useSession.getState().clear(),
+      navigateToLogin: () => router.replace('/login'),
+    });
+
+  const confirmLogout = () => {
+    Alert.alert('¿Cerrar sesión?', 'Si tienes una consulta abierta, quedará en borrador.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: () => void doLogout() },
+    ]);
   };
 
   return (
@@ -82,7 +98,7 @@ export default function AjustesScreen() {
         </Body>
       </Card>
 
-      <Button title="Cerrar sesión" variant="danger" onPress={() => void doLogout()} />
+      <Button title="Cerrar sesión" variant="danger" onPress={confirmLogout} />
     </Screen>
   );
 }

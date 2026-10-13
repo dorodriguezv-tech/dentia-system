@@ -7,10 +7,11 @@ import {
   type RecordingOptions,
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { errorMessage } from '@/api/client';
 import { transcribe } from '@/api/endpoints';
+import { registerActiveRecording } from '@/voice/activeRecording';
 
 /**
  * Graba del micrófono y transcribe con el faster-whisper del servidor de la clínica
@@ -92,6 +93,13 @@ export function useVoiceCapture() {
       setState('idle');
     }
   }, [recorder, recState.isRecording]);
+
+  // Permite detener esta grabación desde otra pantalla (p. ej. al cerrar sesión).
+  useEffect(() => {
+    if (!recState.isRecording) return undefined;
+    registerActiveRecording(() => void cancel());
+    return () => registerActiveRecording(null);
+  }, [recState.isRecording, cancel]);
 
   return {
     state,
