@@ -9,6 +9,7 @@ from app.core.deps import get_clinic_id, require_permission
 from app.modules.iam.models import User
 from app.modules.odontogram import service
 from app.modules.odontogram.schemas import (
+    ToothFindingAnnulRequest,
     ToothFindingCreateRequest,
     ToothFindingHistoryEntryOut,
     ToothFindingOut,
@@ -42,6 +43,20 @@ async def create_tooth_finding(
     db: AsyncSession = Depends(get_db),
 ) -> ToothFindingOut:
     item = await service.create_finding(db, clinic_id=clinic_id, data=payload, actor_id=actor.id)
+    return ToothFindingOut.model_validate(item)
+
+
+@router.post("/tooth-findings/{finding_id}/annul", response_model=ToothFindingOut)
+async def annul_tooth_finding(
+    finding_id: uuid.UUID,
+    payload: ToothFindingAnnulRequest,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("odontogram.write")),
+    db: AsyncSession = Depends(get_db),
+) -> ToothFindingOut:
+    item = await service.annul_finding(
+        db, clinic_id=clinic_id, finding_id=finding_id, reason=payload.reason, actor_id=actor.id
+    )
     return ToothFindingOut.model_validate(item)
 
 

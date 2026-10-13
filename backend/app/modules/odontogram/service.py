@@ -236,6 +236,51 @@ async def retire_finding(
     return finding
 
 
+async def annul_finding(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    finding_id: uuid.UUID,
+    reason: str,
+    actor_id: uuid.UUID,
+) -> ToothFinding:
+    """B12 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4, M5): anula con motivo un
+    hallazgo vigente (p.ej. un error de captura) -- nunca lo borra (regla 2 de
+    CLAUDE.md): lo marca como no vigente y, si remplazaba a uno anterior, lo
+    reactiva, igual que `retire_finding` (deshacer de Dentia) pero exigiendo
+    motivo y con su propia accion de auditoria. Sin `patient_id` en la ruta
+    (igual que `POST /tooth-findings`): el aislamiento por sucursal basta con
+    comparar `clinic_id`, el paciente ya es parte intrinseca del registro."""
+    finding = await db.get(ToothFinding, finding_id)
+    if finding is None or finding.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Hallazgo no encontrado", status_code=404)
+    if not finding.is_current:
+        raise AppError("FINDING_NOT_CURRENT", "Ese hallazgo ya no esta vigente", status_code=409)
+
+    finding.is_current = False
+    if finding.supersedes_id is not None:
+        previous = await db.get(ToothFinding, finding.supersedes_id)
+        if previous is not None:
+            previous.is_current = True
+
+    await audit_service.log(
+        db,
+        action="odontogram.finding_annulled",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="tooth_finding",
+        entity_id=str(finding.id),
+        details={
+            "patient_id": str(finding.patient_id),
+            "tooth_fdi": finding.tooth_fdi,
+            "surface": finding.surface,
+            "reason": reason,
+        },
+    )
+    await db.commit()
+    return finding
+
+
 async def retire_planned(
     db: AsyncSession,
     *,

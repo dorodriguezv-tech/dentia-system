@@ -435,3 +435,161 @@ async def test_retire_finding_already_retired_raises(
             actor_id=odonto,
         )
     assert exc_info.value.code == "FINDING_NOT_CURRENT"
+
+
+# ----------------------------------------------- B12 (M5): POST /tooth-findings/{id}/annul
+
+
+async def test_annul_finding_marks_it_not_current_and_requires_a_reason(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    missing_reason = await client.post(
+        f"/api/v1/tooth-findings/{caries_id}/annul", headers=headers, json={"reason": ""}
+    )
+    assert missing_reason.status_code == 422
+
+    annulled = await client.post(
+        f"/api/v1/tooth-findings/{caries_id}/annul",
+        headers=headers,
+        json={"reason": "Se capturó en la pieza equivocada"},
+    )
+    assert annulled.status_code == 200
+    assert annulled.json()["is_current"] is False
+
+    odontogram = await client.get(f"/api/v1/patients/{patient_id}/odontogram", headers=headers)
+    assert odontogram.json() == []
+
+    history = await client.get(f"/api/v1/patients/{patient_id}/teeth/36/history", headers=headers)
+    assert history.json()[0]["is_current"] is False
+
+
+async def test_annul_finding_reactivates_the_one_it_superseded(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    restauracion = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "restauracion",
+        },
+    )
+    restauracion_id = restauracion.json()["id"]
+
+    annulled = await client.post(
+        f"/api/v1/tooth-findings/{restauracion_id}/annul",
+        headers=headers,
+        json={"reason": "No se realizó la restauración, fue un registro por error"},
+    )
+    assert annulled.status_code == 200
+
+    odontogram = await client.get(f"/api/v1/patients/{patient_id}/odontogram", headers=headers)
+    findings = odontogram.json()
+    assert len(findings) == 1
+    assert findings[0]["id"] == caries_id
+    assert findings[0]["finding_code"] == "caries"
+
+
+async def test_annul_finding_already_annulled_is_a_conflict(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    first = await client.post(
+        f"/api/v1/tooth-findings/{caries_id}/annul", headers=headers, json={"reason": "Motivo 1"}
+    )
+    assert first.status_code == 200
+
+    second = await client.post(
+        f"/api/v1/tooth-findings/{caries_id}/annul", headers=headers, json={"reason": "Motivo 2"}
+    )
+    assert second.status_code == 409
+    assert second.json()["code"] == "FINDING_NOT_CURRENT"
+
+
+async def test_annul_finding_denied_without_odontogram_write(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    caries = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "O",
+            "finding_code": "caries",
+        },
+    )
+    caries_id = caries.json()["id"]
+
+    await make_user(email="recepcion@example.com", role_code="recepcion")
+    recepcion_token = await _login(client, "recepcion@example.com")
+
+    response = await client.post(
+        f"/api/v1/tooth-findings/{caries_id}/annul",
+        headers=_headers(recepcion_token, clinic.id),
+        json={"reason": "Intento sin permiso"},
+    )
+    assert response.status_code == 403
+
+
+async def test_annul_finding_not_found_is_404(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, _patient_id, _encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        f"/api/v1/tooth-findings/{uuid.uuid4()}/annul",
+        headers=headers,
+        json={"reason": "No existe"},
+    )
+    assert response.status_code == 404

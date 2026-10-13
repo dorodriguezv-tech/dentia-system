@@ -16,6 +16,15 @@ Origin = Literal["MANUAL", "AI_ASSISTED"]
 FindingCode = str
 
 
+class ToothFindingAnnulRequest(BaseModel):
+    """B12 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4, M5): anular con motivo
+    obligatorio un hallazgo vigente que fue un error de captura -- distinto de
+    "deshacer" (service.retire_finding, usado solo por el deshacer de 5 s de
+    Dentia, Fase 13.3), que no pide motivo porque es inmediato tras capturarlo."""
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class ToothFindingCreateRequest(BaseModel):
     patient_id: uuid.UUID
     encounter_id: uuid.UUID
