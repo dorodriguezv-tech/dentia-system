@@ -59,7 +59,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen>
+      <Screen topSafe>
         <View style={{ alignItems: 'center', marginTop: 40, gap: 12 }}>
           <ClinicLogo serverUrl={serverUrl} width={240} />
           {/* El logo DENT-IA ya incluye nombre y lema; solo se escribe el nombre si la clínica usa su propia marca */}

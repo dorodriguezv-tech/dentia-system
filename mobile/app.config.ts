@@ -89,7 +89,13 @@ const config: ExpoConfig = {
       {
         cameraPermission: 'DENT-IA usa la cámara para tomar fotografías clínicas del paciente.',
         photosPermission: false,
-        microphonePermission: false,
+        // NUNCA poner `microphonePermission: false` aquí: ese plugin lo traduce a
+        // `tools:node="remove"` para RECORD_AUDIO en el AndroidManifest final, y
+        // se lleva por delante el permiso que expo-audio SÍ necesita para el
+        // dictado -- bug real encontrado al probar en un teléfono: el micrófono
+        // ni aparecía en Ajustes de Android para poder activarlo. Se omite esta
+        // clave (image-picker no pide micrófono por su cuenta de todos modos; el
+        // permiso ya lo declara y describe el plugin expo-audio de arriba).
       },
     ],
     [

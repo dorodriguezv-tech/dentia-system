@@ -19,11 +19,29 @@ import { useTheme } from '@/theme/theme';
 /** Objetivo táctil mínimo: 48 dp (Android) — guantes de látex incluidos. */
 export const TOUCH = 48;
 
-export function Screen({ children, scroll = true, padded = true }: { children: ReactNode; scroll?: boolean; padded?: boolean }) {
+export function Screen({
+  children,
+  scroll = true,
+  padded = true,
+  topSafe = false,
+}: {
+  children: ReactNode;
+  scroll?: boolean;
+  padded?: boolean;
+  /**
+   * Pon `true` SOLO en pantallas sin header de navegación (hoy: login, el
+   * "Gate" de index.tsx). El resto ya tiene un header (de Stack o de Tabs) que
+   * ocupa el área segura de arriba; agregarla también aquí duplicaría el
+   * espacio. Bug real encontrado al probar en un teléfono: sin esto, el
+   * contenido de esas pantallas se dibujaba debajo de los íconos de Android
+   * (hora, batería, notificaciones).
+   */
+  topSafe?: boolean;
+}) {
   const t = useTheme();
   const inner = <View style={{ padding: padded ? t.space(4) : 0, gap: t.space(3), flexGrow: 1 }}>{children}</View>;
   return (
-    <SafeAreaView edges={['bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: t.colors.background }}>
+    <SafeAreaView edges={topSafe ? ['top', 'bottom', 'left', 'right'] : ['bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: t.colors.background }}>
       {scroll ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>{inner}</ScrollView> : inner}
     </SafeAreaView>
   );

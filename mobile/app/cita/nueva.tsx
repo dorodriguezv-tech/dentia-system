@@ -8,6 +8,7 @@ import { createAppointment, createPatientQuick, getPatient, listAppointmentTypes
 import type { PatientListItem } from '@/api/types';
 import { SlotPicker } from '@/agenda/SlotPicker';
 import { Body, Button, Card, ErrorBox, Field, Row, Screen, Title } from '@/components/ui';
+import { whatsappUrl } from '@/contact/links';
 import { hasPermission, useSession } from '@/store/session';
 import { useTheme } from '@/theme/theme';
 
@@ -122,7 +123,9 @@ export default function NuevaCitaScreen() {
           {
             text: 'Enviar recordatorio por WhatsApp',
             onPress: () => {
-              void Linking.openURL(`https://wa.me/${phone!.replace(/\D/g, '')}`);
+              void Linking.openURL(whatsappUrl(phone!)).catch(() =>
+                Alert.alert('No se pudo abrir WhatsApp', 'Verifica que esté instalado y que el teléfono del paciente sea correcto.'),
+              );
               router.back();
             },
           },

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import {
@@ -21,6 +21,7 @@ import {
 import type { FindingKind, OdontogramFindingCatalogItem, Surface, ToothFindingHistoryEntry } from '@/api/types';
 import { applicableSurfaces, Odontogram } from '@/components/Odontogram';
 import { AlertBar, Body, Button, Card, ErrorBox, Loading, Row, Screen, Title } from '@/components/ui';
+import { telUrl } from '@/contact/links';
 import { guardSingleOpenEncounter } from '@/encounters/openEncounterGuard';
 import { hasPermission } from '@/store/session';
 import { FINDING_COLORS, useTheme } from '@/theme/theme';
@@ -186,12 +187,20 @@ export default function PacienteScreen() {
           />
         ) : null}
         {patientDetail.data?.phone ? (
-          <Button title="Llamar" variant="secondary" onPress={() => void Linking.openURL(`tel:${patientDetail.data!.phone}`)} />
+          <Button
+            title="Llamar"
+            variant="secondary"
+            onPress={() =>
+              void Linking.openURL(telUrl(patientDetail.data!.phone!)).catch(() =>
+                Alert.alert('No se pudo abrir el teléfono', 'Verifica que el número del paciente sea correcto.'),
+              )
+            }
+          />
         ) : null}
         {canUploadPhoto ? <Button title="Tomar foto" variant="secondary" onPress={() => photo.mutate()} loading={photo.isPending} /> : null}
       </Row>
       {startEncounterNow.error ? <ErrorBox message={errorMessage(startEncounterNow.error)} /> : null}
-      {photo.error ? <ErrorBox message={errorMessage(photo.error)} /> : null}
+      {photo.error ? <ErrorBox message={errorMessage(photo.error)} onRetry={() => photo.mutate()} /> : null}
 
       <Title>Odontograma</Title>
       {!todayEncounter ? (
@@ -300,7 +309,11 @@ function FindingSheet(props: {
   return (
     <Modal visible={props.visible} transparent animationType="slide" onRequestClose={props.onClose}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={props.onClose} accessibilityLabel="Cerrar" />
-      <View style={{ backgroundColor: t.colors.surface, padding: 16, gap: 12, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85%' }}>
+      {/* Un Modal de RN en Android no hereda windowSoftInputMode="adjustResize" de la
+          actividad (limitación conocida): sin esto, el teclado tapaba el campo que se
+          estaba llenando -- bug real encontrado al probar en un teléfono. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ maxHeight: '85%' }}>
+      <View style={{ backgroundColor: t.colors.surface, padding: 16, gap: 12, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
         <Title>Pieza {tooth}</Title>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {props.canWrite ? (
@@ -426,6 +439,7 @@ function FindingSheet(props: {
         </ScrollView>
         <Button title="Cerrar" variant="ghost" onPress={props.onClose} />
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

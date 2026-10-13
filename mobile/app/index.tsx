@@ -44,7 +44,7 @@ export default function Gate() {
   if (!serverUrl) return <Redirect href="/servidor" />;
   if (checking) {
     return (
-      <Screen>
+      <Screen topSafe>
         <Loading label="Conectando con la clínica…" />
       </Screen>
     );

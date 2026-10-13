@@ -1,15 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Modal, Pressable, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, TextInput, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import { getPatient, setAppointmentStatus } from '@/api/endpoints';
 import type { Appointment } from '@/api/types';
 import { canTransition, isEditable } from '@/agenda/rules';
 import { Body, Button, ErrorBox, Row, Title } from '@/components/ui';
+import { telUrl, whatsappUrl } from '@/contact/links';
 import { hasPermission } from '@/store/session';
 import { useTheme } from '@/theme/theme';
+
+function openOrWarn(url: string, failureMessage: string) {
+  void Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir', failureMessage));
+}
 
 /** M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): acciones de una cita más allá de
  * "Llegó"/"Iniciar atención" (ya en la tarjeta de la agenda) — solo se muestran las
@@ -57,6 +62,10 @@ export function AppointmentActionsSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={close} accessibilityLabel="Cerrar" />
+      {/* Un Modal de RN en Android no ajusta su tamaño cuando aparece el teclado
+          (limitación conocida, a diferencia de la actividad principal): sin esto,
+          el teclado tapaba el campo de motivo. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={{ backgroundColor: t.colors.surface, padding: 16, gap: 10, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
         <Title>{appointment.patient_full_name}</Title>
 
@@ -125,17 +134,18 @@ export function AppointmentActionsSheet({
 
         {phone ? (
           <Row>
-            <Button title="Llamar" variant="secondary" onPress={() => void Linking.openURL(`tel:${phone}`)} />
+            <Button title="Llamar" variant="secondary" onPress={() => openOrWarn(telUrl(phone), 'Verifica que el teléfono del paciente sea correcto.')} />
             <Button
               title="WhatsApp"
               variant="secondary"
-              onPress={() => void Linking.openURL(`https://wa.me/${phone.replace(/\D/g, '')}`)}
+              onPress={() => openOrWarn(whatsappUrl(phone), 'Verifica que WhatsApp esté instalado y que el teléfono del paciente sea correcto.')}
             />
           </Row>
         ) : null}
 
         <Button title="Cerrar" variant="ghost" onPress={close} />
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

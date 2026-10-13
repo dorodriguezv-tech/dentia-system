@@ -214,6 +214,58 @@ Tras instalar un development build, los cambios de código se ven al instante (F
 
 > En el emulador, `localhost` es el propio emulador: para llegar al backend de tu PC usa `http://10.0.2.2:8001`.
 
+### 5.1 Usar el emulador de Android Studio paso a paso
+
+Útil cuando no tienes el teléfono a la mano, pero recuerda: cámara, micrófono, huella/rostro y una red real se comportan distinto en un emulador (ver limitaciones al final). Para la prueba final siempre conviene un teléfono real (§6.2).
+
+**A. Crear el dispositivo virtual (AVD) — una sola vez**
+1. Abre **Android Studio**. Si no tienes ningún proyecto abierto, la pantalla de bienvenida ya tiene el botón; si tienes uno abierto, usa el menú **More Actions → Virtual Device Manager** (en versiones más viejas: **Tools → Device Manager**).
+2. Botón **+ Create Virtual Device** (o **Create device**).
+3. **Categoría Phone** → elige **Pixel 8** (o cualquier teléfono moderno; usar uno real ayuda a detectar problemas de tamaño de pantalla) → **Next**.
+4. **System Image**: pestaña **Services** (NO "Google APIs" a secas) → busca la fila **API 36 ("Baklava")** con la columna *Target* diciendo **Google Play**. Si el renglón dice *Download* en vez de un ✔, haz clic en el ícono de descarga y espera (puede tardar varios minutos; son ~1-1.5 GB). Elige esa imagen → **Next**.
+   - Por qué "Google Play" y no "Google APIs" a secas: la variante *Google Play* trae la Play Store y los servicios de Google ya activados, más parecido a un teléfono real que compraría la clínica. La app no depende de Play Services directamente, pero algunos módulos nativos (notificaciones, Face/Fingerprint) se comportan más realista ahí.
+5. Ponle un nombre si quieres (p. ej. "Pixel 8 API 36") y deja lo demás en sus valores por defecto → **Finish**.
+6. El nuevo dispositivo aparece en la lista del Device Manager con un botón ▶ (Play) a la derecha.
+
+**B. Arrancar el emulador**
+1. En el Device Manager, haz clic en el botón ▶ junto al dispositivo que creaste. La primera vez tarda uno o dos minutos en arrancar (como un teléfono real encendiéndose).
+2. Déjalo abierto: es una ventana aparte que simula la pantalla del teléfono — puedes seguir usando Android Studio o tu terminal mientras sigue corriendo.
+3. Verifica que Metro/ADB ya lo ve, desde **cualquier terminal** (no hace falta estar en `mobile/`):
+   ```powershell
+   adb devices
+   ```
+   Debe listar algo como `emulator-5554   device`. Si no aparece nada, espera a que termine de arrancar (la pantalla de inicio de Android debe estar visible y desbloqueada) y repite.
+
+**C. Instalar y abrir la app DENT-IA en el emulador**
+1. Con el backend corriendo (`cd backend` → `uvicorn app.main:app --reload --port 8001`, basta con `localhost` aquí, **no** necesitas `--host 0.0.0.0` solo para el emulador).
+2. En otra terminal:
+   ```powershell
+   cd C:\workspace\dentia-system\mobile
+   npx expo run:android
+   ```
+   Si detecta más de un dispositivo (p. ej. tu teléfono real conectado a la vez que el emulador), te preguntará cuál usar — elige el que empieza con `emulator-`.
+3. Esto compila la app, la instala en el emulador y la abre automáticamente. La primera vez puede tardar varios minutos (compila el proyecto nativo de Android); las siguientes son más rápidas porque solo reinstala.
+4. Una vez instalada, para los cambios del día a día **no vuelvas a correr `run:android`**: basta con
+   ```powershell
+   npx expo start --dev-client
+   ```
+   y en el emulador abrir la app DENT-IA ya instalada (queda en el cajón de apps, como cualquier app); se conecta sola a Metro y los cambios de código aparecen con Fast Refresh.
+5. En la pantalla **Servidor** de la app, escribe:
+   ```
+   http://10.0.2.2:8001
+   ```
+   `10.0.2.2` es una dirección especial que el emulador traduce a "la máquina donde corre Android Studio" — nunca uses `localhost` ni la IP de tu Wi-Fi aquí. Toca **Probar y guardar** y continúa con el login normal (usa un usuario de `python -m app.seed`).
+
+**Limitaciones del emulador frente a un teléfono real**
+- **Cámara**: el AVD simula una cámara ("Virtual scene" o la webcam de tu PC si la configuras en *Extended Controls → Camera*); sirve para probar que el flujo no truena, pero no es una foto clínica real.
+- **Micrófono**: por defecto usa el micrófono de tu PC a través del emulador — funciona para probar el dictado, pero con más eco/ruido que un teléfono.
+- **Huella/rostro**: no hay sensor real. Para probar el bloqueo (§6.2), simula una huella desde los **tres puntos (⋮) de la barra lateral del emulador → Fingerprint → Touch the sensor**, o por línea de comandos:
+  ```powershell
+  adb -s emulator-5554 emu finger touch 1
+  ```
+- **Red / Tailscale**: el emulador comparte la red de tu PC; no puedes probar "fuera de la Wi-Fi de la clínica" de forma realista ahí.
+- **Rendimiento**: con Ollama/Whisper corriendo en la misma máquina que el emulador, todo compite por la misma CPU/RAM — los tiempos de respuesta del dictado no son representativos de un teléfono real contra un servidor dedicado.
+
 ---
 
 ## 6. Plan de pruebas
@@ -391,6 +443,11 @@ Requiere un development build nuevo (módulo nativo) y un ADR en `docs/adr/`.
 | `SDK location not found` | Falta `ANDROID_HOME` (§1.1). Abre una terminal nueva. |
 | Google rechaza: "no pudimos acceder" | Servidor demo caído o credenciales de *Acceso a la app* incorrectas (§8.5). |
 | Google rechaza por permisos | Asegúrate de que solo estén `RECORD_AUDIO` y `CAMERA` y que la política de privacidad explique ambos. |
+| El micrófono no aparece en *Ajustes de Android → Apps → DENT-IA → Permisos* (solo Cámara) | **Bug real, corregido**: `microphonePermission: false` en el plugin `expo-image-picker` de `app.config.ts` generaba `tools:node="remove"` para `RECORD_AUDIO` en el `AndroidManifest.xml` final, quitando el permiso que sí declaraba `expo-audio`. Ya corregido en el código; si tu build es de antes de este cambio, corre `npx expo prebuild --clean` y vuelve a instalar (`npx expo run:android`) para regenerar el manifiesto. |
+| El teclado tapa el campo que estás llenando (hoja de hallazgos, acciones de cita) | **Bug real, corregido**: un `Modal` de React Native en Android no hereda `windowSoftInputMode="adjustResize"` de la actividad. Se envolvió el contenido de esos modales en `KeyboardAvoidingView`. Si aparece en una pantalla nueva que use `Modal` con campos de texto, aplica el mismo patrón (ver `src/agenda/AppointmentActionsSheet.tsx`). |
+| El contenido de Login o de la pantalla de carga inicial se dibuja debajo de la hora/batería de Android | **Bug real, corregido**: esas dos pantallas no tienen header de navegación, y el `Screen` compartido solo protegía abajo/lados (`edges: ['bottom','left','right']`). Ahora aceptan `topSafe` (ver `src/components/ui.tsx`); solo pásalo en pantallas sin header, nunca en una que ya tenga uno (duplicaría el espacio). |
+| Tocar "Llamar" o "WhatsApp" no hace nada | Antes fallaba en silencio. Ahora muestra una alerta si no se pudo abrir, y el número para WhatsApp se normaliza a formato internacional (`52` + 10 dígitos) — un teléfono capturado en formato local sin lada de país no abría el chat correcto (`src/contact/links.ts`). Si sigue sin funcionar, confirma que el teléfono del paciente esté bien capturado y que WhatsApp esté instalado. |
+| Foto: "No se pudo conectar con el servidor de la clínica" al subir | Mismo mensaje genérico que una pérdida de red real (ver primera fila de esta tabla) — ahora con botón "Reintentar". Si persiste con la misma Wi-Fi donde sí funcionan otras pantallas, puede ser el router bloqueando tráfico entre dispositivos ("aislamiento de clientes" / AP isolation, común en redes de invitados); pruébalo en otra red o revisa esa opción del router. |
 
 ---
 

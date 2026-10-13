@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import { addDays, combineDayAndTime, dateKey, dayLabel, hhmm } from '@/api/dates';
@@ -9,12 +9,20 @@ import type { Uuid } from '@/api/types';
 import { Body, Button, ErrorBox, Loading, Row } from '@/components/ui';
 import { useTheme } from '@/theme/theme';
 
+/** Dos semanas hacia adelante, como franja de días (misma idea que la Agenda) para
+ * explorar varios días a la vez en vez de ir de uno en uno con ◀ / ▶. Se reporta
+ * como mejora al probar en un teléfono: pedía algo "como el calendario web" para
+ * elegir un horario libre tecleando menos. No es una cuadrícula de horas completa
+ * (eso sigue pendiente, ver docs/05_APP_MOVIL.md "Qué queda para después"). */
+const DAY_STRIP_LENGTH = 14;
+
 /**
  * M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): elige día y hora para una cita nueva o
  * una reprogramación, con los mismos huecos libres reales que calcula el backend
  * (B8, GET /appointments/availability) — nunca inventados en el teléfono. No hay un
  * selector de fecha nativo instalado (evita agregar un paquete con código nativo a
- * mitad de esta tarea); el día se cambia con ◀ / ▶ / Hoy / Mañana, como en Agenda.
+ * mitad de esta tarea); el día se elige de una franja de 14 días o con ◀ / ▶ para ir
+ * más lejos, y la hora de los huecos libres reales o escribiéndola a mano.
  */
 export function SlotPicker({
   providerId,
@@ -59,14 +67,18 @@ export function SlotPicker({
   return (
     <View style={{ gap: 8 }}>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Button title="◀" variant="ghost" onPress={() => setDayOffset((o) => o - 1)} />
+        <Button title="◀" variant="ghost" accessibilityHint="Día anterior" onPress={() => setDayOffset((o) => o - 1)} />
         <Body style={{ fontWeight: '700' }}>{dayLabel(dayOffset, day)}</Body>
-        <Button title="▶" variant="ghost" onPress={() => setDayOffset((o) => o + 1)} />
+        <Button title="▶" variant="ghost" accessibilityHint="Día siguiente" onPress={() => setDayOffset((o) => o + 1)} />
       </Row>
-      <Row>
-        {dayOffset !== 0 ? <Button title="Hoy" variant="secondary" onPress={() => setDayOffset(0)} /> : null}
-        {dayOffset !== 1 ? <Button title="Mañana" variant="secondary" onPress={() => setDayOffset(1)} /> : null}
-      </Row>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {Array.from({ length: DAY_STRIP_LENGTH }, (_, i) => {
+          const chipDay = addDays(new Date(), i);
+          const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : chipDay.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' });
+          return <Button key={i} title={label} variant={dayOffset === i ? 'secondary' : 'ghost'} onPress={() => setDayOffset(i)} />;
+        })}
+      </ScrollView>
 
       {availability.isLoading ? <Loading label="Buscando horarios…" /> : null}
       {availability.error ? <ErrorBox message={errorMessage(availability.error)} onRetry={() => void availability.refetch()} /> : null}
