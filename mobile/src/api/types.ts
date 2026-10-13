@@ -167,6 +167,32 @@ export interface Encounter {
   chief_complaint?: string | null;
 }
 
+/** M4 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, B10): la consulta que este
+ * profesional dejó abierta, para la barra "En consulta" y recuperarla al
+ * reabrir la app. `null` si no tiene ninguna abierta hoy. */
+export interface CurrentEncounter {
+  id: Uuid;
+  patient_id: Uuid;
+  patient_full_name: string;
+  started_at: string;
+  chief_complaint?: string | null;
+}
+
+export interface EncounterCreateInput {
+  patient_id: Uuid;
+  chief_complaint?: string | null;
+  appointment_id?: Uuid | null;
+}
+
+/** Subconjunto de PlanOut (backend/app/modules/treatment/schemas.py) para el
+ * resumen de "Plan de tratamiento vigente" en la pantalla Consulta. */
+export interface TreatmentPlanSummary {
+  id: Uuid;
+  title: string;
+  status: 'BORRADOR' | 'PRESENTADO' | 'ACEPTADO' | 'RECHAZADO' | 'EN_PROGRESO' | 'TERMINADO';
+  total: string;
+}
+
 /** M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): crear/reprogramar cita, disponibilidad. */
 export interface Provider {
   id: Uuid;

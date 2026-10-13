@@ -5,10 +5,19 @@ import { useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
-import { createToothFinding, getOdontogram, getPatientEncounters, getPatientSummary, uploadPatientImages } from '@/api/endpoints';
+import {
+  createEncounter,
+  createToothFinding,
+  getCurrentEncounter,
+  getOdontogram,
+  getPatientEncounters,
+  getPatientSummary,
+  uploadPatientImages,
+} from '@/api/endpoints';
 import type { Surface } from '@/api/types';
 import { FINDING_CATALOG, Odontogram } from '@/components/Odontogram';
 import { AlertBar, Body, Button, Card, ErrorBox, Loading, Row, Screen, Title } from '@/components/ui';
+import { guardSingleOpenEncounter } from '@/encounters/openEncounterGuard';
 import { hasPermission } from '@/store/session';
 import { FINDING_COLORS, useTheme } from '@/theme/theme';
 
@@ -32,6 +41,21 @@ export default function PacienteScreen() {
 
   const canWriteOdo = hasPermission('odontogram.write') && !!todayEncounter;
   const canUploadPhoto = hasPermission('imaging.write') && !!todayEncounter;
+
+  // M4 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R2 forma 2): iniciar atención sin
+  // cita (urgencia / paciente que llegó sin agendar).
+  const currentEncounter = useQuery({
+    queryKey: ['encounters', 'current'],
+    queryFn: getCurrentEncounter,
+    enabled: hasPermission('records.write'),
+  });
+  const startEncounterNow = useMutation({
+    mutationFn: () => createEncounter({ patient_id: id }),
+    onSuccess: (enc) => {
+      void qc.invalidateQueries({ queryKey: ['encounters', 'current'] });
+      router.push({ pathname: '/atencion/[id]', params: { id: enc.id, patientId: id, patientName: p.full_name } });
+    },
+  });
 
   const addFinding = useMutation({
     mutationFn: (finding_code: string) =>
@@ -84,14 +108,23 @@ export default function PacienteScreen() {
       <AlertBar alerts={p.alerts} />
 
       <Row>
-        {hasPermission('records.write') && todayEncounter ? (
-          <Button
-            title="Dictar con IA"
-            onPress={() => router.push({ pathname: '/atencion/[id]', params: { id: todayEncounter.id, patientId: id, patientName: p.full_name } })}
-          />
+        {hasPermission('records.write') ? (
+          todayEncounter ? (
+            <Button
+              title="Dictar con IA"
+              onPress={() => router.push({ pathname: '/atencion/[id]', params: { id: todayEncounter.id, patientId: id, patientName: p.full_name } })}
+            />
+          ) : (
+            <Button
+              title="Iniciar atención"
+              onPress={() => guardSingleOpenEncounter(currentEncounter.data, () => startEncounterNow.mutate())}
+              loading={startEncounterNow.isPending}
+            />
+          )
         ) : null}
         {canUploadPhoto ? <Button title="Tomar foto" variant="secondary" onPress={() => photo.mutate()} loading={photo.isPending} /> : null}
       </Row>
+      {startEncounterNow.error ? <ErrorBox message={errorMessage(startEncounterNow.error)} /> : null}
       {photo.error ? <ErrorBox message={errorMessage(photo.error)} /> : null}
 
       <Title>Odontograma</Title>

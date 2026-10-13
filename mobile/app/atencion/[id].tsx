@@ -1,21 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 
 import { ApiError, errorMessage } from '@/api/client';
-import { acceptSuggestion, getPatientSummary, interpret, listSuggestions, rejectSuggestion } from '@/api/endpoints';
+import {
+  acceptSuggestion,
+  getEncounter,
+  getPatientEncounters,
+  getPatientSummary,
+  interpret,
+  listSuggestions,
+  listTreatmentPlans,
+  rejectSuggestion,
+} from '@/api/endpoints';
 import type { AiSuggestion, UnrecognizedOut } from '@/api/types';
 import { AlertBar, Badge, Body, Button, Card, ErrorBox, Loading, Row, Screen, Title } from '@/components/ui';
 import { useVoiceCapture } from '@/voice/useVoiceCapture';
 import { useTheme } from '@/theme/theme';
 
 /**
- * Dictado clínico de una atención (docs/03_AGENTE_IA_VOZ.md), versión móvil:
- *   micrófono → /ai/transcribe (faster-whisper local) → texto editable
- *   → /ai/interpret (Ollama local) → propuestas PENDING
- *   → el odontólogo Acepta / Rechaza cada una (regla 9: la IA nunca guarda sola).
+ * Pantalla "Consulta" (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, M4): por ahora dos
+ * secciones, Resumen y Dictado. Odontograma editable (M5), Nota y Cerrar consulta
+ * (M6) y Fotos/Procedimientos dentro de esta pantalla llegan en esas tareas — ya
+ * existen por separado (odontograma y fotos desde la ficha del paciente).
+ *
+ * Dictado: micrófono → /ai/transcribe (faster-whisper local) → texto editable
+ * → /ai/interpret (Ollama local) → propuestas PENDING
+ * → el odontólogo Acepta / Rechaza cada una (regla 9: la IA nunca guarda sola).
  */
 
 const DESTINO: Record<string, string> = {
@@ -34,6 +47,17 @@ const DESTINO: Record<string, string> = {
 
 const NEEDS_ALERT_CHECK = new Set(['add_planned_procedure', 'add_performed_procedure']);
 
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  BORRADOR: 'Borrador',
+  PRESENTADO: 'Presentado',
+  ACEPTADO: 'Aceptado',
+  RECHAZADO: 'Rechazado',
+  EN_PROGRESO: 'En progreso',
+  TERMINADO: 'Terminado',
+};
+
+type Section = 'resumen' | 'dictado';
+
 export default function AtencionScreen() {
   useKeepAwake(); // que la pantalla no se apague mientras el odontólogo dicta
   const { id: encounterId, patientId, patientName } = useLocalSearchParams<{ id: string; patientId: string; patientName?: string }>();
@@ -42,8 +66,18 @@ export default function AtencionScreen() {
   const voice = useVoiceCapture();
   const [text, setText] = useState('');
   const [unrecognized, setUnrecognized] = useState<UnrecognizedOut[]>([]);
+  const [section, setSection] = useState<Section>('resumen');
+  // Regla 8 de CLAUDE.md: la primera vez que se abre esta atención, hay que
+  // "enterarse" de las alertas antes de poder hacer nada más. No hay un endpoint
+  // propio para auditar este acuse (solo existe para finalizar la nota, M6) — por
+  // ahora es una compuerta de la interfaz, documentado en docs/PENDIENTES_CLINICOS.md.
+  const [ackAlerts, setAckAlerts] = useState(false);
+  useEffect(() => setAckAlerts(false), [encounterId]);
 
   const summary = useQuery({ queryKey: ['patient', patientId], queryFn: () => getPatientSummary(patientId), enabled: !!patientId });
+  const encounter = useQuery({ queryKey: ['encounter', encounterId], queryFn: () => getEncounter(encounterId) });
+  const encounters = useQuery({ queryKey: ['encounters', patientId], queryFn: () => getPatientEncounters(patientId), enabled: !!patientId });
+  const plans = useQuery({ queryKey: ['treatment-plans', patientId], queryFn: () => listTreatmentPlans(patientId), enabled: !!patientId });
   const suggestions = useQuery({ queryKey: ['suggestions', encounterId], queryFn: () => listSuggestions(encounterId) });
 
   const runInterpret = useMutation({
@@ -65,6 +99,8 @@ export default function AtencionScreen() {
 
   const alerts = summary.data?.alerts ?? [];
   const pending = (suggestions.data ?? []).filter((s) => s.status === 'PENDING');
+  const previousEncounters = (encounters.data ?? []).filter((e) => e.id !== encounterId).slice(0, 3);
+  const plansToShow = (plans.data ?? []).filter((p) => p.status !== 'RECHAZADO');
 
   const accept = (s: AiSuggestion) => {
     if (NEEDS_ALERT_CHECK.has(s.action_type) && alerts.length) {
@@ -99,89 +135,140 @@ export default function AtencionScreen() {
 
   const ollamaDown = runInterpret.error instanceof ApiError && runInterpret.error.status === 503;
 
+  if (!summary.isLoading && alerts.length > 0 && !ackAlerts) {
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: patientName ? `Atención · ${patientName}` : 'Atención' }} />
+        <Card style={{ borderColor: t.colors.danger, borderWidth: 2 }}>
+          <Title>⚠ Alertas clínicas</Title>
+          {alerts.map((a, i) => (
+            <Body key={`${a}-${i}`}>• {a}</Body>
+          ))}
+          <Button title="Enterado" variant="danger" onPress={() => setAckAlerts(true)} />
+        </Card>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <Stack.Screen options={{ title: patientName ? `Atención · ${patientName}` : 'Atención' }} />
       <AlertBar alerts={alerts} />
 
-      <Card>
-        <Title>Dictado</Title>
-        <Button
-          big
-          title={voice.isRecording ? `Detener (${voice.seconds}s)` : voice.state === 'transcribing' ? 'Transcribiendo…' : 'Dictar'}
-          variant={voice.isRecording ? 'danger' : 'primary'}
-          loading={voice.state === 'transcribing'}
-          onPress={() => void toggleMic()}
-          accessibilityHint="Graba el dictado; vuelve a tocar para detener y transcribir"
-        />
-        {voice.error ? <ErrorBox message={voice.error} /> : null}
-        <TextInput
-          multiline
-          value={text}
-          onChangeText={setText}
-          placeholder="Aquí aparece lo que dictes. Puedes corregirlo antes de interpretar."
-          placeholderTextColor={t.colors.textMuted}
-          accessibilityLabel="Transcripción del dictado"
-          style={{
-            minHeight: 120,
-            textAlignVertical: 'top',
-            borderWidth: 1,
-            borderColor: t.colors.border,
-            borderRadius: t.radius,
-            padding: 12,
-            color: t.colors.text,
-            fontSize: 16,
-          }}
-        />
-        <Row>
-          <Button title="Interpretar dictado" onPress={() => runInterpret.mutate()} disabled={!text.trim()} loading={runInterpret.isPending} />
-          {text ? <Button title="Limpiar" variant="ghost" onPress={() => setText('')} /> : null}
-        </Row>
-        {runInterpret.isPending ? <Body muted>El modelo local puede tardar hasta 2 minutos…</Body> : null}
-        {runInterpret.error ? (
-          <ErrorBox
-            message={
-              ollamaDown
-                ? 'El asistente (Ollama) no está disponible en el servidor. Tu texto se conserva aquí; interprétalo cuando vuelva o captúralo en la computadora.'
-                : errorMessage(runInterpret.error)
-            }
-          />
-        ) : null}
-        {unrecognized.length ? (
-          <View style={{ gap: 4 }}>
-            <Body style={{ fontWeight: '700' }}>No reconocido (captúralo a mano):</Body>
-            {unrecognized.map((u, i) => (
-              <Body key={i} muted>
-                • {u.text}
-              </Body>
-            ))}
-          </View>
-        ) : null}
-      </Card>
-
-      <Row style={{ justifyContent: 'space-between' }}>
-        <Title>Propuestas del asistente</Title>
-        {pending.length > 1 ? <Button title="Aceptar todo" variant="secondary" onPress={() => void acceptAll()} /> : null}
+      <Row>
+        <Button title="Resumen" variant={section === 'resumen' ? 'secondary' : 'ghost'} onPress={() => setSection('resumen')} />
+        <Button title="Dictado" variant={section === 'dictado' ? 'secondary' : 'ghost'} onPress={() => setSection('dictado')} />
       </Row>
-      {suggestions.isLoading ? <Loading /> : null}
-      {decide.error ? <ErrorBox message={errorMessage(decide.error)} /> : null}
-      {suggestions.data && pending.length === 0 ? <Body muted>Sin propuestas pendientes.</Body> : null}
 
-      {pending.map((s) => (
-        <Card key={s.id}>
+      {section === 'resumen' ? (
+        <>
+          <Card>
+            <Title>Motivo de esta atención</Title>
+            {encounter.isLoading ? <Loading /> : null}
+            <Body muted>{encounter.data?.chief_complaint || 'Sin motivo capturado.'}</Body>
+          </Card>
+
+          <Card>
+            <Title>Últimas atenciones</Title>
+            {previousEncounters.length === 0 ? <Body muted>Esta es la primera atención registrada.</Body> : null}
+            {previousEncounters.map((e) => (
+              <Body key={e.id}>{new Date(e.started_at).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</Body>
+            ))}
+          </Card>
+
+          <Card>
+            <Title>Plan de tratamiento</Title>
+            {plansToShow.length === 0 ? <Body muted>Sin plan de tratamiento vigente.</Body> : null}
+            {plansToShow.map((p) => (
+              <Row key={p.id} style={{ justifyContent: 'space-between' }}>
+                <Body style={{ fontWeight: '600' }}>{p.title}</Body>
+                <Badge label={PLAN_STATUS_LABEL[p.status] ?? p.status} color={t.colors.secondary} />
+              </Row>
+            ))}
+          </Card>
+        </>
+      ) : (
+        <>
+          <Card>
+            <Title>Dictado</Title>
+            <Button
+              big
+              title={voice.isRecording ? `Detener (${voice.seconds}s)` : voice.state === 'transcribing' ? 'Transcribiendo…' : 'Dictar'}
+              variant={voice.isRecording ? 'danger' : 'primary'}
+              loading={voice.state === 'transcribing'}
+              onPress={() => void toggleMic()}
+              accessibilityHint="Graba el dictado; vuelve a tocar para detener y transcribir"
+            />
+            {voice.error ? <ErrorBox message={voice.error} /> : null}
+            <TextInput
+              multiline
+              value={text}
+              onChangeText={setText}
+              placeholder="Aquí aparece lo que dictes. Puedes corregirlo antes de interpretar."
+              placeholderTextColor={t.colors.textMuted}
+              accessibilityLabel="Transcripción del dictado"
+              style={{
+                minHeight: 120,
+                textAlignVertical: 'top',
+                borderWidth: 1,
+                borderColor: t.colors.border,
+                borderRadius: t.radius,
+                padding: 12,
+                color: t.colors.text,
+                fontSize: 16,
+              }}
+            />
+            <Row>
+              <Button title="Interpretar dictado" onPress={() => runInterpret.mutate()} disabled={!text.trim()} loading={runInterpret.isPending} />
+              {text ? <Button title="Limpiar" variant="ghost" onPress={() => setText('')} /> : null}
+            </Row>
+            {runInterpret.isPending ? <Body muted>El modelo local puede tardar hasta 2 minutos…</Body> : null}
+            {runInterpret.error ? (
+              <ErrorBox
+                message={
+                  ollamaDown
+                    ? 'El asistente (Ollama) no está disponible en el servidor. Tu texto se conserva aquí; interprétalo cuando vuelva o captúralo en la computadora.'
+                    : errorMessage(runInterpret.error)
+                }
+              />
+            ) : null}
+            {unrecognized.length ? (
+              <View style={{ gap: 4 }}>
+                <Body style={{ fontWeight: '700' }}>No reconocido (captúralo a mano):</Body>
+                {unrecognized.map((u, i) => (
+                  <Body key={i} muted>
+                    • {u.text}
+                  </Body>
+                ))}
+              </View>
+            ) : null}
+          </Card>
+
           <Row style={{ justifyContent: 'space-between' }}>
-            <Badge label={DESTINO[s.action_type] ?? s.action_type} color={t.colors.primary} />
-            <Badge label="IA" color={t.colors.secondary} />
+            <Title>Propuestas del asistente</Title>
+            {pending.length > 1 ? <Button title="Aceptar todo" variant="secondary" onPress={() => void acceptAll()} /> : null}
           </Row>
-          <Body>{describeSuggestion(s)}</Body>
-          {s.transcript_excerpt ? <Body muted>“{s.transcript_excerpt}”</Body> : null}
-          <Row>
-            <Button title="Aceptar" onPress={() => accept(s)} disabled={decide.isPending} />
-            <Button title="Rechazar" variant="ghost" onPress={() => decide.mutate({ s, accept: false })} disabled={decide.isPending} />
-          </Row>
-        </Card>
-      ))}
-      <Body muted>Para editar el contenido de una propuesta, ábrela en la versión web (pantalla Atención).</Body>
+          {suggestions.isLoading ? <Loading /> : null}
+          {decide.error ? <ErrorBox message={errorMessage(decide.error)} /> : null}
+          {suggestions.data && pending.length === 0 ? <Body muted>Sin propuestas pendientes.</Body> : null}
+
+          {pending.map((s) => (
+            <Card key={s.id}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Badge label={DESTINO[s.action_type] ?? s.action_type} color={t.colors.primary} />
+                <Badge label="IA" color={t.colors.secondary} />
+              </Row>
+              <Body>{describeSuggestion(s)}</Body>
+              {s.transcript_excerpt ? <Body muted>“{s.transcript_excerpt}”</Body> : null}
+              <Row>
+                <Button title="Aceptar" onPress={() => accept(s)} disabled={decide.isPending} />
+                <Button title="Rechazar" variant="ghost" onPress={() => decide.mutate({ s, accept: false })} disabled={decide.isPending} />
+              </Row>
+            </Card>
+          ))}
+          <Body muted>Para editar el contenido de una propuesta, ábrela en la versión web (pantalla Atención).</Body>
+        </>
+      )}
     </Screen>
   );
 }

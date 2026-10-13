@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import { addDays, dateKey, dayRange, hhmm } from '@/api/dates';
-import { listAppointments, setAppointmentStatus, startEncounter } from '@/api/endpoints';
+import { getCurrentEncounter, listAppointments, setAppointmentStatus, startEncounter } from '@/api/endpoints';
 import type { Appointment } from '@/api/types';
 import { AppointmentActionsSheet } from '@/agenda/AppointmentActionsSheet';
 import { Badge, Body, Button, Card, Empty, ErrorBox, Loading, Row, Title } from '@/components/ui';
+import { guardSingleOpenEncounter } from '@/encounters/openEncounterGuard';
 import { hasPermission } from '@/store/session';
 import { STATUS_COLORS, useTheme } from '@/theme/theme';
 
@@ -51,9 +52,31 @@ export default function AgendaScreen() {
     mutationFn: (a: Appointment) => startEncounter(a.id),
     onSuccess: (enc, a) => {
       void qc.invalidateQueries({ queryKey: ['appointments'] });
+      void qc.invalidateQueries({ queryKey: ['encounters', 'current'] });
       router.push({ pathname: '/atencion/[id]', params: { id: enc.id, patientId: a.patient_id, patientName: a.patient_full_name } });
     },
   });
+
+  // M4 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R2 forma 1): si la cita sigue
+  // "Agendada"/"Confirmada" (no pasó por "Llegó"), confirma antes de iniciar en un
+  // solo paso; y solo una consulta abierta por profesional (B10).
+  const currentEncounter = useQuery({
+    queryKey: ['encounters', 'current'],
+    queryFn: getCurrentEncounter,
+    enabled: hasPermission('records.write'),
+  });
+
+  const confirmStart = (a: Appointment) => {
+    const proceed = () => guardSingleOpenEncounter(currentEncounter.data, () => start.mutate(a));
+    if (a.status === 'EN_SALA') {
+      proceed();
+      return;
+    }
+    Alert.alert('Iniciar atención', '¿El paciente ya está en el sillón?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sí, iniciar', onPress: proceed },
+    ]);
+  };
 
   const canAgenda = hasPermission('agenda.write');
   const canStart = hasPermission('records.write');
@@ -127,8 +150,10 @@ export default function AgendaScreen() {
                   <Button title="Llegó" variant="secondary" onPress={() => checkIn.mutate(a)} loading={checkIn.isPending && checkIn.variables?.id === a.id} />
                 ) : null}
                 {canStart ? (
-                  <Button title="Iniciar atención" onPress={() => start.mutate(a)} loading={start.isPending && start.variables?.id === a.id} />
-                ) : null}
+                  <Button title="Iniciar atención" onPress={() => confirmStart(a)} loading={start.isPending && start.variables?.id === a.id} />
+                ) : (
+                  <Body muted>Lo inicia el odontólogo.</Body>
+                )}
               </View>
             ) : null}
           </Card>

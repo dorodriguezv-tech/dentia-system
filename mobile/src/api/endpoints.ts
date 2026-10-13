@@ -9,7 +9,9 @@ import type {
   AvailableSlots,
   Branding,
   ClinicMembership,
+  CurrentEncounter,
   Encounter,
+  EncounterCreateInput,
   InterpretResponse,
   LoginResponse,
   Me,
@@ -25,6 +27,7 @@ import type {
   Surface,
   TokenPair,
   TranscribeResponse,
+  TreatmentPlanSummary,
   UserPreferences,
   UserPreferencesUpdate,
   Uuid,
@@ -125,6 +128,18 @@ export const setAppointmentStatus = (id: Uuid, status: AppointmentStatus, reason
 
 export const startEncounter = (appointmentId: Uuid) =>
   api<Encounter>(`/appointments/${appointmentId}/start-encounter`, { method: 'POST' });
+
+// M4 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R2): iniciar atención sin cita
+// (urgencia) y recuperar la consulta abierta (B10).
+export const createEncounter = (input: EncounterCreateInput) =>
+  api<Encounter>('/encounters', { method: 'POST', body: input });
+
+export const getCurrentEncounter = () => api<CurrentEncounter | null>('/encounters/current');
+
+export const getEncounter = (id: Uuid) => api<Encounter>(`/encounters/${id}`);
+
+export const listTreatmentPlans = (patientId: Uuid) =>
+  api<TreatmentPlanSummary[]>(`/patients/${patientId}/treatment-plans`);
 
 // M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): mismos endpoints que
 // frontend/src/modules/agenda/api.ts.

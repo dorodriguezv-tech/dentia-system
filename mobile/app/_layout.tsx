@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { getBranding } from '@/api/endpoints';
+import { OpenEncounterBanner } from '@/encounters/OpenEncounterBanner';
 import { LockScreen, SecureScreen, useAutoLock } from '@/security/appLock';
 import { useSession } from '@/store/session';
 import { ThemeProvider, useTheme } from '@/theme/theme';
@@ -89,6 +90,7 @@ function Shell() {
     <>
       <StatusBar style={t.dark ? 'light' : 'dark'} />
       {loggedIn ? <SecureScreen /> : null}
+      {loggedIn ? <OpenEncounterBanner /> : null}
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: t.colors.surface },
