@@ -136,6 +136,15 @@ export interface ToothFinding {
 /** GET /patients/{id}/odontogram responde el arreglo directo, sin envoltura. */
 export type OdontogramResponse = ToothFinding[];
 
+/** GET /patients/{id}/teeth/{fdi}/history (M5): a diferencia de ToothFinding, sí
+ * trae is_current y el nombre del autor — es el historial real, no solo el
+ * hallazgo vigente. */
+export interface ToothFindingHistoryEntry extends ToothFinding {
+  supersedes_id: Uuid | null;
+  is_current: boolean;
+  author_name: string;
+}
+
 // ---------- Agenda (Fase 6) ----------
 export type AppointmentStatus =
   | 'RESERVADA'
@@ -213,7 +222,17 @@ export interface RawCatalogItem {
   code: string;
   name: string;
   is_active: boolean;
+  sort_order: number;
   extra: Record<string, unknown>;
+}
+
+/** M5: catálogo real de hallazgos de la sucursal (GET /catalogs/odontogram_finding),
+ * en vez de una lista fija en el teléfono que podía no coincidir con el catálogo
+ * administrable (y que, con códigos en MAYÚSCULA, el backend rechazaba siempre). */
+export interface OdontogramFindingCatalogItem {
+  code: string;
+  name: string;
+  requiresSurface: boolean;
 }
 
 export interface AppointmentCreateInput {

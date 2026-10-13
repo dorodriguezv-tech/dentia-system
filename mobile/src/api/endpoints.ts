@@ -12,9 +12,11 @@ import type {
   CurrentEncounter,
   Encounter,
   EncounterCreateInput,
+  FindingKind,
   InterpretResponse,
   LoginResponse,
   Me,
+  OdontogramFindingCatalogItem,
   OdontogramResponse,
   PatientCreateInput,
   PatientDetail,
@@ -25,6 +27,8 @@ import type {
   RawMyClinic,
   RescheduleInput,
   Surface,
+  ToothFinding,
+  ToothFindingHistoryEntry,
   TokenPair,
   TranscribeResponse,
   TreatmentPlanSummary,
@@ -82,15 +86,35 @@ export const getPatientSummary = (id: Uuid) => api<PatientSummary>(`/patients/${
 
 export const getOdontogram = (id: Uuid) => api<OdontogramResponse>(`/patients/${id}/odontogram`); // arreglo directo, sin envoltura
 
+// M5: historial real de una pieza (fecha, autor, origen) — antes la app mostraba
+// solo el hallazgo vigente filtrando el odontograma actual, no el historial.
+export const getToothHistory = (patientId: Uuid, toothFdi: number) =>
+  api<ToothFindingHistoryEntry[]>(`/patients/${patientId}/teeth/${toothFdi}/history`);
+
 export const createToothFinding = (input: {
   patient_id: Uuid;
   encounter_id: Uuid;
   tooth_fdi: number;
   surface: Surface | null;
   finding_code: string;
-  kind?: 'EXISTING';
+  kind?: FindingKind;
   material?: string | null;
-}) => api('/tooth-findings', { method: 'POST', body: { kind: 'EXISTING', ...input } });
+}) => api<ToothFinding>('/tooth-findings', { method: 'POST', body: { kind: 'EXISTING', ...input } });
+
+// M5 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): "Anular" un hallazgo vigente con
+// motivo obligatorio (B12) -- nunca se borra (regla 2 de CLAUDE.md).
+export const annulToothFinding = (findingId: Uuid, reason: string) =>
+  api<ToothFinding>(`/tooth-findings/${findingId}/annul`, { method: 'POST', body: { reason } });
+
+// Catálogo real de la sucursal (antes: una lista fija en MAYÚSCULA en el teléfono
+// que el backend siempre rechazaba — ver FINDING_COLORS en theme.tsx).
+export const listOdontogramFindings = async (): Promise<OdontogramFindingCatalogItem[]> => {
+  const raw = await api<RawCatalogItem[]>('/catalogs/odontogram_finding');
+  return raw
+    .filter((i) => i.is_active)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((i) => ({ code: i.code, name: i.name, requiresSurface: !!i.extra?.requires_surface }));
+};
 
 export const getPatientEncounters = (id: Uuid) => api<Encounter[]>(`/patients/${id}/encounters`);
 

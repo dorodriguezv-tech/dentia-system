@@ -128,20 +128,28 @@ export function buildTheme(branding: Branding | undefined, dark: boolean, fontsL
   };
 }
 
-/** Colores semánticos del odontograma: fijos, no dependen de la marca. */
+/**
+ * Colores semánticos del odontograma: fijos, no dependen de la marca.
+ *
+ * Claves en minúscula a propósito: son el `finding_code` real que manda el backend
+ * (backend/app/modules/odontogram/finding_catalog.py, igual que
+ * frontend/src/modules/odontogram/findingCatalog.ts), no un valor inventado — con
+ * mayúsculas esta tabla nunca hacía match y los hallazgos se veían siempre del
+ * mismo color (M5, auditoría de docs/PARIDAD_WEB_MOVIL.md).
+ */
 export const FINDING_COLORS: Record<string, string> = {
-  SANO: '#E5E7EB',
-  CARIES: '#DC2626',
-  RESTAURACION: '#2563EB',
-  CORONA: '#7C3AED',
-  ENDODONCIA: '#EA580C',
-  AUSENTE: '#111827',
-  EXTRACCION_INDICADA: '#B91C1C',
-  IMPLANTE: '#0891B2',
-  PROTESIS_FIJA: '#4F46E5',
-  SELLADOR: '#16A34A',
-  FRACTURA: '#CA8A04',
-  MOVILIDAD: '#9333EA',
+  sano: '#E5E7EB',
+  caries: '#DC2626',
+  restauracion: '#2563EB',
+  corona: '#7C3AED',
+  endodoncia: '#EA580C',
+  ausente: '#111827',
+  extraccion_indicada: '#B91C1C',
+  implante: '#0891B2',
+  protesis_fija: '#4F46E5',
+  sellador: '#16A34A',
+  fractura: '#CA8A04',
+  movilidad: '#9333EA',
 };
 
 export const STATUS_COLORS: Record<string, string> = {

@@ -51,6 +51,12 @@ export function surfaceForZone(tooth: number, zone: Zone): Surface {
   }
 }
 
+/** Las 5 superficies reales de una pieza (M5: selección múltiple en la hoja de
+ * captura), en el mismo orden que las zonas de la cruz. */
+export function applicableSurfaces(tooth: number): Surface[] {
+  return (Object.keys(ZONES) as Zone[]).map((z) => surfaceForZone(tooth, z));
+}
+
 interface Props {
   findings: ToothFinding[];
   onSelect?: (tooth: number, surface: Surface | null) => void;
@@ -162,8 +168,8 @@ export function Odontogram({ findings, onSelect, selected }: Props) {
 }
 
 function abbrev(code: string): string {
-  const map: Record<string, string> = { AUSENTE: 'X', IMPLANTE: 'IMP', CORONA: 'CR', ENDODONCIA: 'EN', EXTRACCION_INDICADA: 'EI', PROTESIS_FIJA: 'PF', FRACTURA: 'FX', MOVILIDAD: 'MV' };
-  return map[code] ?? code.slice(0, 2);
+  const map: Record<string, string> = { ausente: 'X', implante: 'IMP', corona: 'CR', endodoncia: 'EN', extraccion_indicada: 'EI', protesis_fija: 'PF', fractura: 'FX', movilidad: 'MV' };
+  return map[code] ?? code.slice(0, 2).toUpperCase();
 }
 
 function Legend() {
@@ -171,7 +177,7 @@ function Legend() {
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
       {Object.entries(FINDING_COLORS)
-        .filter(([k]) => k !== 'SANO')
+        .filter(([k]) => k !== 'sano')
         .map(([code, color]) => (
           <View key={code} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <View style={{ width: 12, height: 12, backgroundColor: color, borderRadius: 2 }} />
@@ -181,19 +187,3 @@ function Legend() {
     </View>
   );
 }
-
-/** Catálogo por defecto de hallazgos (odontogram/finding_catalog.py del backend). */
-export const FINDING_CATALOG = [
-  { code: 'CARIES', label: 'Caries', wholeTooth: false },
-  { code: 'RESTAURACION', label: 'Restauración', wholeTooth: false },
-  { code: 'SELLADOR', label: 'Sellador', wholeTooth: false },
-  { code: 'FRACTURA', label: 'Fractura', wholeTooth: false },
-  { code: 'CORONA', label: 'Corona', wholeTooth: true },
-  { code: 'ENDODONCIA', label: 'Endodoncia', wholeTooth: true },
-  { code: 'AUSENTE', label: 'Ausente', wholeTooth: true },
-  { code: 'EXTRACCION_INDICADA', label: 'Extracción indicada', wholeTooth: true },
-  { code: 'IMPLANTE', label: 'Implante', wholeTooth: true },
-  { code: 'PROTESIS_FIJA', label: 'Prótesis fija', wholeTooth: true },
-  { code: 'MOVILIDAD', label: 'Movilidad', wholeTooth: true },
-  { code: 'SANO', label: 'Sano', wholeTooth: false },
-] as const;
