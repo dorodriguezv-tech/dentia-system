@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +13,12 @@ from app.core.deps import (
 )
 from app.core.errors import AppError
 from app.modules.agenda import service
+from app.modules.agenda.rules import DEFAULT_APPOINTMENT_DURATION_MINUTES
 from app.modules.agenda.schemas import (
     AppointmentCreateRequest,
     AppointmentListItemOut,
     AppointmentOut,
+    AvailableSlotsOut,
     BlockCreateRequest,
     BlockOut,
     ProviderCreateRequest,
@@ -223,6 +225,27 @@ async def list_appointments(
         resource_id=resource_id,
     )
     return [AppointmentListItemOut(**i) for i in items]
+
+
+@router.get("/appointments/availability", response_model=AvailableSlotsOut)
+async def get_availability(
+    provider_id: uuid.UUID = Query(...),
+    day: date = Query(...),
+    duration_minutes: int = Query(default=DEFAULT_APPOINTMENT_DURATION_MINUTES, ge=5, le=480),
+    limit: int = Query(default=3, ge=1, le=20),
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    _actor: User = Depends(require_permission("agenda.read")),
+    db: AsyncSession = Depends(get_db),
+) -> AvailableSlotsOut:
+    times = await service.find_free_slots(
+        db,
+        clinic_id=clinic_id,
+        provider_id=provider_id,
+        day=day,
+        duration_minutes=duration_minutes,
+        limit=limit,
+    )
+    return AvailableSlotsOut(slots=[datetime.combine(day, t, tzinfo=UTC) for t in times])
 
 
 @router.post("/appointments", response_model=AppointmentOut, status_code=201)

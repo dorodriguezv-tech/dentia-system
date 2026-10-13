@@ -165,6 +165,14 @@ class WaitlistOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AvailableSlotsOut(BaseModel):
+    """B8 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): huecos libres reales de un
+    profesional en un dia, para que la app no tenga que calcularlos -- la misma
+    logica que ya usaba Dentia por voz (service.find_free_slots)."""
+
+    slots: list[datetime]
+
+
 class ReminderTaskOut(BaseModel):
     id: uuid.UUID
     appointment_id: uuid.UUID
