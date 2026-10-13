@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import {
@@ -11,6 +11,7 @@ import {
   createToothFinding,
   getCurrentEncounter,
   getOdontogram,
+  getPatient,
   getPatientEncounters,
   getPatientSummary,
   getToothHistory,
@@ -38,6 +39,8 @@ export default function PacienteScreen() {
   const summary = useQuery({ queryKey: ['patient', id], queryFn: () => getPatientSummary(id) });
   const odo = useQuery({ queryKey: ['odontogram', id], queryFn: () => getOdontogram(id), enabled: hasPermission('odontogram.read') });
   const encounters = useQuery({ queryKey: ['encounters', id], queryFn: () => getPatientEncounters(id) });
+  // M8: acción rápida "Llamar" en la ficha.
+  const patientDetail = useQuery({ queryKey: ['patient-detail', id], queryFn: () => getPatient(id) });
 
   // Un hallazgo siempre va ligado a una atención (regla 6): usamos la más reciente de hoy
   const todayEncounter = useMemo(() => {
@@ -175,6 +178,16 @@ export default function PacienteScreen() {
             <Button title="Iniciar atención" onPress={startToEdit} loading={startEncounterNow.isPending} />
           )
         ) : null}
+        {hasPermission('agenda.write') ? (
+          <Button
+            title="Nueva cita"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/cita/nueva', params: { patientId: id, patientName: p.full_name } })}
+          />
+        ) : null}
+        {patientDetail.data?.phone ? (
+          <Button title="Llamar" variant="secondary" onPress={() => void Linking.openURL(`tel:${patientDetail.data!.phone}`)} />
+        ) : null}
         {canUploadPhoto ? <Button title="Tomar foto" variant="secondary" onPress={() => photo.mutate()} loading={photo.isPending} /> : null}
       </Row>
       {startEncounterNow.error ? <ErrorBox message={errorMessage(startEncounterNow.error)} /> : null}
@@ -297,6 +310,7 @@ function FindingSheet(props: {
                 <Pressable
                   onPress={selectWholeTooth}
                   accessibilityRole="button"
+                  accessibilityLabel="Pieza completa"
                   accessibilityState={{ selected: wholeTooth }}
                   style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center', borderWidth: 2, borderColor: wholeTooth ? t.colors.primary : t.colors.border, backgroundColor: wholeTooth ? t.colors.primarySoft : 'transparent' }}
                 >
@@ -307,6 +321,7 @@ function FindingSheet(props: {
                     key={s}
                     onPress={() => toggleSurface(s)}
                     accessibilityRole="button"
+                    accessibilityLabel={`Superficie ${SURFACE_LABEL[s]}`}
                     accessibilityState={{ selected: surfaces.has(s) }}
                     style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center', borderWidth: 2, borderColor: surfaces.has(s) ? t.colors.primary : t.colors.border, backgroundColor: surfaces.has(s) ? t.colors.primarySoft : 'transparent' }}
                   >
@@ -350,6 +365,7 @@ function FindingSheet(props: {
                       disabled={props.creating || !canSubmit || blocked}
                       onPress={() => props.onCreate({ surfaces: Array.from(surfaces), wholeTooth, finding_code: f.code, kind, material: material.trim() || null })}
                       accessibilityRole="button"
+                      accessibilityLabel={f.name}
                       style={{ minHeight: 48, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center', borderWidth: 2, borderColor: FINDING_COLORS[f.code] ?? t.colors.border, opacity: props.creating || !canSubmit || blocked ? 0.4 : 1 }}
                     >
                       <Text style={{ color: t.colors.text, fontWeight: '600' }}>{f.name}</Text>

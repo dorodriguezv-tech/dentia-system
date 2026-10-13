@@ -33,19 +33,29 @@ Logo oficial aplicado (manual: `docs/MARCA_DENT-IA.md`, vista general: `docs/MAR
 
 Archivos: `assets/icon.png`, `assets/adaptive-icon.png`, `assets/adaptive-icon-monochrome.png`, `assets/splash.png`, `assets/splash-dark.png`, `assets/brand/*`. Código: `src/theme/theme.tsx` (`DENTIA_BRAND`, `BRAND_ASSETS`) y `src/components/Brand.tsx`. Los colores deben ser idénticos al preset `dentia` del sistema web (`CAMBIOS_WEB.md` W1).
 
-### Qué hace la versión 1.0
+### Qué hace la versión 1.1
+Paridad con la web para el flujo completo de consulta (docs/06_APP_MOVIL_V1_1_PARIDAD.md, bloques M1–M8), además de lo ya existente en la v1.0:
+
 - Configurar el servidor de la clínica, login con MFA, elegir sucursal.
-- **Agenda** del día (y otros días): marcar "Llegó" (EN_SALA) e "Iniciar atención".
-- **Pacientes**: búsqueda tolerante; ficha con barra de alertas clínicas.
-- **Odontograma** FDI táctil (permanente/temporal), historial por pieza, registrar hallazgos ligados a la atención de hoy.
+- **Cerrar sesión** con confirmación ("si tienes una consulta abierta, quedará en borrador"); limpia sesión, caché y Dentia sin importar si el servidor respondió.
+- **Mis preferencias** (todos los usuarios, sincronizadas entre dispositivos vía `GET/PUT /me/preferences`): Dentia activado/desactivado, voz/velocidad/volumen, tema (según el teléfono / claro / oscuro), tiempo de bloqueo. **Clínica** (servidor, estado de IA) separado y solo para `branding.manage`/`ai.configure`.
+- **Agenda completa**: crear cita (buscar paciente o crear uno rápido, profesional, tipo de cita, horarios libres reales o hora manual), reprogramar, cancelar/no asistió con motivo, confirmar — solo las transiciones válidas según la máquina de estados del backend. Vista semana simple (7 días) además del día. Llamar/WhatsApp al paciente desde la cita.
+- **Iniciar atención** de tres formas: desde una cita (Reservada/Confirmada/En sala, con confirmación si aún no ha pasado por sala), desde la ficha sin cita (urgencia), o recuperando la que ya tenías abierta (barra "En consulta" visible en toda la app). Solo una consulta abierta por profesional (aviso, no bloqueo del backend).
+- **Pantalla Consulta** con Resumen (alertas, motivo, últimas atenciones, plan de tratamiento), Dictado (igual que antes) y Nota.
+- **Odontograma** FDI táctil (permanente/temporal), selección de varias superficies o pieza completa, estado (diagnóstico/planificado/realizado), **cambiar** un hallazgo vigente, **anular con motivo obligatorio**, deshacer 5 s después de capturar, historial real por pieza (fecha, autor, origen).
 - **Fotografía clínica** con la cámara → pestaña Imágenes del expediente.
 - **Dictado con IA** en la atención: grabar → transcribir → interpretar → aceptar/rechazar propuestas (con aviso de alertas antes de aceptar procedimientos).
+- **Nota de la consulta** (SOAP) prellenada con lo capturado ese día (motivo, hallazgos, procedimientos, propuestas de IA aceptadas); guardar borrador o finalizar. Finalizar **cierra la consulta** (marca la cita como Atendida) y muestra las validaciones del backend tal cual (propuestas sin revisar, alertas sin confirmar, nota sin finalizar). Una nota final no se edita en el teléfono ("Corregir en la web").
+- **Próxima cita** al cerrar la consulta: agendar (fecha sugerida +7 días, con recordatorio por WhatsApp), dejar un pendiente para recepción, o marcar que no se requiere.
 - **Dentia por voz**: "abre el expediente de…", "agenda de mañana", "¿quién sigue?", "Laura Sánchez ya llegó", "cancela".
 - Seguridad: sin capturas de pantalla, bloqueo con huella/rostro/PIN, `https` obligatorio fuera de desarrollo.
 
 ### Qué queda para después (y por qué)
 - Editar el contenido de una propuesta de IA (hoy: aceptar/rechazar; editar en la web).
-- Nota SOAP completa, consentimientos con firma, cobranza y reportes: se usan mejor en la computadora; la app es para el sillón y la recepción.
+- Agendar una cita por voz ("Dentia, agenda a Laura mañana a las 10"): el intérprete de órdenes de Dentia todavía no tiene esa intención.
+- Una cuadrícula de horas tocable como la de la web (`CalendarGrid.tsx`) y una vista semana con esa misma cuadrícula: por ahora la hora se elige de los huecos libres reales o se escribe a mano.
+- Selector de idioma y de tamaño de letra propios de la app: se guardan como preferencia, pero ni la web ni el teléfono tienen todavía textos en otro idioma que no sea español (docs/PENDIENTES_CLINICOS.md #50).
+- Consentimientos con firma, cobranza y reportes: se usan mejor en la computadora; la app es para el sillón y la recepción.
 - Palabra de activación "Dentia" siempre escuchando → §9.
 
 ---
@@ -211,23 +221,24 @@ Tras instalar un development build, los cambios de código se ven al instante (F
 ### 6.1 Automáticas
 ```powershell
 npm run typecheck     # TypeScript estricto, 0 errores
-npm test              # intérprete de Dentia: 21 casos (órdenes, nombres, cancelar, no inventar acciones)
+npm test              # 75 casos: intérprete de Dentia, logout, agenda, odontograma, nota, preferencias, etc.
 npx expo-doctor       # dependencias alineadas con SDK 57
 ```
-Y en el backend, las pruebas nuevas de §7 junto con las 298 existentes.
+Y en el backend, `pytest` completo (834 pruebas al cierre de la v1.1, incluye B7–B12 del contrato móvil).
 
 ### 6.2 Checklist manual (teléfono real, en la Wi-Fi de la clínica y luego por Tailscale)
+
+**v1.0**
 - [ ] Servidor: dirección mala → mensaje claro; buena → pasa a login.
 - [ ] Login correcto, contraseña mala, 6 intentos (rate limit), **MFA** con `admin_clinica`.
 - [ ] Cerrar la app y volver a abrirla → entra sin pedir contraseña (refresh). Esperar > 8 h → pide login.
-- [ ] Dejar la app 3 min en segundo plano → pide huella/PIN.
+- [ ] Dejar la app en segundo plano más que el tiempo de bloqueo elegido en Mis preferencias → pide huella/PIN.
 - [ ] Intentar captura de pantalla en la ficha → Android la bloquea.
-- [ ] Usuario de **recepción**: ve agenda y "Llegó", **no** ve "Iniciar atención" ni "Dictar".
+- [ ] Usuario de **recepción**: ve agenda y "Llegó", **no** ve "Iniciar atención" ni "Dictar"; la cita muestra "Lo inicia el odontólogo".
 - [ ] Agenda: hoy/mañana/ayer, deslizar para actualizar, "Llegó" cambia a *En sala* también en la web.
-- [ ] "Iniciar atención" abre la pantalla de dictado.
-- [ ] Ficha: barra de alertas visible con un paciente alérgico.
+- [ ] "Iniciar atención" abre la pantalla Consulta (Resumen/Dictado/Nota).
+- [ ] Ficha: barra de alertas visible con un paciente alérgico; al abrir Consulta, tarjeta de alertas bloqueante hasta tocar "Enterado".
 - [ ] Odontograma: tocar pieza y superficie, registrar caries en 36-O, verla en la web; pieza "Ausente" dibuja recuadro completo; historial muestra autor/IA.
-- [ ] Sin atención de hoy → odontograma en solo lectura con aviso.
 - [ ] Foto: tomarla y verla en la pestaña Imágenes de la web.
 - [ ] Dictado: el ejemplo de docs/03 §1 genera propuestas; aceptar una alergia la agrega al expediente; rechazar no guarda nada; procedimiento con paciente alérgico muestra la alerta antes.
 - [ ] Apagar Ollama → mensaje claro y el texto se conserva.
@@ -235,6 +246,25 @@ Y en el backend, las pruebas nuevas de §7 junto con las 298 existentes.
 - [ ] Marca: ícono y splash DENT-IA (claro y oscuro), ícono temático monocromo (Android 13+: *Fondo de pantalla y estilo → Íconos temáticos*), logo de la clínica en el login cuando la sucursal subió uno, y "con tecnología DENT-IA".
 - [ ] Modo oscuro del teléfono, letra grande (Ajustes → Pantalla → Tamaño de fuente) y TalkBack leen bien los botones.
 - [ ] Sin red → mensaje "¿Estás en la red de la clínica o en la VPN?".
+
+**v1.1 (docs/06_APP_MOVIL_V1_1_PARIDAD.md)**
+- [ ] **Cerrar sesión** con red, sin red y con token vencido → Login; reabrir la app pide contraseña.
+- [ ] Recepción cambia idioma (texto informativo) y voz de Dentia; no ve "Clínica".
+- [ ] Recepción crea cita desde el botón "+ Nueva cita"; conflicto de horario muestra alternativas.
+- [ ] Reprogramar y cancelar (con motivo) se reflejan en la web.
+- [ ] Odontólogo inicia atención: desde cita Reservada/Confirmada (con "¿ya está en el sillón?"), desde cita En sala, desde la ficha sin cita, por voz.
+- [ ] Con una consulta ya abierta, intentar iniciar otra → "¿Volver a ella o dejarla en borrador?".
+- [ ] Barra "En consulta" visible al navegar a otras pantallas y al reabrir la app.
+- [ ] Al iniciar se muestran alertas y hay que tocar "Enterado".
+- [ ] Odontograma: registrar caries en 36-O y 36-M a la vez, cambiarla a obturación, anular otra con motivo, deshacer en los primeros 5 s; todo con historial en la web.
+- [ ] Sin consulta abierta el odontograma muestra el botón "Iniciar atención para editar".
+- [ ] Nota: prellenada al entrar con el motivo, hallazgos y propuestas aceptadas del día; guardar borrador y volver después.
+- [ ] Cerrar consulta con propuestas IA pendientes → mensaje del backend tal cual, sin cerrar.
+- [ ] Cerrar consulta con alertas sin confirmar o sin nota finalizada → mensaje del backend tal cual.
+- [ ] Finalizar nota → no editable en el teléfono; la cita pasa a Atendida en la web.
+- [ ] Al cerrar aparece "¿Agendar la próxima cita?": agendar con fecha +7 días sugerida y WhatsApp, "Recordar después" (aparece en la lista de espera de la web), "No requiere".
+- [ ] Botón Atrás de Android en Consulta → "¿Salir de la consulta?" (no la cierra).
+- [ ] Ficha del paciente: botones rápidos Iniciar atención/Dictar, Nueva cita, Llamar (si el paciente tiene teléfono), Tomar foto.
 
 ---
 

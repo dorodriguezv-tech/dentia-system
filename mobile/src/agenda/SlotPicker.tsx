@@ -21,14 +21,17 @@ export function SlotPicker({
   durationMinutes,
   value,
   onChange,
+  initialDayOffset = 0,
 }: {
   providerId: Uuid | null;
   durationMinutes: number;
   value: string | null;
   onChange: (iso: string) => void;
+  /** M7: "próxima cita" sugiere +7 días en vez de hoy. */
+  initialDayOffset?: number;
 }) {
   const t = useTheme();
-  const [dayOffset, setDayOffset] = useState(0);
+  const [dayOffset, setDayOffset] = useState(initialDayOffset);
   const [manualTime, setManualTime] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const day = addDays(new Date(), dayOffset);

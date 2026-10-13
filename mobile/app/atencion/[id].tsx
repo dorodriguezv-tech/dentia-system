@@ -1,30 +1,40 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useState } from 'react';
-import { Alert, TextInput, View } from 'react-native';
+import { Alert, BackHandler, TextInput, View } from 'react-native';
 
 import { ApiError, errorMessage } from '@/api/client';
 import {
   acceptSuggestion,
+  closeEncounter,
+  createNote,
+  createWaitlistEntry,
+  finalizeNote,
   getEncounter,
+  getOdontogram,
   getPatientEncounters,
   getPatientSummary,
   interpret,
+  listEncounterNotes,
+  listProceduresPerformed,
   listSuggestions,
   listTreatmentPlans,
   rejectSuggestion,
+  updateNote,
 } from '@/api/endpoints';
 import type { AiSuggestion, UnrecognizedOut } from '@/api/types';
 import { AlertBar, Badge, Body, Button, Card, ErrorBox, Loading, Row, Screen, Title } from '@/components/ui';
+import { buildNotePrefill } from '@/encounters/notePrefill';
 import { useVoiceCapture } from '@/voice/useVoiceCapture';
 import { useTheme } from '@/theme/theme';
 
 /**
- * Pantalla "Consulta" (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, M4): por ahora dos
- * secciones, Resumen y Dictado. Odontograma editable (M5), Nota y Cerrar consulta
- * (M6) y Fotos/Procedimientos dentro de esta pantalla llegan en esas tareas — ya
- * existen por separado (odontograma y fotos desde la ficha del paciente).
+ * Pantalla "Consulta" (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): Resumen, Dictado y
+ * Nota (M6, con "Cerrar consulta"). Odontograma editable dentro de esta pantalla y
+ * Fotos/Procedimientos como pestañas propias quedan fuera de alcance — ya existen
+ * por separado (odontograma y fotos desde la ficha del paciente; procedimientos se
+ * resumen aquí, en el prellenado de la nota).
  *
  * Dictado: micrófono → /ai/transcribe (faster-whisper local) → texto editable
  * → /ai/interpret (Ollama local) → propuestas PENDING
@@ -56,7 +66,7 @@ const PLAN_STATUS_LABEL: Record<string, string> = {
   TERMINADO: 'Terminado',
 };
 
-type Section = 'resumen' | 'dictado';
+type Section = 'resumen' | 'dictado' | 'nota';
 
 export default function AtencionScreen() {
   useKeepAwake(); // que la pantalla no se apague mientras el odontólogo dicta
@@ -74,11 +84,125 @@ export default function AtencionScreen() {
   const [ackAlerts, setAckAlerts] = useState(false);
   useEffect(() => setAckAlerts(false), [encounterId]);
 
+  // M8: el botón Atrás de Android no debe cerrar la consulta "por accidente" —
+  // solo confirma salir (la consulta sigue abierta; la barra "En consulta" permite
+  // volver, docs/06_APP_MOVIL_V1_1_PARIDAD.md §2).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      Alert.alert('¿Salir de la consulta?', 'Quedará abierta; puedes volver desde "En consulta" arriba.', [
+        { text: 'Seguir aquí', style: 'cancel' },
+        { text: 'Salir', onPress: () => router.back() },
+      ]);
+      return true; // evita que Android salga directo
+    });
+    return () => sub.remove();
+  }, []);
+
   const summary = useQuery({ queryKey: ['patient', patientId], queryFn: () => getPatientSummary(patientId), enabled: !!patientId });
   const encounter = useQuery({ queryKey: ['encounter', encounterId], queryFn: () => getEncounter(encounterId) });
   const encounters = useQuery({ queryKey: ['encounters', patientId], queryFn: () => getPatientEncounters(patientId), enabled: !!patientId });
   const plans = useQuery({ queryKey: ['treatment-plans', patientId], queryFn: () => listTreatmentPlans(patientId), enabled: !!patientId });
   const suggestions = useQuery({ queryKey: ['suggestions', encounterId], queryFn: () => listSuggestions(encounterId) });
+  const odo = useQuery({ queryKey: ['odontogram', patientId], queryFn: () => getOdontogram(patientId), enabled: !!patientId });
+  const procedures = useQuery({ queryKey: ['procedures-performed', patientId], queryFn: () => listProceduresPerformed(patientId), enabled: !!patientId });
+  const notesQ = useQuery({ queryKey: ['notes', encounterId], queryFn: () => listEncounterNotes(encounterId) });
+
+  // M6: nota SOAP de esta consulta -- se precarga con lo capturado hoy la primera
+  // vez que no hay ningún borrador todavía (nunca vuelve a sobreescribir lo que el
+  // odontólogo ya haya escrito en un refetch posterior).
+  const [noteId, setNoteId] = useState<string | null>(null);
+  const [soapS, setSoapS] = useState('');
+  const [soapO, setSoapO] = useState('');
+  const [soapA, setSoapA] = useState('');
+  const [soapP, setSoapP] = useState('');
+  const [prefilled, setPrefilled] = useState(false);
+
+  useEffect(() => {
+    if (prefilled || !notesQ.data) return;
+    const draft = notesQ.data.find((n) => n.status === 'DRAFT');
+    const final = notesQ.data.find((n) => n.status === 'FINAL');
+    const existing = final ?? draft;
+    if (existing) {
+      setNoteId(existing.id);
+      setSoapS(existing.soap_s ?? '');
+      setSoapO(existing.soap_o ?? '');
+      setSoapA(existing.soap_a ?? '');
+      setSoapP(existing.soap_p ?? '');
+    } else {
+      const { soapS: s, soapO: o } = buildNotePrefill({
+        encounterId,
+        chiefComplaint: encounter.data?.chief_complaint,
+        findings: odo.data ?? [],
+        proceduresPerformed: procedures.data ?? [],
+        suggestions: suggestions.data ?? [],
+        describeSuggestion,
+      });
+      setSoapS(s);
+      setSoapO(o);
+    }
+    setPrefilled(true);
+  }, [prefilled, notesQ.data, odo.data, procedures.data, suggestions.data, encounter.data, encounterId]);
+
+  const noteFields = { soap_s: soapS || null, soap_o: soapO || null, soap_a: soapA || null, soap_p: soapP || null };
+  const finalNote = notesQ.data?.find((n) => n.status === 'FINAL');
+  const isClosed = !!encounter.data?.ended_at;
+
+  const saveDraft = useMutation({
+    mutationFn: async () => (noteId ? updateNote(noteId, noteFields) : createNote(encounterId, noteFields)),
+    onSuccess: (note) => {
+      setNoteId(note.id);
+      void qc.invalidateQueries({ queryKey: ['notes', encounterId] });
+    },
+  });
+
+  const finalizeAndClose = useMutation({
+    mutationFn: async () => {
+      const id = noteId ? (await updateNote(noteId, noteFields)).id : (await createNote(encounterId, noteFields)).id;
+      setNoteId(id);
+      await finalizeNote(id, true); // la pantalla ya exigió "Enterado" de las alertas al entrar
+      return closeEncounter(encounterId, true);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notes', encounterId] });
+      void qc.invalidateQueries({ queryKey: ['encounter', encounterId] });
+      void qc.invalidateQueries({ queryKey: ['encounters', 'current'] });
+      void qc.invalidateQueries({ queryKey: ['appointments'] });
+      promptNextAppointment();
+    },
+  });
+
+  const remindLater = useMutation({
+    mutationFn: () => createWaitlistEntry({ patient_id: patientId, notes: 'Seguimiento pendiente de agendar (cierre de consulta)' }),
+    onSuccess: () => router.back(),
+  });
+
+  const confirmFinalize = () => {
+    Alert.alert('Finalizar nota', 'Una nota final no se puede modificar; las correcciones crean una versión nueva.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Finalizar y cerrar', onPress: () => finalizeAndClose.mutate() },
+    ]);
+  };
+
+  const promptNextAppointment = () => {
+    const planHint = plansToShow[0]?.title;
+    Alert.alert('¿Agendar la próxima cita?', undefined, [
+      { text: 'No requiere', style: 'cancel', onPress: () => router.back() },
+      { text: 'Recordar después', onPress: () => remindLater.mutate() },
+      {
+        text: 'Agendar',
+        onPress: () =>
+          router.replace({
+            pathname: '/cita/nueva',
+            params: {
+              patientId,
+              patientName: patientName ?? '',
+              suggestedOffsetDays: '7',
+              ...(planHint ? { planHint: `Plan pendiente: ${planHint}` } : {}),
+            },
+          }),
+      },
+    ]);
+  };
 
   const runInterpret = useMutation({
     mutationFn: () => interpret({ transcript: text, encounter_id: encounterId }),
@@ -155,9 +279,16 @@ export default function AtencionScreen() {
       <Stack.Screen options={{ title: patientName ? `Atención · ${patientName}` : 'Atención' }} />
       <AlertBar alerts={alerts} />
 
+      {isClosed ? (
+        <Card style={{ borderColor: t.colors.success, borderWidth: 2 }}>
+          <Body style={{ fontWeight: '700' }}>Consulta cerrada</Body>
+        </Card>
+      ) : null}
+
       <Row>
         <Button title="Resumen" variant={section === 'resumen' ? 'secondary' : 'ghost'} onPress={() => setSection('resumen')} />
         <Button title="Dictado" variant={section === 'dictado' ? 'secondary' : 'ghost'} onPress={() => setSection('dictado')} />
+        <Button title="Nota" variant={section === 'nota' ? 'secondary' : 'ghost'} onPress={() => setSection('nota')} />
       </Row>
 
       {section === 'resumen' ? (
@@ -187,7 +318,7 @@ export default function AtencionScreen() {
             ))}
           </Card>
         </>
-      ) : (
+      ) : section === 'dictado' ? (
         <>
           <Card>
             <Title>Dictado</Title>
@@ -268,9 +399,52 @@ export default function AtencionScreen() {
           ))}
           <Body muted>Para editar el contenido de una propuesta, ábrela en la versión web (pantalla Atención).</Body>
         </>
+      ) : (
+        <>
+          {finalNote ? (
+            <Card>
+              <Title>Nota finalizada</Title>
+              <Body muted>Esta nota ya es definitiva. Las correcciones se hacen desde la computadora.</Body>
+            </Card>
+          ) : (
+            <Card>
+              <Title>Nota de la consulta</Title>
+              <Body muted>Prellenada con lo capturado hoy; puedes corregirla antes de guardar.</Body>
+              <Body style={{ fontWeight: '700' }}>S · Subjetivo (motivo, síntomas)</Body>
+              <TextInput multiline value={soapS} onChangeText={setSoapS} placeholderTextColor={t.colors.textMuted} accessibilityLabel="Subjetivo" style={noteInputStyle(t)} />
+              <Body style={{ fontWeight: '700' }}>O · Objetivo (hallazgos, procedimientos)</Body>
+              <TextInput multiline value={soapO} onChangeText={setSoapO} placeholderTextColor={t.colors.textMuted} accessibilityLabel="Objetivo" style={noteInputStyle(t)} />
+              <Body style={{ fontWeight: '700' }}>A · Análisis (diagnóstico)</Body>
+              <TextInput multiline value={soapA} onChangeText={setSoapA} placeholderTextColor={t.colors.textMuted} accessibilityLabel="Análisis" style={noteInputStyle(t)} />
+              <Body style={{ fontWeight: '700' }}>P · Plan</Body>
+              <TextInput multiline value={soapP} onChangeText={setSoapP} placeholderTextColor={t.colors.textMuted} accessibilityLabel="Plan" style={noteInputStyle(t)} />
+
+              {saveDraft.error ? <ErrorBox message={errorMessage(saveDraft.error)} /> : null}
+              {finalizeAndClose.error ? <ErrorBox message={errorMessage(finalizeAndClose.error)} /> : null}
+
+              <Row>
+                <Button title="Guardar borrador" variant="secondary" onPress={() => saveDraft.mutate()} loading={saveDraft.isPending} />
+                <Button title="Finalizar y cerrar consulta" variant="danger" onPress={confirmFinalize} loading={finalizeAndClose.isPending} disabled={isClosed} />
+              </Row>
+            </Card>
+          )}
+        </>
       )}
     </Screen>
   );
+}
+
+function noteInputStyle(t: ReturnType<typeof useTheme>) {
+  return {
+    minHeight: 70,
+    textAlignVertical: 'top' as const,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    borderRadius: t.radius,
+    padding: 12,
+    color: t.colors.text,
+    fontSize: 16,
+  };
 }
 
 /** Texto legible de una propuesta (payload según docs/03 §4). */

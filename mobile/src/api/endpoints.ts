@@ -8,6 +8,8 @@ import type {
   AppointmentTypeCatalogItem,
   AvailableSlots,
   Branding,
+  ClinicalNote,
+  ClinicalNoteFields,
   ClinicMembership,
   CurrentEncounter,
   Encounter,
@@ -22,6 +24,7 @@ import type {
   PatientDetail,
   PatientListItem,
   PatientSummary,
+  ProcedurePerformedSummary,
   Provider,
   RawCatalogItem,
   RawMyClinic,
@@ -35,6 +38,7 @@ import type {
   UserPreferences,
   UserPreferencesUpdate,
   Uuid,
+  WaitlistCreateInput,
 } from './types';
 
 /**
@@ -164,6 +168,29 @@ export const getEncounter = (id: Uuid) => api<Encounter>(`/encounters/${id}`);
 
 export const listTreatmentPlans = (patientId: Uuid) =>
   api<TreatmentPlanSummary[]>(`/patients/${patientId}/treatment-plans`);
+
+export const listProceduresPerformed = (patientId: Uuid) =>
+  api<ProcedurePerformedSummary[]>(`/patients/${patientId}/procedures-performed`);
+
+// M6 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): nota de la consulta y cierre.
+export const listEncounterNotes = (encounterId: Uuid) =>
+  api<ClinicalNote[]>(`/encounters/${encounterId}/notes`);
+
+export const createNote = (encounterId: Uuid, input: ClinicalNoteFields) =>
+  api<ClinicalNote>(`/encounters/${encounterId}/notes`, { method: 'POST', body: input });
+
+export const updateNote = (noteId: Uuid, input: ClinicalNoteFields) =>
+  api<ClinicalNote>(`/notes/${noteId}`, { method: 'PATCH', body: input });
+
+export const finalizeNote = (noteId: Uuid, alertsAcknowledged: boolean) =>
+  api<ClinicalNote>(`/notes/${noteId}/finalize`, { method: 'POST', body: { alerts_acknowledged: alertsAcknowledged } });
+
+export const closeEncounter = (encounterId: Uuid, alertsAcknowledged: boolean) =>
+  api<Encounter>(`/encounters/${encounterId}/close`, { method: 'POST', body: { alerts_acknowledged: alertsAcknowledged } });
+
+// M7: "Recordar después" al cerrar sin agendar la próxima cita todavía.
+export const createWaitlistEntry = (input: WaitlistCreateInput) =>
+  api('/waitlist', { method: 'POST', body: input });
 
 // M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): mismos endpoints que
 // frontend/src/modules/agenda/api.ts.

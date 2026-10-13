@@ -174,6 +174,7 @@ export interface Encounter {
   patient_id: Uuid;
   started_at: string;
   chief_complaint?: string | null;
+  ended_at?: string | null;
 }
 
 /** M4 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, B10): la consulta que este
@@ -200,6 +201,39 @@ export interface TreatmentPlanSummary {
   title: string;
   status: 'BORRADOR' | 'PRESENTADO' | 'ACEPTADO' | 'RECHAZADO' | 'EN_PROGRESO' | 'TERMINADO';
   total: string;
+}
+
+// ---------- Nota clínica y cierre de consulta (M6) ----------
+export type NoteStatus = 'DRAFT' | 'FINAL' | 'CORRECTED' | 'CANCELLED';
+
+export interface ClinicalNoteFields {
+  soap_s?: string | null;
+  soap_o?: string | null;
+  soap_a?: string | null;
+  soap_p?: string | null;
+  free_text?: string | null;
+}
+
+export interface ClinicalNote extends ClinicalNoteFields {
+  id: Uuid;
+  encounter_id: Uuid;
+  patient_id: Uuid;
+  status: NoteStatus;
+  version: number;
+}
+
+export interface ProcedurePerformedSummary {
+  id: Uuid;
+  encounter_id: Uuid;
+  tooth_fdi: number | null;
+  surface: Surface | null;
+  procedure_name: string;
+}
+
+export interface WaitlistCreateInput {
+  patient_id: Uuid;
+  provider_id?: Uuid | null;
+  notes?: string | null;
 }
 
 /** M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): crear/reprogramar cita, disponibilidad. */

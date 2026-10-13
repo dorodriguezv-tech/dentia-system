@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Alert, Linking, TextInput, View } from 'react-native';
 
 import { ApiError, errorMessage } from '@/api/client';
-import { createAppointment, createPatientQuick, listAppointmentTypes, listProviders, searchPatients } from '@/api/endpoints';
+import { createAppointment, createPatientQuick, getPatient, listAppointmentTypes, listProviders, searchPatients } from '@/api/endpoints';
 import type { PatientListItem } from '@/api/types';
 import { SlotPicker } from '@/agenda/SlotPicker';
 import { Body, Button, Card, ErrorBox, Field, Row, Screen, Title } from '@/components/ui';
@@ -12,14 +12,24 @@ import { hasPermission, useSession } from '@/store/session';
 import { useTheme } from '@/theme/theme';
 
 /**
- * M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): "+ Nueva cita". No incluye el
- * gabinete (opcional en el backend, decisión administrativa que la web sí ofrece
- * pero que no está en el alcance de esta pantalla — se agenda sin gabinete y se
- * asigna después desde la web si la clínica lo usa) ni la preselección por tocar un
- * hueco libre en una cuadrícula (no existe esa cuadrícula en el teléfono todavía).
+ * M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3, R1): "+ Nueva cita". También sirve
+ * como pantalla de "próxima cita" de M7 (R7) cuando llega con `suggestedOffsetDays`
+ * y/o `planHint` (desde "Cerrar consulta") — mismos endpoints, un contexto arriba
+ * y la fecha sugerida en vez de hoy; no es una pantalla separada.
+ *
+ * No incluye el gabinete (opcional en el backend, decisión administrativa que la
+ * web sí ofrece pero que no está en el alcance de esta pantalla — se agenda sin
+ * gabinete y se asigna después desde la web si la clínica lo usa) ni la
+ * preselección por tocar un hueco libre en una cuadrícula (no existe esa
+ * cuadrícula en el teléfono todavía).
  */
 export default function NuevaCitaScreen() {
-  const params = useLocalSearchParams<{ patientId?: string; patientName?: string }>();
+  const params = useLocalSearchParams<{
+    patientId?: string;
+    patientName?: string;
+    suggestedOffsetDays?: string;
+    planHint?: string;
+  }>();
   const t = useTheme();
   const qc = useQueryClient();
   const me = useSession((s) => s.me);
@@ -97,9 +107,30 @@ export default function NuevaCitaScreen() {
         starts_at: startsAt!,
         notes: notes.trim() || null,
       }),
-    onSuccess: () => {
+    onSuccess: async (appt) => {
       void qc.invalidateQueries({ queryKey: ['appointments'] });
-      router.back();
+      const when = new Date(appt.starts_at).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      const whenLabel = `${when}, ${new Date(appt.starts_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+      let phone: string | null = null;
+      try {
+        phone = (await getPatient(appt.patient_id)).phone;
+      } catch {
+        /* si falla, se omite el botón de WhatsApp, no es bloqueante */
+      }
+      if (phone) {
+        Alert.alert(`Cita creada: ${whenLabel}`, undefined, [
+          {
+            text: 'Enviar recordatorio por WhatsApp',
+            onPress: () => {
+              void Linking.openURL(`https://wa.me/${phone!.replace(/\D/g, '')}`);
+              router.back();
+            },
+          },
+          { text: 'Listo', style: 'cancel', onPress: () => router.back() },
+        ]);
+      } else {
+        router.back();
+      }
     },
   });
 
@@ -109,6 +140,12 @@ export default function NuevaCitaScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: 'Nueva cita' }} />
+      {params.planHint ? (
+        <Card>
+          <Body style={{ fontWeight: '700' }}>Siguiente cita sugerida</Body>
+          <Body muted>{params.planHint}</Body>
+        </Card>
+      ) : null}
       <Card>
         <Title>Paciente</Title>
         {patient ? (
@@ -174,7 +211,13 @@ export default function NuevaCitaScreen() {
 
       <Card>
         <Title>Fecha y hora</Title>
-        <SlotPicker providerId={providerId} durationMinutes={duration} value={startsAt} onChange={setStartsAt} />
+        <SlotPicker
+          providerId={providerId}
+          durationMinutes={duration}
+          value={startsAt}
+          onChange={setStartsAt}
+          initialDayOffset={params.suggestedOffsetDays ? Number(params.suggestedOffsetDays) || 0 : 0}
+        />
       </Card>
 
       <Card>
