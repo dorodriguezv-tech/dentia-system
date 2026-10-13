@@ -12,6 +12,7 @@ import type {
   ClinicalNoteFields,
   ClinicMembership,
   CurrentEncounter,
+  DaySchedule,
   Encounter,
   EncounterCreateInput,
   FindingKind,
@@ -209,6 +210,12 @@ export const listAppointmentTypes = async (): Promise<AppointmentTypeCatalogItem
 
 export const getAvailability = (provider_id: Uuid, day: string, duration_minutes: number) =>
   api<AvailableSlots>('/appointments/availability', { query: { provider_id, day, duration_minutes } });
+
+/** Cuadrícula de horas completas del día (disponibles y ocupadas), de acuerdo a la
+ * agenda real del profesional. Reporte al probar en un teléfono real: la lista de
+ * `getAvailability` solo mostraba 3 huecos sueltos en pasos de 15 minutos. */
+export const getDaySchedule = (provider_id: Uuid, day: string, duration_minutes: number) =>
+  api<DaySchedule>('/appointments/day-schedule', { query: { provider_id, day, duration_minutes } });
 
 export const createAppointment = (input: AppointmentCreateInput) =>
   api<Appointment>('/appointments', { method: 'POST', body: input });

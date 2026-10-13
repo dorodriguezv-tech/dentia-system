@@ -173,6 +173,21 @@ class AvailableSlotsOut(BaseModel):
     slots: list[datetime]
 
 
+class DayScheduleSlotOut(BaseModel):
+    """Una hora completa de la agenda de un profesional: disponible u ocupada."""
+
+    starts_at: datetime
+    available: bool
+
+
+class DayScheduleOut(BaseModel):
+    """Cuadricula de horas completas del dia (9:00, 10:00, ...) para elegir un
+    horario tocando en vez de escribirlo -- reporte de uso en telefono real: la
+    app solo mostraba 3 huecos libres dispersos en pasos de 15 minutos."""
+
+    slots: list[DayScheduleSlotOut]
+
+
 class ReminderTaskOut(BaseModel):
     id: uuid.UUID
     appointment_id: uuid.UUID

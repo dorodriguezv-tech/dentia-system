@@ -4,7 +4,7 @@ import { ScrollView, TextInput, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import { addDays, combineDayAndTime, dateKey, dayLabel, hhmm } from '@/api/dates';
-import { getAvailability } from '@/api/endpoints';
+import { getDaySchedule } from '@/api/endpoints';
 import type { Uuid } from '@/api/types';
 import { Body, Button, ErrorBox, Loading, Row } from '@/components/ui';
 import { useTheme } from '@/theme/theme';
@@ -12,17 +12,19 @@ import { useTheme } from '@/theme/theme';
 /** Dos semanas hacia adelante, como franja de días (misma idea que la Agenda) para
  * explorar varios días a la vez en vez de ir de uno en uno con ◀ / ▶. Se reporta
  * como mejora al probar en un teléfono: pedía algo "como el calendario web" para
- * elegir un horario libre tecleando menos. No es una cuadrícula de horas completa
- * (eso sigue pendiente, ver docs/05_APP_MOVIL.md "Qué queda para después"). */
+ * elegir un horario libre tecleando menos. */
 const DAY_STRIP_LENGTH = 14;
 
 /**
  * M3 (docs/06_APP_MOVIL_V1_1_PARIDAD.md §3): elige día y hora para una cita nueva o
- * una reprogramación, con los mismos huecos libres reales que calcula el backend
- * (B8, GET /appointments/availability) — nunca inventados en el teléfono. No hay un
+ * una reprogramación, con la agenda real del profesional que calcula el backend
+ * (GET /appointments/day-schedule) — nunca inventada en el teléfono. No hay un
  * selector de fecha nativo instalado (evita agregar un paquete con código nativo a
  * mitad de esta tarea); el día se elige de una franja de 14 días o con ◀ / ▶ para ir
- * más lejos, y la hora de los huecos libres reales o escribiéndola a mano.
+ * más lejos, y la hora de una cuadrícula de horas completas (disponibles y
+ * ocupadas, igual que la agenda del dentista) o escribiéndola a mano para algo
+ * que no caiga en una hora en punto. Reporte al probar en un teléfono real: antes
+ * solo se mostraban 3 huecos sueltos en pasos de 15 minutos, sin ver lo ocupado.
  */
 export function SlotPicker({
   providerId,
@@ -44,9 +46,9 @@ export function SlotPicker({
   const [manualError, setManualError] = useState<string | null>(null);
   const day = addDays(new Date(), dayOffset);
 
-  const availability = useQuery({
-    queryKey: ['availability', providerId, dateKey(day), durationMinutes],
-    queryFn: () => getAvailability(providerId as Uuid, dateKey(day), durationMinutes),
+  const schedule = useQuery({
+    queryKey: ['day-schedule', providerId, dateKey(day), durationMinutes],
+    queryFn: () => getDaySchedule(providerId as Uuid, dateKey(day), durationMinutes),
     enabled: !!providerId,
   });
 
@@ -80,18 +82,20 @@ export function SlotPicker({
         })}
       </ScrollView>
 
-      {availability.isLoading ? <Loading label="Buscando horarios…" /> : null}
-      {availability.error ? <ErrorBox message={errorMessage(availability.error)} onRetry={() => void availability.refetch()} /> : null}
-      {availability.data && availability.data.slots.length === 0 ? (
-        <Body muted>Sin horarios libres ese día (fuera de horario laboral o todo ocupado).</Body>
+      {schedule.isLoading ? <Loading label="Buscando horarios…" /> : null}
+      {schedule.error ? <ErrorBox message={errorMessage(schedule.error)} onRetry={() => void schedule.refetch()} /> : null}
+      {schedule.data && schedule.data.slots.length === 0 ? (
+        <Body muted>Sin horario laboral ese día para este profesional.</Body>
       ) : null}
       <Row>
-        {(availability.data?.slots ?? []).map((slot) => (
+        {(schedule.data?.slots ?? []).map((slot) => (
           <Button
-            key={slot}
-            title={hhmm(slot)}
-            variant={value === slot ? 'secondary' : 'ghost'}
-            onPress={() => onChange(slot)}
+            key={slot.starts_at}
+            title={slot.available ? hhmm(slot.starts_at) : `${hhmm(slot.starts_at)} · Ocupado`}
+            variant={value === slot.starts_at ? 'secondary' : 'ghost'}
+            disabled={!slot.available}
+            accessibilityHint={slot.available ? undefined : 'Este horario ya está ocupado'}
+            onPress={() => onChange(slot.starts_at)}
           />
         ))}
       </Row>

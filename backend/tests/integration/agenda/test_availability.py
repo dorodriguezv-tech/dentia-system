@@ -137,6 +137,93 @@ async def test_availability_is_empty_without_working_hours_that_day(
     assert resp.json()["slots"] == []
 
 
+async def test_day_schedule_returns_full_hours_marking_busy_ones(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Reporte al probar en un telefono real: la app solo mostraba 3 huecos
+    sueltos en pasos de 15 minutos (medias y cuartos); ahora se recorre cada
+    hora completa de la ventana laboral, marcando ocupadas las que ya tienen
+    una cita."""
+    admin_headers, provider_id, patient_id = await _setup(client, make_user, clinic, db_session)
+    await _set_monday_working_hours(client, admin_headers, provider_id, start="09:00", end="12:00")
+
+    create_resp = await client.post(
+        "/api/v1/appointments",
+        headers=admin_headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "consulta",
+            "starts_at": f"{MONDAY}T10:00:00+00:00",
+            "ends_at": f"{MONDAY}T10:30:00+00:00",
+        },
+    )
+    assert create_resp.status_code == 201, create_resp.text
+
+    resp = await client.get(
+        "/api/v1/appointments/day-schedule",
+        headers=admin_headers,
+        params={"provider_id": provider_id, "day": MONDAY, "duration_minutes": 30},
+    )
+
+    assert resp.status_code == 200
+    slots = resp.json()["slots"]
+    assert [s["starts_at"][11:16] for s in slots] == ["09:00", "10:00", "11:00"]
+    assert [s["available"] for s in slots] == [True, False, True]
+
+
+async def test_day_schedule_rounds_up_to_the_next_full_hour(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    admin_headers, provider_id, _patient_id = await _setup(client, make_user, clinic, db_session)
+    await _set_monday_working_hours(client, admin_headers, provider_id, start="09:30", end="12:00")
+
+    resp = await client.get(
+        "/api/v1/appointments/day-schedule",
+        headers=admin_headers,
+        params={"provider_id": provider_id, "day": MONDAY, "duration_minutes": 30},
+    )
+
+    assert resp.status_code == 200
+    slots = resp.json()["slots"]
+    # 09:30 no es una hora completa: la primera disponible es 10:00.
+    assert [s["starts_at"][11:16] for s in slots] == ["10:00", "11:00"]
+
+
+async def test_day_schedule_is_empty_without_working_hours_that_day(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    admin_headers, provider_id, _patient_id = await _setup(client, make_user, clinic, db_session)
+    await _set_monday_working_hours(client, admin_headers, provider_id, start="09:00", end="12:00")
+
+    resp = await client.get(
+        "/api/v1/appointments/day-schedule",
+        headers=admin_headers,
+        params={"provider_id": provider_id, "day": SUNDAY, "duration_minutes": 30},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["slots"] == []
+
+
+async def test_day_schedule_requires_agenda_read_permission(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    admin_headers, provider_id, _patient_id = await _setup(client, make_user, clinic, db_session)
+    await _set_monday_working_hours(client, admin_headers, provider_id, start="09:00", end="12:00")
+
+    await make_user(email="caja@example.com", role_code="caja")
+    token = await _login(client, "caja@example.com")
+
+    resp = await client.get(
+        "/api/v1/appointments/day-schedule",
+        headers=_headers(token, clinic.id),
+        params={"provider_id": provider_id, "day": MONDAY, "duration_minutes": 30},
+    )
+
+    assert resp.status_code == 403
+
+
 async def test_availability_requires_agenda_read_permission(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

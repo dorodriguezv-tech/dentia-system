@@ -437,6 +437,79 @@ async def find_free_slots(
     return slots
 
 
+_HOURLY_STEP_MINUTES = 60
+
+
+async def get_day_schedule(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    day: date,
+    duration_minutes: int,
+) -> list[tuple[time, bool]]:
+    """Cuadricula de horas completas (9:00, 10:00, ...) del horario laboral de ese
+    dia, cada una marcada disponible u ocupada. Reporte al probar en un telefono
+    real: `find_free_slots` solo devuelve unos pocos huecos dispersos en pasos de
+    15 minutos (medias y cuartos); aqui, en cambio, se recorre cada hora completa
+    para elegir tocando en vez de escribir la hora, con las mismas reglas de
+    conflicto que `create_appointment`."""
+    provider = await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=provider_id)
+    hours_stmt = select(ProviderWorkingHours).where(
+        ProviderWorkingHours.provider_id == provider_id,
+        ProviderWorkingHours.weekday == day.weekday(),
+    )
+    working_hours = list((await db.execute(hours_stmt)).scalars().all())
+    if not working_hours:
+        return []
+
+    day_start = datetime.combine(day, time.min, tzinfo=UTC)
+    day_end = datetime.combine(day, time.max, tzinfo=UTC)
+    busy_appointments = await _find_conflicts(
+        db,
+        clinic_id=clinic_id,
+        provider_id=provider_id,
+        resource_id=provider.default_resource_id,
+        starts_at=day_start,
+        ends_at=day_end,
+    )
+    blocks_stmt = select(ProviderBlock).where(
+        ProviderBlock.provider_id == provider_id,
+        ProviderBlock.starts_at < day_end,
+        ProviderBlock.ends_at > day_start,
+    )
+    blocks = list((await db.execute(blocks_stmt)).scalars().all())
+    busy_ranges = [(a.starts_at, a.ends_at) for a in busy_appointments] + [
+        (b.starts_at, b.ends_at) for b in blocks
+    ]
+
+    now = datetime.now(UTC)
+    duration = timedelta(minutes=duration_minutes)
+    step = timedelta(minutes=_HOURLY_STEP_MINUTES)
+    results: list[tuple[time, bool]] = []
+    seen: set[time] = set()
+    for working_hour in sorted(working_hours, key=lambda wh: wh.start_time):
+        window_start = datetime.combine(day, working_hour.start_time, tzinfo=UTC)
+        window_end = datetime.combine(day, working_hour.end_time, tzinfo=UTC)
+        candidate = window_start.replace(minute=0, second=0, microsecond=0)
+        if candidate < window_start:
+            candidate += step
+        while candidate < window_end:
+            if candidate.time() not in seen:
+                seen.add(candidate.time())
+                available = (
+                    candidate >= now
+                    and candidate + duration <= window_end
+                    and not any(
+                        candidate < busy_end and candidate + duration > busy_start
+                        for busy_start, busy_end in busy_ranges
+                    )
+                )
+                results.append((candidate.time(), available))
+            candidate += step
+    return sorted(results, key=lambda r: r[0])
+
+
 def _conflict_error(conflicts: list[Appointment]) -> AppError:
     return AppError(
         "APPOINTMENT_CONFLICT",

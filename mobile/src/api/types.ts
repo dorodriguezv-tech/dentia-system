@@ -287,6 +287,12 @@ export interface AvailableSlots {
   slots: string[];
 }
 
+/** Cuadrícula de horas completas del día (9:00, 10:00, …), cada una marcada
+ * disponible u ocupada, para elegir tocando en vez de escribir la hora. */
+export interface DaySchedule {
+  slots: { starts_at: string; available: boolean }[];
+}
+
 export interface PatientDetail {
   id: Uuid;
   full_name: string;

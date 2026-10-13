@@ -21,6 +21,8 @@ from app.modules.agenda.schemas import (
     AvailableSlotsOut,
     BlockCreateRequest,
     BlockOut,
+    DayScheduleOut,
+    DayScheduleSlotOut,
     ProviderCreateRequest,
     ProviderOut,
     ReminderTaskOut,
@@ -246,6 +248,30 @@ async def get_availability(
         limit=limit,
     )
     return AvailableSlotsOut(slots=[datetime.combine(day, t, tzinfo=UTC) for t in times])
+
+
+@router.get("/appointments/day-schedule", response_model=DayScheduleOut)
+async def get_day_schedule(
+    provider_id: uuid.UUID = Query(...),
+    day: date = Query(...),
+    duration_minutes: int = Query(default=DEFAULT_APPOINTMENT_DURATION_MINUTES, ge=5, le=480),
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    _actor: User = Depends(require_permission("agenda.read")),
+    db: AsyncSession = Depends(get_db),
+) -> DayScheduleOut:
+    slots = await service.get_day_schedule(
+        db,
+        clinic_id=clinic_id,
+        provider_id=provider_id,
+        day=day,
+        duration_minutes=duration_minutes,
+    )
+    return DayScheduleOut(
+        slots=[
+            DayScheduleSlotOut(starts_at=datetime.combine(day, t, tzinfo=UTC), available=available)
+            for t, available in slots
+        ]
+    )
 
 
 @router.post("/appointments", response_model=AppointmentOut, status_code=201)
