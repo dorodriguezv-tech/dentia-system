@@ -21,6 +21,8 @@ from app.modules.iam.schemas import (
     TokenResponse,
     UserCreateRequest,
     UserOut,
+    UserPreferencesOut,
+    UserPreferencesUpdateRequest,
     UserUpdateRequest,
     UserWithRoleOut,
 )
@@ -100,6 +102,24 @@ async def my_clinics(
         MyClinicOut(clinic=clinic, role=role, clinic_name=clinic.name, permissions=permissions)
         for clinic, role, permissions in triples
     ]
+
+
+@router.get("/me/preferences", response_model=UserPreferencesOut)
+async def get_my_preferences(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> UserPreferencesOut:
+    pref = await service.get_preferences(db, user_id=current_user.id)
+    return UserPreferencesOut.model_validate(pref)
+
+
+@router.put("/me/preferences", response_model=UserPreferencesOut)
+async def update_my_preferences(
+    payload: UserPreferencesUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserPreferencesOut:
+    pref = await service.update_preferences(db, user_id=current_user.id, data=payload)
+    return UserPreferencesOut.model_validate(pref)
 
 
 @router.patch("/clinics/current", response_model=ClinicOut)

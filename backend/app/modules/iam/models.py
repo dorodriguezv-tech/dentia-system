@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,6 +92,27 @@ class UserClinic(AuditedMixin, Base):
     user: Mapped[User] = relationship(foreign_keys=[user_id])
     clinic: Mapped[Clinic] = relationship()
     role: Mapped[Role] = relationship()
+
+
+class UserPreference(AuditedMixin, Base):
+    """B7 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4): preferencias personales del
+    usuario (idioma, voz y velocidad de Dentia, tema, tiempo de bloqueo), para que
+    viajen entre web, tablet y telefono en vez de vivir solo en un dispositivo. No
+    son datos clinicos, por eso no llevan clinic_id (CLAUDE.md sec. 6: "cuando
+    aplique")."""
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True
+    )
+    language: Mapped[str] = mapped_column(String(10), default="es-MX", server_default="es-MX")
+    theme: Mapped[str] = mapped_column(String(10), default="system", server_default="system")
+    dentia_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    voice_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    speech_rate: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
+    speech_volume: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
+    lock_timeout_minutes: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
 
 
 class RefreshToken(UUIDPkMixin, Base):

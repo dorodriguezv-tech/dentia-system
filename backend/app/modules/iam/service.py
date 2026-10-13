@@ -31,8 +31,14 @@ from app.modules.iam.models import (
     RolePermission,
     User,
     UserClinic,
+    UserPreference,
 )
-from app.modules.iam.schemas import ClinicUpdateRequest, UserCreateRequest, UserUpdateRequest
+from app.modules.iam.schemas import (
+    ClinicUpdateRequest,
+    UserCreateRequest,
+    UserPreferencesUpdateRequest,
+    UserUpdateRequest,
+)
 
 settings = get_settings()
 
@@ -249,6 +255,49 @@ async def update_current_clinic(
     )
     await db.commit()
     return clinic
+
+
+async def get_preferences(db: AsyncSession, *, user_id: uuid.UUID) -> UserPreference:
+    """B7: crea la fila con los valores por defecto la primera vez que se consulta,
+    para no tener que sincronizar un alta en el registro del usuario."""
+    stmt = select(UserPreference).where(UserPreference.user_id == user_id)
+    pref = (await db.execute(stmt)).scalar_one_or_none()
+    if pref is None:
+        pref = UserPreference(user_id=user_id, created_by=user_id)
+        db.add(pref)
+        await db.commit()
+    return pref
+
+
+async def update_preferences(
+    db: AsyncSession, *, user_id: uuid.UUID, data: UserPreferencesUpdateRequest
+) -> UserPreference:
+    pref = await get_preferences(db, user_id=user_id)
+
+    if data.language is not None:
+        pref.language = data.language
+    if data.theme is not None:
+        pref.theme = data.theme
+    if data.dentia_enabled is not None:
+        pref.dentia_enabled = data.dentia_enabled
+    if data.voice_id is not None:
+        pref.voice_id = data.voice_id
+    if data.speech_rate is not None:
+        pref.speech_rate = data.speech_rate
+    if data.speech_volume is not None:
+        pref.speech_volume = data.speech_volume
+    if data.lock_timeout_minutes is not None:
+        pref.lock_timeout_minutes = data.lock_timeout_minutes
+
+    await audit_service.log(
+        db,
+        action="iam.preferences_updated",
+        actor_user_id=user_id,
+        entity_type="user_preference",
+        entity_id=str(pref.id),
+    )
+    await db.commit()
+    return pref
 
 
 async def setup_mfa(db: AsyncSession, *, user: User) -> tuple[str, str]:

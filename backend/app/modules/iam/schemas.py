@@ -1,9 +1,12 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.validators import Email
 from app.modules.iam.rules import is_valid_timezone
+
+PreferenceTheme = Literal["system", "light", "dark"]
 
 
 class LoginRequest(BaseModel):
@@ -139,3 +142,30 @@ class UserUpdateRequest(BaseModel):
 class UserWithRoleOut(BaseModel):
     user: UserOut
     role: RoleOut
+
+
+class UserPreferencesOut(BaseModel):
+    """B7 (docs/06_APP_MOVIL_V1_1_PARIDAD.md sec. 4)."""
+
+    language: str
+    theme: PreferenceTheme
+    dentia_enabled: bool
+    voice_id: str | None
+    speech_rate: float
+    speech_volume: float
+    lock_timeout_minutes: int
+
+    model_config = {"from_attributes": True}
+
+
+class UserPreferencesUpdateRequest(BaseModel):
+    """Actualizacion parcial: un campo en None significa "no lo toques", no "bórralo"
+    (mismo criterio que ClinicUpdateRequest/UserUpdateRequest en este modulo)."""
+
+    language: str | None = Field(default=None, min_length=2, max_length=10)
+    theme: PreferenceTheme | None = None
+    dentia_enabled: bool | None = None
+    voice_id: str | None = Field(default=None, max_length=200)
+    speech_rate: float | None = Field(default=None, ge=0.5, le=2.0)
+    speech_volume: float | None = Field(default=None, ge=0.0, le=1.0)
+    lock_timeout_minutes: int | None = Field(default=None, ge=1, le=30)
