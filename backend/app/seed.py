@@ -9,7 +9,7 @@ Es idempotente: si el admin ya existe, no hace nada.
 import asyncio
 import random
 import uuid
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from faker import Faker
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session_factory
 from app.core.security import hash_password
 from app.modules.agenda import service as agenda_service
+from app.modules.agenda.models import Provider, Resource
 from app.modules.agenda.schemas import (
     AppointmentCreateRequest,
     ProviderCreateRequest,
@@ -293,10 +294,10 @@ async def _seed_agenda(
     admin_id: uuid.UUID,
     odontologo_id: uuid.UUID,
     patients: list[Patient],
-) -> None:
+) -> tuple[Provider, Resource]:
     """Agenda de muestra (Fase 6): un profesional agendable, un gabinete, horario
-    laboral de lunes a viernes y citas en distintos estados para ver el calendario
-    poblado (reservada, confirmada y una en la semana siguiente)."""
+    laboral abierto toda la semana y citas en distintos estados para ver el
+    calendario poblado (reservada, confirmada y una en la semana siguiente)."""
     provider, _name = await agenda_service.create_provider(
         db,
         clinic_id=clinic_id,
@@ -307,32 +308,21 @@ async def _seed_agenda(
         db, clinic_id=clinic_id, data=ResourceCreateRequest(name="Gabinete 1"), actor_id=admin_id
     )
 
-    # Horario de la clinica: lunes a viernes 08:00-19:00 con hora de comida de
-    # 14:00 a 15:00 (dos ventanas), sabado 08:00-15:00, domingo no se labora (sin
-    # filas ese weekday).
-    for weekday in range(5):  # lunes (0) a viernes (4)
+    # Horario de la clinica: abierto los 7 dias de la semana, sin restriccion de
+    # hora (decision del operador -- antes era lunes a viernes con hora de
+    # comida y sabado medio dia). El horario sigue siendo informativo nada mas
+    # (sombrea el calendario, no bloquea agendar, ver docstring de
+    # ProviderWorkingHours); el admin_clinica puede ajustarlo por profesional
+    # desde Configuracion -> Horarios en cualquier momento.
+    for weekday in range(7):  # lunes (0) a domingo (6)
         await agenda_service.create_working_hours(
             db,
             clinic_id=clinic_id,
             provider_id=provider.id,
             data=WorkingHoursCreateRequest(
-                weekday=weekday, start_time=time(8, 0), end_time=time(14, 0)
+                weekday=weekday, start_time=time(0, 0), end_time=time(23, 59)
             ),
         )
-        await agenda_service.create_working_hours(
-            db,
-            clinic_id=clinic_id,
-            provider_id=provider.id,
-            data=WorkingHoursCreateRequest(
-                weekday=weekday, start_time=time(15, 0), end_time=time(19, 0)
-            ),
-        )
-    await agenda_service.create_working_hours(
-        db,
-        clinic_id=clinic_id,
-        provider_id=provider.id,
-        data=WorkingHoursCreateRequest(weekday=5, start_time=time(8, 0), end_time=time(15, 0)),
-    )
 
     # .astimezone() (no UTC) para que .replace(hour=...) fije la hora de pared local
     # de la maquina, no 10:00 UTC (que seria la madrugada en America/Mexico_City).
@@ -382,6 +372,268 @@ async def _seed_agenda(
             provider_id=provider.id,
             appointment_type="urgencia",
             starts_at=next_week_930am,
+        ),
+        actor_id=admin_id,
+    )
+
+    return provider, resource
+
+
+def _next_weekday(base: datetime, target_weekday: int) -> datetime:
+    """Proxima fecha (estrictamente despues de `base`, nunca el mismo dia) que
+    caiga en `target_weekday` (0=lunes .. 6=domingo, igual convencion que
+    ProviderWorkingHours.weekday)."""
+    days_ahead = target_weekday - base.weekday()
+    if days_ahead <= 0:
+        days_ahead += 7
+    return base + timedelta(days=days_ahead)
+
+
+async def _seed_example_patient(
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    admin_id: uuid.UUID,
+    professional_id: uuid.UUID,
+    provider_id: uuid.UUID,
+    resource_id: uuid.UUID,
+) -> None:
+    """Paciente de ejemplo (a peticion del operador) con expediente completo:
+    varias consultas, cada una con nota SOAP finalizada, y un odontograma con
+    varios trabajos y observaciones en distintas piezas -- para tener algo
+    representativo que mostrar sin tener que armar el expediente a mano. Trae
+    ademas dos citas en dias fijos de la semana (proximo lunes 9:00, proximo
+    martes 11:00), pedidas explicitamente para verlas pobladas en la agenda.
+    """
+    patient = await patients_service.create_patient(
+        db,
+        clinic_id=clinic_id,
+        data=PatientCreateRequest(
+            first_name="Roberto",
+            last_name_paternal="Fernandez",
+            last_name_maternal="Castillo",
+            date_of_birth=date(1985, 6, 12),
+            sex="M",
+            phone="555-010-2030",
+            email="roberto.fernandez.ejemplo@example.com",
+            address="Av. Reforma 123, CDMX",
+        ),
+        actor_id=admin_id,
+    )
+
+    # Consulta 1: valoracion inicial -- caries en 16, antecedente relevante.
+    encounter1 = await encounters_service.create_encounter(
+        db,
+        clinic_id=clinic_id,
+        data=EncounterCreateRequest(
+            patient_id=patient.id, chief_complaint="Dolor al masticar del lado derecho"
+        ),
+        professional_id=professional_id,
+    )
+    await records_service.create_history(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=MedicalHistoryCreateRequest(
+            encounter_id=encounter1.id,
+            category="odontologico",
+            text="Tratamiento de ortodoncia hace 10 anos, sin complicaciones.",
+        ),
+        actor_id=professional_id,
+    )
+    note1 = await encounters_service.create_note(
+        db,
+        clinic_id=clinic_id,
+        encounter_id=encounter1.id,
+        data=ClinicalNoteCreateRequest(
+            soap_s="Refiere dolor al masticar del lado derecho desde hace 3 dias.",
+            soap_o="Caries oclusal profunda en pieza 16. Sensible a la percusion.",
+            soap_a="Caries profunda en organo dentario 16, probable compromiso pulpar.",
+            soap_p="Se propone endodoncia en pieza 16, seguida de corona. Se explica al"
+            " paciente el plan y acepta continuar.",
+        ),
+        author_id=professional_id,
+    )
+    await encounters_service.finalize_note(
+        db,
+        clinic_id=clinic_id,
+        note_id=note1.id,
+        data=FinalizeNoteRequest(alerts_acknowledged=True),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter1.id,
+            tooth_fdi=16,
+            surface="O",
+            finding_code="caries",
+        ),
+        actor_id=professional_id,
+    )
+
+    # Consulta 2: se realiza la endodoncia acordada en la consulta 1.
+    encounter2 = await encounters_service.create_encounter(
+        db,
+        clinic_id=clinic_id,
+        data=EncounterCreateRequest(
+            patient_id=patient.id, chief_complaint="Continuacion de tratamiento en pieza 16"
+        ),
+        professional_id=professional_id,
+    )
+    note2 = await encounters_service.create_note(
+        db,
+        clinic_id=clinic_id,
+        encounter_id=encounter2.id,
+        data=ClinicalNoteCreateRequest(
+            soap_s="Acude para continuar tratamiento, sin dolor en este momento.",
+            soap_o="Pieza 16 aislada con dique de hule. Conductos localizados.",
+            soap_a="Pulpitis irreversible en organo dentario 16, confirmada.",
+            soap_p="Endodoncia en pieza 16 realizada en esta cita. Se programa corona en"
+            " proxima visita. Paciente tolero bien el procedimiento.",
+        ),
+        author_id=professional_id,
+    )
+    await encounters_service.finalize_note(
+        db,
+        clinic_id=clinic_id,
+        note_id=note2.id,
+        data=FinalizeNoteRequest(alerts_acknowledged=True),
+        actor_id=professional_id,
+    )
+    # La caries previa en 16-O queda resuelta: se registra la endodoncia con
+    # la MISMA superficie para que reemplace ese hallazgo (regla 5: solo uno
+    # vigente por pieza y superficie -- "vigente" se evalua pieza+superficie
+    # exactas, asi que hay que repetir la superficie para encadenar el
+    # historial en vez de dejar la caries vigente en paralelo).
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter2.id,
+            tooth_fdi=16,
+            surface="O",
+            finding_code="endodoncia",
+        ),
+        actor_id=professional_id,
+    )
+    # Caries nueva, activa, en otra pieza -- para que el odontograma muestre
+    # mas de un trabajo a la vez.
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter2.id,
+            tooth_fdi=26,
+            surface="O",
+            finding_code="caries",
+        ),
+        actor_id=professional_id,
+    )
+    # Sellador preventivo en una pieza sana, para mostrar un hallazgo que no
+    # es una caries ni una restauracion.
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter2.id,
+            tooth_fdi=36,
+            surface="O",
+            finding_code="sellador",
+        ),
+        actor_id=professional_id,
+    )
+
+    # Consulta 3: se coloca la corona en 16 y se resuelve la caries de 26.
+    encounter3 = await encounters_service.create_encounter(
+        db,
+        clinic_id=clinic_id,
+        data=EncounterCreateRequest(
+            patient_id=patient.id, chief_complaint="Colocacion de corona y revision"
+        ),
+        professional_id=professional_id,
+    )
+    note3 = await encounters_service.create_note(
+        db,
+        clinic_id=clinic_id,
+        encounter_id=encounter3.id,
+        data=ClinicalNoteCreateRequest(
+            soap_s="Sin molestias desde la endodoncia.",
+            soap_o="Pieza 16 asintomatica. Caries oclusal en 26 confirmada al explorar.",
+            soap_a="Organo dentario 16 listo para restauracion definitiva. Caries activa en 26.",
+            soap_p="Se cementa corona en pieza 16. Se coloca resina en pieza 26. Proxima"
+            " revision en 6 meses.",
+        ),
+        author_id=professional_id,
+    )
+    await encounters_service.finalize_note(
+        db,
+        clinic_id=clinic_id,
+        note_id=note3.id,
+        data=FinalizeNoteRequest(alerts_acknowledged=True),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter3.id,
+            tooth_fdi=16,
+            surface="O",
+            finding_code="corona",
+        ),
+        actor_id=professional_id,
+    )
+    await odontogram_service.create_finding(
+        db,
+        clinic_id=clinic_id,
+        data=ToothFindingCreateRequest(
+            patient_id=patient.id,
+            encounter_id=encounter3.id,
+            tooth_fdi=26,
+            surface="O",
+            finding_code="restauracion",
+            material="resina",
+        ),
+        actor_id=professional_id,
+    )
+
+    # Dos citas, pedidas explicitamente: proximo lunes 9:00 y proximo martes
+    # 11:00 (nunca el mismo dia de hoy, aunque hoy sea lunes o martes -- ver
+    # _next_weekday).
+    now = datetime.now().astimezone()
+    next_monday_9am = _next_weekday(now, 0).replace(hour=9, minute=0, second=0, microsecond=0)
+    next_tuesday_11am = _next_weekday(now, 1).replace(hour=11, minute=0, second=0, microsecond=0)
+
+    await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patient.id,
+            provider_id=provider_id,
+            resource_id=resource_id,
+            appointment_type="consulta",
+            starts_at=next_monday_9am,
+            notes="Revision de control, paciente con expediente de ejemplo.",
+        ),
+        actor_id=admin_id,
+    )
+    await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patient.id,
+            provider_id=provider_id,
+            resource_id=resource_id,
+            appointment_type="limpieza",
+            starts_at=next_tuesday_11am,
+            notes="Limpieza de control, paciente con expediente de ejemplo.",
         ),
         actor_id=admin_id,
     )
@@ -894,7 +1146,7 @@ async def seed() -> None:
         )
         # recepcion y caja (Fase 12): sin estos dos no se puede recorrer el flujo
         # completo paciente->cita->...->pago en el E2E de Playwright, porque
-        # patients.write y billing.write no los tiene el odontologo (RBAC real,
+        # billing.write no lo tiene el odontologo (RBAC real,
         # docs/MATRIZ_PERMISOS.md) -- tambien sirven para pruebas manuales.
         recepcion = User(
             email=RECEPCION_EMAIL,
@@ -930,12 +1182,20 @@ async def seed() -> None:
         await _seed_clinical_records(
             db, clinic_id=clinic.id, professional_id=odontologo.id, patients=patients
         )
-        await _seed_agenda(
+        provider, resource = await _seed_agenda(
             db,
             clinic_id=clinic.id,
             admin_id=admin.id,
             odontologo_id=odontologo.id,
             patients=patients,
+        )
+        await _seed_example_patient(
+            db,
+            clinic_id=clinic.id,
+            admin_id=admin.id,
+            professional_id=odontologo.id,
+            provider_id=provider.id,
+            resource_id=resource.id,
         )
         await _seed_treatment(
             db,
@@ -962,7 +1222,13 @@ async def seed() -> None:
         )
         print(
             "Agenda de muestra (Fase 6): 1 profesional, 1 gabinete, horario laboral "
-            "L-V, una cita reservada manana, una confirmada manana y una en 7 dias."
+            "abierto toda la semana, una cita reservada manana, una confirmada "
+            "manana y una en 7 dias."
+        )
+        print(
+            "Paciente de ejemplo con expediente completo: Roberto Fernandez Castillo "
+            "-- 3 consultas (endodoncia y corona en pieza 16, caries y sellador en "
+            "otras piezas), y 2 citas: proximo lunes 9:00 y proximo martes 11:00."
         )
         print(
             "Plan de tratamiento de muestra (Fase 7): catalogo de 5 procedimientos, "

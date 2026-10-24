@@ -79,12 +79,12 @@ export function LoginPage() {
               width={240}
             />
           </div>
-          {/* El logo DENT-IA ya incluye nombre y lema; solo se repite el texto cuando
-              la clinica usa su propio logo (que normalmente no los trae). */}
-          {hasCustomLogo && (
+          {/* Nombre de la clinica, siempre visible: el logo generico de DENT-IA no
+              lo menciona, y aunque haya logo propio normalmente tampoco trae texto. */}
+          {branding?.display_name && (
             <>
-              <p className={styles.brand}>{branding?.display_name}</p>
-              {branding?.subtitle && <p className={styles.hint}>{branding.subtitle}</p>}
+              <p className={styles.brand}>{branding.display_name}</p>
+              {branding.subtitle && <p className={styles.hint}>{branding.subtitle}</p>}
             </>
           )}
 

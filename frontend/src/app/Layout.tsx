@@ -50,6 +50,13 @@ export function Layout() {
             clinicName={branding?.display_name ?? 'DENT-IA'}
             width={160}
           />
+          {/* Titulo de la clinica, siempre visible (no solo con logo propio) --
+              el logo generico de DENT-IA no menciona el nombre de la clinica. */}
+          {branding?.display_name && (
+            <span className={styles.clinicName} aria-hidden="true">
+              {branding.display_name}
+            </span>
+          )}
         </NavLink>
         <ul className={styles.nav}>
           <li>
@@ -60,6 +67,11 @@ export function Layout() {
           <li>
             <NavLink to="/pacientes" className={styles.navLink}>
               Pacientes
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/ayuda" className={styles.navLink}>
+              Ayuda
             </NavLink>
           </li>
           {canReadAgenda(activeRole) && (
@@ -115,6 +127,13 @@ export function Layout() {
             <li>
               <NavLink to="/configuracion/catalogos" className={styles.navLink}>
                 Catalogos
+              </NavLink>
+            </li>
+          )}
+          {canManageCatalogs(activeRole) && (
+            <li>
+              <NavLink to="/configuracion/horarios" className={styles.navLink}>
+                Horarios
               </NavLink>
             </li>
           )}

@@ -27,7 +27,7 @@ export function canManageBranding(roleCode: string | null): boolean {
 }
 
 /** Roles con el permiso `patients.write` (ver docs/MATRIZ_PERMISOS.md). */
-const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion'])
+const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion', 'odontologo'])
 
 export function canWritePatients(roleCode: string | null): boolean {
   return roleCode !== null && ROLES_THAT_WRITE_PATIENTS.has(roleCode)

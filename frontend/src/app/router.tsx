@@ -10,11 +10,13 @@ import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
 import { AtencionPage } from '../modules/encounters/AtencionPage'
+import { HelpPage } from '../modules/help/HelpPage'
 import { NewPatientPage } from '../modules/patients/NewPatientPage'
 import { PatientDetailPage } from '../modules/patients/PatientDetailPage'
 import { PatientsListPage } from '../modules/patients/PatientsListPage'
 import { ReportsPage } from '../modules/reports/ReportsPage'
 import { UsersPage } from '../modules/users/UsersPage'
+import { WorkingHoursPage } from '../modules/agenda/WorkingHoursPage'
 import { HomePage } from './HomePage'
 import { Layout } from './Layout'
 
@@ -36,8 +38,11 @@ export const router = createBrowserRouter([
               { path: 'agenda', element: <AgendaPage /> },
               { path: 'pacientes', element: <PatientsListPage /> },
               { path: 'pacientes/:id', element: <PatientDetailPage /> },
+              { path: 'ayuda', element: <HelpPage /> },
               {
-                element: <RequireRole roles={['admin_clinica', 'recepcion', 'superadmin']} />,
+                element: (
+                  <RequireRole roles={['admin_clinica', 'recepcion', 'odontologo', 'superadmin']} />
+                ),
                 children: [{ path: 'pacientes/nuevo', element: <NewPatientPage /> }],
               },
               {
@@ -59,6 +64,7 @@ export const router = createBrowserRouter([
                   { path: 'configuracion/asistente-ia', element: <AiSettingsPage /> },
                   { path: 'configuracion/cobranza', element: <BillingSettingsPage /> },
                   { path: 'configuracion/catalogos', element: <CatalogsPage /> },
+                  { path: 'configuracion/horarios', element: <WorkingHoursPage /> },
                 ],
               },
               {

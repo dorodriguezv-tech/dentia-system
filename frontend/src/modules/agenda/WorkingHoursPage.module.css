@@ -1,0 +1,158 @@
+.hint {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  max-width: 60ch;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 320px;
+  margin-bottom: 1rem;
+}
+
+.field label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.field select {
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.message {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.openWeekButton {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-primary);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+}
+
+.openWeekButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dayGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.dayCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.dayCard h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.closed {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.blockList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.blockList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  gap: 0.5rem;
+}
+
+.deleteButton {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.addForm {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  max-width: 640px;
+}
+
+.addForm h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+.addFormRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.addFormRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.addFormRow select,
+.addFormRow input[type='time'] {
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.primaryButton {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-primary);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
