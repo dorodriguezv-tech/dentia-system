@@ -28,6 +28,10 @@ echo "=== E2E (Playwright) ==="
 # backend/tests/conftest.py) -- esta necesita sus migraciones tambien.
 cd "$REPO_ROOT/backend"
 python -m alembic upgrade head
+# Los usuarios demo (odontologo@dentalcare-demo.mx, etc., ver app/seed.py) no
+# los crea la migracion -- sin esto el login de cada prueba E2E falla porque
+# la cuenta no existe en una base nueva como la de este job.
+python -m app.seed
 cd "$REPO_ROOT/e2e"
 npx playwright test
 
