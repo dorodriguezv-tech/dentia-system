@@ -109,27 +109,38 @@ log "Regla DOCKER-USER (solo Cloudflare en 443) instalada y aplicada."
 
 # 6. Secretos: se generan solo si no existen -- nunca se pisan en una
 # reinstalacion (perderia el acceso a la base ya cifrada con el anterior).
+# Permiso 644 (no 600): docker compose (a diferencia de Swarm) monta estos
+# archivos de secreto en el contenedor con un bind mount directo del archivo
+# del host, sin volver a asignarle permisos -- y la API corre como el
+# usuario sin privilegios "dentia" (api.Dockerfile), que con 600 propiedad
+# de root no podria leerlos. El directorio padre (700, root:root, abajo) ya
+# es lo que impide que otros usuarios del host los lean.
 mkdir -p "$SECRETS_DIR"
 chmod 700 "/etc/dentia/${PROJECT_NAME}"
 if [ ! -f "$SECRETS_DIR/jwt_secret" ]; then
     python3 -c "import secrets; print(secrets.token_hex(48))" > "$SECRETS_DIR/jwt_secret"
-    chmod 600 "$SECRETS_DIR/jwt_secret"
+    chmod 644 "$SECRETS_DIR/jwt_secret"
     log "jwt_secret generado."
 fi
 if [ ! -f "$SECRETS_DIR/db_password" ]; then
     python3 -c "import secrets; print(secrets.token_urlsafe(32))" > "$SECRETS_DIR/db_password"
-    chmod 600 "$SECRETS_DIR/db_password"
+    chmod 644 "$SECRETS_DIR/db_password"
     log "db_password generado."
 fi
 chown -R root:root "/etc/dentia/${PROJECT_NAME}"
 
 # 7. Certificado de origen de Cloudflare: el operador ya lo descargo a mano
 # (sec. 4.1, paso H.5) y lo copio junto con este paquete -- aqui solo se
-# instala con los permisos correctos.
+# instala con los permisos correctos. 644, no 600: el contenedor "caddy"
+# corre con cap_drop: ALL + cap_add: NET_BIND_SERVICE (docker-compose.yml) --
+# sin CAP_DAC_OVERRIDE, ni siquiera un proceso con UID 0 puede saltarse los
+# bits de permiso del archivo, asi que con 600 Caddy no podria leer su
+# propio certificado. El directorio padre (700, root:root, linea de arriba)
+# ya es lo que impide que otros usuarios del host los lean.
 mkdir -p "$TLS_DIR"
 for f in origin.pem origin.key cloudflare-origin-pull-ca.pem; do
     if [ -f "$VPS_ROOT/$f" ]; then
-        install -m 600 -o root -g root "$VPS_ROOT/$f" "$TLS_DIR/$f"
+        install -m 644 -o root -g root "$VPS_ROOT/$f" "$TLS_DIR/$f"
     elif [ ! -f "$TLS_DIR/$f" ]; then
         echo "ADVERTENCIA: falta $TLS_DIR/$f -- Caddy no arrancara sin el. Copialo desde" \
              "Cloudflare (SSL/TLS -> Origin Server) antes de desplegar." >&2

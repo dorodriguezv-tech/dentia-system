@@ -186,7 +186,7 @@ dónde mirar si algo falla o si se necesita ajustar un control:
 | Acceso de administración | Llave SSH, sin contraseña ni root, `fail2ban`, puerto no estándar; 2FA en hPanel y Cloudflare | Dentro del servidor + paneles web |
 | Sistema operativo | Ubuntu 26.04 LTS mínimo, parches de seguridad automáticos (`unattended-upgrades`), `auditd`, escáner de malware de hPanel | Dentro del servidor + **panel web — hPanel** |
 | Contenedores | Imágenes sin root, sistema de archivos de solo lectura, `no-new-privileges`, sin capacidades extra, límites de memoria | `docker-compose.yml`, dentro del servidor |
-| Secretos | `JWT_SECRET` y contraseña de BD como *Docker secrets* en archivos `600` propiedad de root, fuera del repositorio | Dentro del servidor (`/etc/dentia/<proyecto>/secrets/`) |
+| Secretos | `JWT_SECRET`, contraseña de BD y certificado de origen como *Docker secrets*/bind mounts en archivos `644` propiedad de root (legibles por el contenedor sin privilegios que los usa; `docker compose`, a diferencia de Swarm, monta el archivo del host tal cual, sin volver a asignarle permisos), fuera del repositorio. El directorio que los contiene (`700`, solo root) es lo que impide que otros usuarios del host los lean; `ghcr_token` y `restic.env` (que solo lee el host, nunca un contenedor) siguen en `600` | Dentro del servidor (`/etc/dentia/<proyecto>/secrets/`) |
 | Base de datos | PostgreSQL 16, `scram-sha-256`, sin puerto publicado, `pg_dump` cifrado diario | Contenedor `db`, dentro del servidor |
 | Cifrado en reposo | Respaldos cifrados con `restic` (AES-256) antes de salir del servidor | Dentro del servidor (`scripts/backup.sh`) |
 | Aplicación | Política de contraseñas robustas (mín. 12 caracteres, rechazo de comunes), límite de 5 intentos/15 min por correo + 10/min por IP en Cloudflare, `/docs` apagado, auditoría append-only | DENT-IA (ya implementado) + **panel web — Cloudflare** |
@@ -353,7 +353,8 @@ cada paso — todo corre dentro del servidor, nada de esto toca tu PC):
 6. Secretos (`jwt_secret`, `db_password`): se generan **solo si no
    existen** — nunca se pisan en una reinstalación.
 7. Certificados de Cloudflare: se copian a `/etc/dentia/dentia-demo/tls/`
-   con permisos `600`.
+   con permisos `644` (legibles por el contenedor `caddy`, que corre con
+   capacidades reducidas -- ver sección 2).
 8. **Pide una vez, de forma interactiva, ahí mismo en la terminal:** el
    token de GitHub de solo lectura de paquetes (para descargar las
    imágenes de GHCR). Crearlo de antemano en **panel web — GitHub**:
@@ -903,9 +904,11 @@ concretas:
       `/api/v1/docs` responde 404 (probar en el navegador).
 - [ ] `AuditEvent` registra la IP real del cliente, no `127.0.0.1` —
       **dentro de DENT-IA**.
-- [ ] Secretos en `/etc/dentia/<proyecto>/secrets` con permisos `600`; sin
-      ningún `.env` con contraseñas en texto plano — verificar dentro del
-      servidor.
+- [ ] Secretos en `/etc/dentia/<proyecto>/secrets` y `/tls` con el directorio
+      del proyecto en `700` (root); `jwt_secret`/`db_password`/certificado de
+      origen en `644` (los lee un contenedor sin privilegios), `ghcr_token` y
+      `restic.env` en `600` (solo los lee el host); sin ningún `.env` con
+      contraseñas en texto plano — verificar dentro del servidor.
 - [ ] Sin usuarios del `seed` ni `DEMO_PASSWORD` en `dentia-prod`.
 - [ ] `pip-audit`, `npm audit` y Trivy sin hallazgos críticos — revisar el
       resumen del último *workflow* en **panel web — GitHub** → Actions.
