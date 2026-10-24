@@ -15,7 +15,7 @@ por defecto deben validarse con la clinica antes de produccion
 | `audit.read` | Consultar la bitacora de auditoria | X | X |  |  |  |  |  |
 | `branding.manage` | Editar nombre, logo y colores de la clinica | X | X |  |  |  |  |  |
 | `patients.read` | Ver pacientes |  | X | X | X | X | X | X |
-| `patients.write` | Crear y editar pacientes |  | X |  |  |  | X |  |
+| `patients.write` | Crear y editar pacientes |  | X | X |  |  | X |  |
 | `records.read` | Ver el expediente clinico |  |  | X | X |  |  |  |
 | `records.write` | Editar el expediente clinico |  |  | X | X |  |  |  |
 | `odontogram.read` | Ver el odontograma |  |  | X | X | X |  |  |

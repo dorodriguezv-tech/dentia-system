@@ -57,8 +57,11 @@ async def test_create_patient_assigns_expediente_number(
 async def test_create_patient_denied_without_write_permission(
     client: AsyncClient, make_user, clinic
 ) -> None:
-    await make_user(email="odonto@example.com", role_code="odontologo")
-    token = await _login(client, "odonto@example.com")
+    # asistente, no odontologo: desde que el odontologo gana patients.write
+    # (RBAC real, docs/MATRIZ_PERMISOS.md), asistente es el rol clinico que
+    # sigue sin poder dar de alta pacientes.
+    await make_user(email="asistente@example.com", role_code="asistente")
+    token = await _login(client, "asistente@example.com")
 
     response = await client.post(
         "/api/v1/patients", headers=_headers(token, clinic.id), json=BASIC_PATIENT

@@ -174,7 +174,8 @@ async def test_my_clinics_includes_clinic_name_and_permissions(
     assert item["clinic"]["id"] == str(clinic.id)
     assert item["role"]["code"] == "odontologo"
     assert "agenda.write" in item["permissions"]
-    assert "patients.write" not in item["permissions"]  # RBAC real: el odontologo no lo tiene
+    assert "patients.write" in item["permissions"]  # RBAC real: el odontologo da de alta pacientes
+    assert "billing.configure" not in item["permissions"]  # RBAC real: eso es solo admin_clinica
 
 
 async def _access_token_for(client: AsyncClient, email: str, password: str) -> str:

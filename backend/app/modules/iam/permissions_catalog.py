@@ -84,6 +84,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     ),
     "odontologo": (
         "patients.read",
+        "patients.write",
         "records.read",
         "records.write",
         "odontogram.read",
