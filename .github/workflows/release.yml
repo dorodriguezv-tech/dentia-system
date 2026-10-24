@@ -61,6 +61,10 @@ jobs:
         working-directory: backend
         run: |
           python -m venv .venv
+          # El pip que trae el runner (bundle de Python 3.12.15) tiene CVE
+          # conocidas; se actualiza antes de instalar para que pip-audit (que
+          # tambien audita a pip mismo) no falle por eso.
+          .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -r requirements.txt
 
       - name: Instalar dependencias del frontend
