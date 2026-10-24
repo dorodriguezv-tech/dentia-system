@@ -26,12 +26,16 @@ fi
 GHCR_NAMESPACE="$(grep -E '^GHCR_NAMESPACE=' "$ENV_FILE" | cut -d= -f2)"
 
 log "1/6 Respaldo inmediato antes de actualizar..."
-if [ -n "$(compose ps -q)" ]; then
+if [ ! -f "$SECRETS_DIR/restic.env" ]; then
+    log "   ADVERTENCIA: no existe $SECRETS_DIR/restic.env -- se omite el respaldo." \
+        "Configurarlo (sec. 'Respaldos' de INSTALACION_VPS.md) antes de cargar datos" \
+        "reales: sin esto, un fallo del servidor pierde todo lo que haya en esta" \
+        "instalacion sin forma de recuperarlo."
+elif [ -n "$(compose ps -q)" ]; then
     "$SCRIPT_DIR/backup.sh" "$PROJECT_NAME"
 else
     log "   Primer despliegue (todavia no hay contenedores de ${PROJECT_NAME}) -- nada que" \
-        "respaldar, se omite. Configurar restic.env antes del PROXIMO despliegue (sec." \
-        "'Respaldos' de INSTALACION_VPS.md)."
+        "respaldar, se omite."
 fi
 
 log "2/6 Autenticando con GitHub Container Registry..."
