@@ -23,6 +23,8 @@ ENV_FILE="$COMPOSE_DIR/.env"
 DOMAIN="$(grep -E '^DOMAIN=' "$ENV_FILE" | cut -d= -f2)"
 CLINIC_NAME="${CLINIC_NAME:-$DOMAIN}"
 
+# Sin --no-deps: ver el comentario equivalente en deploy.sh (deja que
+# depends_on arranque "db" solo si hiciera falta).
 docker compose --project-name "$PROJECT_NAME" --project-directory "$COMPOSE_DIR" \
-    run --rm --no-deps api python -m app.create_admin \
+    run --rm api python -m app.create_admin \
     --clinic-name "$CLINIC_NAME" --email "$EMAIL"

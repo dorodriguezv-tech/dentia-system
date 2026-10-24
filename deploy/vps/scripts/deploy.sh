@@ -62,7 +62,10 @@ fi
 sed -i "s/^VERSION=.*/VERSION=${VERSION}/" "$ENV_FILE"
 
 log "4/6 Aplicando migraciones (alembic upgrade head)..."
-compose run --rm --no-deps api python -m alembic upgrade head
+# Sin --no-deps a proposito: en el primer despliegue "db" todavia no esta
+# corriendo, y el depends_on (service_healthy) de docker-compose.yml es
+# justo lo que lo arranca y espera a que este listo antes de migrar.
+compose run --rm api python -m alembic upgrade head
 
 log "5/6 Reiniciando la API y Caddy..."
 compose up -d

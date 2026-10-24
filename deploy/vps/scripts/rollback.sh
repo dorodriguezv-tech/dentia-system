@@ -42,7 +42,8 @@ fi
 log "   ${TARGET_VERSION} esperaba el esquema en la revision ${OLD_HEAD_REVISION}."
 
 log "2/4 Bajando el esquema a ${OLD_HEAD_REVISION}..."
-compose run --rm --no-deps api python -m alembic downgrade "$OLD_HEAD_REVISION"
+# Sin --no-deps: ver el comentario equivalente en deploy.sh.
+compose run --rm api python -m alembic downgrade "$OLD_HEAD_REVISION"
 
 sed -i "s/^VERSION=.*/VERSION=${TARGET_VERSION}/" "$ENV_FILE"
 
