@@ -35,7 +35,11 @@ else
 fi
 
 log "2/6 Autenticando con GitHub Container Registry..."
-cat "$SECRETS_DIR/ghcr_token" | docker login ghcr.io -u "$GHCR_NAMESPACE" --password-stdin
+if ! cat "$SECRETS_DIR/ghcr_token" | docker login ghcr.io -u "$GHCR_NAMESPACE" --password-stdin; then
+    log "   ADVERTENCIA: no se pudo autenticar con GHCR. Si dentia-api/dentia-web son" \
+        "publicas esto no importa -- el docker pull de abajo funciona igual sin login;" \
+        "si son privadas, ese paso fallara a continuacion con un error claro."
+fi
 
 log "3/6 Descargando dentia-api:${VERSION} y dentia-web:${VERSION}..."
 docker pull "ghcr.io/${GHCR_NAMESPACE}/dentia-api:${VERSION}"
