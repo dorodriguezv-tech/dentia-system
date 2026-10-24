@@ -12,6 +12,7 @@ import {
   canWriteBilling,
 } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
+import { useInactivityLogout } from '../modules/auth/useInactivityLogout'
 import { GlobalSearch } from '../modules/patients/GlobalSearch'
 import { useGlobalSearchStore } from '../modules/patients/searchStore'
 import { DentiaOrb } from '../modules/voice/DentiaOrb'
@@ -20,6 +21,7 @@ import styles from './Layout.module.css'
 
 export function Layout() {
   const navigate = useNavigate()
+  useInactivityLogout()
   const user = useAuthStore((s) => s.user)
   const clinics = useAuthStore((s) => s.clinics)
   const activeClinicId = useAuthStore((s) => s.activeClinicId)
@@ -95,7 +97,7 @@ export function Layout() {
               </NavLink>
             </li>
           )}
-          {canConfigureAi(activeRole) && (
+          {canConfigureAi(activeRole) && user?.ai_enabled && (
             <li>
               <NavLink to="/configuracion/asistente-ia" className={styles.navLink}>
                 Asistente IA
@@ -139,7 +141,7 @@ export function Layout() {
         <Outlet />
       </main>
       <GlobalSearch />
-      {canUseVoice(activeRole) && <DentiaOrb />}
+      {canUseVoice(activeRole) && user?.ai_enabled && <DentiaOrb />}
     </div>
   )
 }

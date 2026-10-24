@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.password_policy import MIN_PASSWORD_LENGTH, password_policy_violations
 from app.core.validators import Email
 from app.modules.iam.rules import is_valid_timezone
 
@@ -12,6 +13,9 @@ PreferenceTheme = Literal["system", "light", "dark"]
 class LoginRequest(BaseModel):
     email: Email
     password: str
+    # Cloudflare Turnstile (ver app/core/captcha.py) -- opcional: solo se exige
+    # cuando el servidor tiene TURNSTILE_SECRET_KEY configurada.
+    turnstile_token: str | None = None
 
 
 class LoginMfaRequest(BaseModel):
@@ -76,6 +80,11 @@ class UserOut(BaseModel):
     is_active: bool
     mfa_enabled: bool
     mfa_setup_required: bool = False
+    # Fase "Publicacion en Hostinger" sec. 6, cambio #4: disponible en /me (se
+    # carga siempre, al iniciar sesion) para que el frontend pueda ocultar
+    # todo lo de IA sin una peticion aparte ni depender del permiso
+    # ai.configure (que no tienen odontologo/especialista).
+    ai_enabled: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -123,8 +132,16 @@ class ClinicAssignmentRequest(BaseModel):
 class UserCreateRequest(BaseModel):
     email: Email
     full_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
     role_code: str
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password_strength(cls, value: str) -> str:
+        violations = password_policy_violations(value)
+        if violations:
+            raise ValueError(violations[0])
+        return value
     # B2: gabinete por defecto en la sucursal activa (X-Clinic-Id) mas, si el
     # administrador elige mas de una sucursal, una asignacion por cada una extra --
     # el mismo rol en todas, el formulario no ofrece elegir un rol distinto por
@@ -137,6 +154,23 @@ class UserUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     is_active: bool | None = None
     role_code: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Autoservicio (sec. 6, cambio #1 de la Fase "Publicacion en Hostinger"):
+    sin esto, un usuario nunca podria dejar de usar la contrasena inicial
+    compartida del alta controlada (bootstrap_clinic.py)."""
+
+    current_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_password_strength(cls, value: str) -> str:
+        violations = password_policy_violations(value)
+        if violations:
+            raise ValueError(violations[0])
+        return value
 
 
 class UserWithRoleOut(BaseModel):

@@ -2,14 +2,16 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pyotp
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
 from app.audit.models import AuditEvent
+from app.core.captcha import verify_turnstile
 from app.core.config import get_settings
 from app.core.deps import user_has_any_permission
 from app.core.errors import AppError
+from app.core.password_policy import PASSWORD_HISTORY_SIZE
 from app.core.security import (
     TokenError,
     create_access_token,
@@ -78,9 +80,21 @@ async def _issue_token_pair(
 
 
 async def login(
-    db: AsyncSession, *, email: str, password: str, ip_address: str | None
+    db: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    ip_address: str | None,
+    turnstile_token: str | None = None,
 ) -> tuple[User | None, str | None, tuple[str, str, int] | None]:
     """Devuelve (user, mfa_token, tokens). Si mfa_token no es None, falta el paso MFA."""
+
+    # Captcha antes que cualquier otra cosa: no revela ni el conteo de intentos
+    # fallidos ni si el correo existe a una peticion que no lo supera.
+    if not await verify_turnstile(turnstile_token, remote_ip=ip_address):
+        raise AppError(
+            "CAPTCHA_INVALID", "Verificacion de seguridad invalida o expirada.", status_code=400
+        )
 
     if await _recent_login_failures(db, email) >= rules.MAX_LOGIN_FAILURES:
         raise AppError(
@@ -170,6 +184,40 @@ async def logout(db: AsyncSession, *, refresh_token: str) -> None:
         row.revoked_at = datetime.now(UTC)
         await audit_service.log(db, action="auth.logout", actor_user_id=row.user_id)
         await db.commit()
+
+
+async def change_password(
+    db: AsyncSession, *, user: User, current_password: str, new_password: str
+) -> None:
+    """Autoservicio (sec. 6, cambio #1): sin esto un usuario jamas podria dejar
+    de usar la contrasena inicial compartida del alta controlada
+    (bootstrap_clinic.py). Rechaza reutilizar la contrasena actual o
+    cualquiera de las ultimas PASSWORD_HISTORY_SIZE, y revoca las sesiones
+    existentes -- una sesion robada no debe sobrevivir a un cambio de
+    contrasena."""
+    if not verify_password(current_password, user.hashed_password):
+        raise AppError("INVALID_CREDENTIALS", "Contrasena actual incorrecta", status_code=401)
+
+    if verify_password(new_password, user.hashed_password) or any(
+        verify_password(new_password, old_hash) for old_hash in user.password_history
+    ):
+        raise AppError(
+            "PASSWORD_REUSED",
+            f"No se puede reutilizar ninguna de las ultimas {PASSWORD_HISTORY_SIZE} contrasenas.",
+            status_code=400,
+        )
+
+    history = [*user.password_history, user.hashed_password][-PASSWORD_HISTORY_SIZE:]
+    user.password_history = history
+    user.hashed_password = hash_password(new_password)
+
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+    await audit_service.log(db, action="auth.password_changed", actor_user_id=user.id)
+    await db.commit()
 
 
 async def _user_role_codes(db: AsyncSession, *, user_id: uuid.UUID) -> set[str]:

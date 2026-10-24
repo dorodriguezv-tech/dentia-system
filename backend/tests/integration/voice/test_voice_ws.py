@@ -40,6 +40,7 @@ async def test_wake_detected_via_fake_mode_responds_with_say_and_logs(
     monkeypatch,
 ) -> None:
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01
@@ -84,8 +85,10 @@ async def test_connection_rejected_without_voice_permission(
     client,  # noqa: ARG001
     make_user,
     clinic: Clinic,
+    monkeypatch,
 ) -> None:
     """`admin_clinica` no tiene voice.use (ver docs/06... sec. C1)."""
+    monkeypatch.setattr(get_settings(), "ai_enabled", True)
     user = await make_user(email="admin.voz@example.com", role_code="admin_clinica")
     token = await _access_token_for(user)
 
@@ -99,7 +102,9 @@ async def test_connection_rejected_without_voice_permission(
 async def test_connection_rejected_with_invalid_token(
     client,  # noqa: ARG001
     clinic: Clinic,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setattr(get_settings(), "ai_enabled", True)
     with TestClient(app).websocket_connect("/api/v1/voice/ws") as ws:
         ws.send_json({"type": "auth", "token": "not-a-real-token", "clinic_id": str(clinic.id)})
         error = ws.receive_json()
@@ -114,6 +119,7 @@ async def test_mute_blocks_audio_processing(
     monkeypatch,
 ) -> None:
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01
@@ -187,6 +193,7 @@ async def test_fake_order_ir_a_sends_a_ui_action(
     de punta a punta."""
 
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01
@@ -234,6 +241,7 @@ async def test_fake_order_respects_screen_context_from_the_client(
     from app.modules.patients.service import create_patient
 
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01
@@ -278,6 +286,7 @@ async def test_fake_order_unrecognized_asks_to_repeat(
     monkeypatch,
 ) -> None:
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01
@@ -336,6 +345,7 @@ async def test_full_capture_flow_start_consulta_20_findings_cancela_and_deshaz(
     from app.modules.patients.service import create_patient
 
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         # Deliberadamente generosos (no 0.01 como en otras pruebas): esta
         # prueba nunca depende de que la cuenta regresiva real dispare sola
@@ -462,6 +472,7 @@ async def test_modo_dictado_accumulates_sentences_and_accepts_all_on_confirm(
     from app.modules.patients.service import create_patient
 
     class _FakeSettings:
+        ai_enabled = True
         voice_fake_mode = True
         voice_capture_countdown_s = 0.01
         voice_followup_s = 0.01

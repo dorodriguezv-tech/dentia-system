@@ -1,11 +1,20 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Self
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # _env_file es solo el valor por defecto para desarrollo (python-dotenv
+    # local); en produccion (Fase "Publicacion en Hostinger" sec. 6, cambio
+    # #3) los secretos de verdad llegan por JWT_SECRET_FILE /
+    # DATABASE_PASSWORD_FILE, leidos por _settings_customise_sources abajo --
+    # eso es lo que permite usar Docker secrets (archivos 600 montados en
+    # /run/secrets, nunca un .env en texto plano) en vez de variables de
+    # entorno con el secreto completo.
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "DENT-IA API"
@@ -13,8 +22,14 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     database_url: str = "postgresql+asyncpg://dentia:dentia@localhost:5432/dentia"
+    # Si se define, reemplaza la contrasena de database_url con el contenido de
+    # este archivo (p. ej. /run/secrets/db_password, un Docker secret).
+    database_password_file: str | None = None
 
     jwt_secret: str = "change-me"
+    # Igual que database_password_file, pero para jwt_secret
+    # (p. ej. /run/secrets/jwt_secret).
+    jwt_secret_file: str | None = None
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_hours: int = 8
@@ -22,6 +37,15 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5174"]
 
     storage_dir: str = "../storage"
+
+    # Fase 13 (Publicacion web, PDF "Guia de publicacion en ambiente web"): con el
+    # sistema expuesto a internet, el login necesita un freno contra bots ademas del
+    # limite de intentos por correo (rules.MAX_LOGIN_FAILURES) -- ese limite ya existia,
+    # esto es nuevo. Vacio (desarrollo/pruebas) = no se exige turnstile_token en el
+    # login. Clave secreta de Cloudflare Turnstile, nunca la publica (esa va en el
+    # frontend).
+    turnstile_secret_key: str = ""
+    turnstile_verify_url: str = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
     ai_enabled: bool = True
     ollama_url: str = "http://localhost:11434"
@@ -67,6 +91,24 @@ class Settings(BaseSettings):
     # voice_capture_countdown_s para no esperar tiempo real.
     voice_capture_countdown_s: float = 3.0
     voice_followup_s: float = 8.0
+
+    @model_validator(mode="after")
+    def _resolve_secrets_from_files(self) -> Self:
+        """Docker secrets (sec. 6, cambio #3): si *_FILE esta definido, su
+        contenido gana sobre la variable de entorno correspondiente. Corre
+        ANTES de _require_real_jwt_secret_in_production para que esa
+        validacion vea el secreto ya resuelto."""
+        if self.jwt_secret_file:
+            self.jwt_secret = Path(self.jwt_secret_file).read_text(encoding="utf-8").strip()
+        if self.database_password_file:
+            password = Path(self.database_password_file).read_text(encoding="utf-8").strip()
+            parts = urlsplit(self.database_url)
+            userinfo = parts.username or ""
+            netloc = f"{userinfo}:{quote(password, safe='')}@{parts.hostname}"
+            if parts.port:
+                netloc += f":{parts.port}"
+            self.database_url = urlunsplit(parts._replace(netloc=netloc))
+        return self
 
     @model_validator(mode="after")
     def _require_real_jwt_secret_in_production(self) -> Self:

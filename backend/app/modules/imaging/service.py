@@ -98,7 +98,7 @@ async def upload_images(
             raise AppError("INVALID_FILE_TYPE", "Solo se aceptan JPG, PNG o PDF", status_code=400)
         if len(file.data) > rules.MAX_IMAGE_BYTES:
             raise AppError(
-                "FILE_TOO_LARGE", "Cada archivo no puede pesar mas de 15 MB", status_code=400
+                "FILE_TOO_LARGE", "Cada archivo no puede pesar mas de 25 MB", status_code=400
             )
 
         thumbnail_path = None

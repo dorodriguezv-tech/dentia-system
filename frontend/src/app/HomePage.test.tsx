@@ -29,6 +29,7 @@ function setAuthState(roleCode: string) {
       is_active: true,
       mfa_enabled: false,
       mfa_setup_required: false,
+      ai_enabled: true,
     },
     clinics: [
       {

@@ -3,11 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, get_current_user, require_permission
 from app.modules.iam import service
 from app.modules.iam.models import User
 from app.modules.iam.schemas import (
+    ChangePasswordRequest,
     ClinicOut,
     ClinicUpdateRequest,
     LoginMfaRequest,
@@ -37,6 +39,7 @@ def _client_ip(request: Request) -> str | None:
 async def _user_out(db: AsyncSession, user: User) -> UserOut:
     out = UserOut.model_validate(user)
     out.mfa_setup_required = await service.mfa_setup_required(db, user=user)
+    out.ai_enabled = get_settings().ai_enabled
     return out
 
 
@@ -57,7 +60,11 @@ async def login(
     payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse | MfaRequiredResponse:
     user, mfa_token, tokens = await service.login(
-        db, email=payload.email, password=payload.password, ip_address=_client_ip(request)
+        db,
+        email=payload.email,
+        password=payload.password,
+        ip_address=_client_ip(request),
+        turnstile_token=payload.turnstile_token,
     )
     if mfa_token is not None:
         return MfaRequiredResponse(mfa_token=mfa_token)
@@ -91,6 +98,20 @@ async def me(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> UserOut:
     return await _user_out(db, current_user)
+
+
+@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_my_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await service.change_password(
+        db,
+        user=current_user,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
 
 
 @router.get("/me/clinics", response_model=list[MyClinicOut])

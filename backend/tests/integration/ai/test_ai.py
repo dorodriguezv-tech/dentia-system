@@ -1,17 +1,28 @@
 import json
 from decimal import Decimal
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import ollama_client
 from app.ai.ollama_client import OllamaUnavailableError
+from app.core.config import get_settings
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
 from app.modules.records.models import Allergy
 from app.modules.treatment.schemas import ProcedureCatalogCreateRequest
 from app.modules.treatment.service import create_procedure_catalog_item
+
+
+@pytest.fixture(autouse=True)
+def _ai_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Este archivo entero prueba el interprete/sugerencias de IA -- sin esto,
+    cada prueba dependeria de que AI_ENABLED del .env local sea true (no lo
+    es: la clinica que usa este repo lo apago a proposito, ver
+    docs/INSTALACION_PRODUCCION.md)."""
+    monkeypatch.setattr(get_settings(), "ai_enabled", True)
 
 
 async def _login(client: AsyncClient, email: str, password: str = "Contrasena123") -> str:

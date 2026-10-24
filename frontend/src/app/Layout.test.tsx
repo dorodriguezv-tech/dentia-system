@@ -1,8 +1,39 @@
 import { render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '../modules/auth/store'
+import { useVoiceStore } from '../modules/voice/store'
 import { useThemeStore } from '../theme/store'
 import { Layout } from './Layout'
+
+// El orbe (DentiaOrb) usa useVoiceSession para conectar un WebSocket real --
+// sin este stub, su propio useEffect fuerza el estado a 'disconnected' en
+// jsdom (sin servidor), pisando el estado que los tests de abajo necesitan
+// fijar a mano (mismo patron que DentiaOrb.test.tsx).
+vi.mock('../modules/voice/useVoiceSession', () => ({
+  useVoiceSession: () => ({ toggleMute: vi.fn() }),
+}))
+
+function odontologoUser(aiEnabled: boolean) {
+  return {
+    id: 'u1',
+    email: 'odonto@example.com',
+    full_name: 'Odontologo de prueba',
+    is_active: true,
+    mfa_enabled: false,
+    mfa_setup_required: false,
+    ai_enabled: aiEnabled,
+  }
+}
+
+function odontologoClinics() {
+  return [
+    {
+      clinic: { id: 'c1', name: 'Sucursal Centro' },
+      role: { code: 'odontologo', name: 'Odontologo' },
+    },
+  ]
+}
 
 function renderLayout() {
   const router = createMemoryRouter(
@@ -18,6 +49,33 @@ function renderLayout() {
 describe('Layout', () => {
   beforeEach(() => {
     useThemeStore.setState({ branding: null })
+    useAuthStore.setState({ user: null, clinics: [], activeClinicId: null })
+  })
+
+  it('con AI_ENABLED=false, no muestra el orbe de Dentia aunque el rol pueda usar voz y este en escucha pasiva', () => {
+    useVoiceStore.setState({ state: 'passive', subtitle: null, activeInAnotherTab: false })
+    useAuthStore.setState({
+      user: odontologoUser(false),
+      clinics: odontologoClinics(),
+      activeClinicId: 'c1',
+    })
+
+    renderLayout()
+
+    expect(screen.queryByRole('button', { name: /Dentia/i })).not.toBeInTheDocument()
+  })
+
+  it('con AI_ENABLED=true, si muestra el orbe de Dentia para un rol que puede usar voz', () => {
+    useVoiceStore.setState({ state: 'passive', subtitle: null, activeInAnotherTab: false })
+    useAuthStore.setState({
+      user: odontologoUser(true),
+      clinics: odontologoClinics(),
+      activeClinicId: 'c1',
+    })
+
+    renderLayout()
+
+    expect(screen.getByRole('button', { name: /Dentia/i })).toBeInTheDocument()
   })
 
   it('muestra la marca y el titulo del encabezado', () => {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useAuthStore } from '../auth/store'
 import * as api from './api'
 import styles from './ReportsPage.module.css'
 import type { DateRange } from './types'
@@ -387,10 +388,14 @@ function AiUsageReportTab({ range }: { range: DateRange }) {
 }
 
 export function ReportsPage() {
+  const aiEnabled = useAuthStore((s) => s.user?.ai_enabled ?? true)
   const [tab, setTab] = useState<ReportTabKey>('pacientes')
   const [dateFrom, setDateFrom] = useState(daysAgoIso(30))
   const [dateTo, setDateTo] = useState(todayIso())
   const range: DateRange = { date_from: dateFrom, date_to: dateTo }
+  // Fase "Publicacion en Hostinger" sec. 6, cambio #4: con la IA apagada, no
+  // tiene caso ofrecer un reporte que siempre estaria vacio.
+  const visibleTabs = aiEnabled ? TABS : TABS.filter((t) => t.key !== 'ia')
 
   return (
     <section className={styles.page}>
@@ -410,7 +415,7 @@ export function ReportsPage() {
       )}
 
       <div className={styles.tabs}>
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.key}
             type="button"

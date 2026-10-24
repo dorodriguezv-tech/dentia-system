@@ -47,6 +47,7 @@ describe('UsersPage', () => {
         is_active: true,
         mfa_enabled: false,
         mfa_setup_required: false,
+        ai_enabled: true,
       },
       role: { code: 'odontologo', name: 'Odontologo' },
     })

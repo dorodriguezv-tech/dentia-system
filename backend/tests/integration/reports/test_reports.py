@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.models import AiSuggestion
+from app.core.config import get_settings
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
 from app.modules.treatment.models import TreatmentPlan
@@ -383,8 +384,9 @@ async def test_dashboard_shows_sections_matching_caja_permissions(
 
 
 async def test_dashboard_shows_agenda_and_treatment_for_odontologo(
-    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
 ) -> None:
+    monkeypatch.setattr(get_settings(), "ai_enabled", True)
     ctx = await _setup(client, make_user, clinic, db_session)
     resp = await client.get("/api/v1/reports/dashboard", headers=ctx["odonto"])
     body = resp.json()
@@ -397,6 +399,19 @@ async def test_dashboard_shows_agenda_and_treatment_for_odontologo(
     assert body["treatment"]["pending_plans"] == 1
     assert body["ai_usage"] is not None
     assert body["ai_usage"]["pending_review"] == 1
+
+
+async def test_dashboard_hides_ai_usage_when_ai_is_disabled(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession, monkeypatch
+) -> None:
+    """Fase "Publicacion en Hostinger" sec. 6, cambio #4: con AI_ENABLED=false
+    el widget ni se arma -- no depende de que el frontend lo oculte."""
+    monkeypatch.setattr(get_settings(), "ai_enabled", False)
+    ctx = await _setup(client, make_user, clinic, db_session)
+
+    resp = await client.get("/api/v1/reports/dashboard", headers=ctx["odonto"])
+
+    assert resp.json()["ai_usage"] is None
 
 
 async def test_dashboard_does_not_require_reports_read(

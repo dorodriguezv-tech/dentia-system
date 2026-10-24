@@ -19,10 +19,23 @@ from app.ai.schemas import (
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
+from app.core.errors import AppError
 from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.iam.models import User
 
 router = APIRouter(tags=["ai"])
+
+
+def _require_ai_enabled() -> None:
+    """Interruptor de apagado: AI_ENABLED=false en .env desactiva de verdad el
+    uso del asistente (transcribir, interpretar), no solo el badge de estado.
+    Las sugerencias ya creadas se pueden seguir listando/aceptando/rechazando."""
+    if not get_settings().ai_enabled:
+        raise AppError(
+            code="AI_DISABLED",
+            message="El asistente de IA esta deshabilitado temporalmente.",
+            status_code=503,
+        )
 
 
 @router.post("/ai/transcribe", response_model=TranscribeResponse)
@@ -32,6 +45,7 @@ async def transcribe(
     _actor: User = Depends(require_permission("ai.use")),
     storage: StorageBackend = Depends(get_storage_backend),
 ) -> TranscribeResponse:
+    _require_ai_enabled()
     data = await audio.read()
     settings = get_settings()
     if settings.ai_store_audio:
@@ -47,6 +61,7 @@ async def interpret(
     actor: User = Depends(require_permission("ai.use")),
     db: AsyncSession = Depends(get_db),
 ) -> InterpretResponse:
+    _require_ai_enabled()
     suggestions, unrecognized = await interpreter.interpret(
         db,
         clinic_id=clinic_id,

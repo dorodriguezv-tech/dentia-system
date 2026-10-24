@@ -19,6 +19,7 @@ import json
 from fastapi import WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.modules.iam.models import Clinic, User
 from app.voice.session import handle_connection
@@ -45,12 +46,22 @@ class _FakeWebSocket:
     async def send_json(self, data: dict) -> None:
         return None
 
+    async def close(self) -> None:
+        return None
+
 
 async def test_authenticate_does_not_leave_the_db_session_in_an_open_transaction(
     make_user,
     clinic: Clinic,
     db_session: AsyncSession,
+    monkeypatch,
 ) -> None:
+    # Este test cubre la fuga de transaccion de authenticate(), independiente de si
+    # el asistente de IA esta prendido o apagado (AI_ENABLED=false en .env haria que
+    # handle_connection() retorne antes de llegar a authenticate(), sin ejercer lo
+    # que este test verifica).
+    monkeypatch.setattr(get_settings(), "ai_enabled", True)
+
     user: User = await make_user(email="odonto.leak@example.com", role_code="odontologo")
     token, _jti, _expires_at = create_access_token(user.id)
 

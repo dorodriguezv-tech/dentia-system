@@ -5,6 +5,7 @@ export interface UserOut {
   is_active: boolean
   mfa_enabled: boolean
   mfa_setup_required: boolean
+  ai_enabled: boolean
 }
 
 export interface RoleOut {

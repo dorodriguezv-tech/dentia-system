@@ -14,7 +14,10 @@ STUDY_TYPE_LABELS: dict[str, str] = {
 }
 STUDY_TYPES: tuple[str, ...] = tuple(STUDY_TYPE_LABELS.keys())
 
-MAX_IMAGE_BYTES = 15_000_000
+# Fase "Publicacion en Hostinger" sec. 6, cambio #6: 25 MB (antes 15), el limite
+# que establece ese documento -- Cloudflare Free acepta hasta 100 MB por
+# peticion, asi que esto es lo que realmente limita, no el proxy.
+MAX_IMAGE_BYTES = 25_000_000
 
 ALLOWED_CONTENT_TYPES: dict[str, str] = {
     "image/jpeg": ".jpg",

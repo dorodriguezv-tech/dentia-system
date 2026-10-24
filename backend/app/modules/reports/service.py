@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.models import AiSuggestion
 from app.audit import service as audit_service
+from app.core.config import get_settings
 from app.modules.agenda.models import Appointment, Provider
 from app.modules.billing import rules as billing_rules
 from app.modules.billing import service as billing_service
@@ -485,7 +486,10 @@ async def build_dashboard(
             balance_due_total=ar.total_balance_due, cash_session_open=current_session is not None
         )
 
-    if "ai.use" in codes or "ai.configure" in codes:
+    # Fase "Publicacion en Hostinger" sec. 6, cambio #4: con AI_ENABLED=false
+    # el widget no se arma (no solo se oculta en el frontend) -- menos una
+    # cosa que ocultar del lado del cliente.
+    if get_settings().ai_enabled and ("ai.use" in codes or "ai.configure" in codes):
         pending_review = (
             await db.execute(
                 select(func.count()).where(

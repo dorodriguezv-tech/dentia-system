@@ -614,6 +614,19 @@ async def authenticate(websocket: WebSocket, db: AsyncSession) -> tuple[User, uu
 
 async def handle_connection(websocket: WebSocket, db: AsyncSession) -> None:
     await websocket.accept()
+    if not get_settings().ai_enabled:
+        # Interruptor de apagado (ver app/ai/router.py::_require_ai_enabled):
+        # AI_ENABLED=false cierra la conexion antes de autenticar/escuchar, no
+        # solo bloquea el envio de ordenes.
+        await websocket.send_json(
+            {
+                "type": "error",
+                "code": "AI_DISABLED",
+                "message": "El asistente de IA esta deshabilitado temporalmente.",
+            }
+        )
+        await websocket.close()
+        return
     try:
         user, clinic_id, has_clinical = await authenticate(websocket, db)
     except VoiceAuthError as exc:

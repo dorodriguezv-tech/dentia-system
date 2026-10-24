@@ -9,6 +9,7 @@ const baseUser: UserOut = {
   is_active: true,
   mfa_enabled: false,
   mfa_setup_required: false,
+  ai_enabled: true,
 }
 
 const clinic: MyClinicOut = {

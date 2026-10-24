@@ -8,6 +8,7 @@ import * as api from './api'
 import { isMfaRequired } from './types'
 import { useAuthStore } from './store'
 import { postLoginRedirect } from './navigation'
+import { Turnstile } from './Turnstile'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -20,6 +21,7 @@ export function LoginPage() {
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
 
   async function afterLogin() {
     const user = useAuthStore.getState().user
@@ -32,7 +34,7 @@ export function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      const result = await api.login(email, password)
+      const result = await api.login(email, password, turnstileToken)
       if (isMfaRequired(result)) {
         setMfaToken(result.mfa_token)
       } else {
@@ -112,6 +114,7 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            <Turnstile onToken={setTurnstileToken} />
             <button className={styles.submit} type="submit" disabled={loading}>
               {loading ? 'Entrando...' : 'Entrar'}
             </button>

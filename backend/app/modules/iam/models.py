@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +71,11 @@ class User(AuditedMixin, Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     full_name: Mapped[str] = mapped_column(String(200))
     hashed_password: Mapped[str] = mapped_column(String(255))
+    # Politica de contrasenas (sec. 6, cambio #1): hashes de las ultimas
+    # PASSWORD_HISTORY_SIZE contrasenas (sin contar la actual), mas vieja
+    # primero -- para que un cambio de contrasena pueda rechazar reutilizar
+    # alguna reciente. Nunca contrasenas en claro.
+    password_history: Mapped[list[str]] = mapped_column(JSONB, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)

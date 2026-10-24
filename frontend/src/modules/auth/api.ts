@@ -9,10 +9,14 @@ import type {
   UserOut,
 } from './types'
 
-export function login(email: string, password: string): Promise<LoginResult> {
+export function login(
+  email: string,
+  password: string,
+  turnstileToken: string | null,
+): Promise<LoginResult> {
   return apiRequest<LoginResult>('/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: { email, password, turnstile_token: turnstileToken },
     auth: false,
   })
 }

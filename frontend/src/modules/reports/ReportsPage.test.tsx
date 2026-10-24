@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '../auth/store'
 import * as api from './api'
 import { ReportsPage } from './ReportsPage'
 import type { AccountsReceivableOut, AppointmentsReportOut, PatientsReportOut } from './types'
@@ -55,6 +56,28 @@ describe('ReportsPage', () => {
       .mockReset()
       .mockResolvedValue(accountsReceivableReport)
     vi.mocked(api.exportPatientsReport).mockReset().mockResolvedValue(undefined)
+    useAuthStore.setState({ user: null, clinics: [], activeClinicId: null })
+  })
+
+  it('con AI_ENABLED=false, no ofrece la pestana "Uso del asistente IA"', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u1',
+        email: 'admin@example.com',
+        full_name: 'Admin',
+        is_active: true,
+        mfa_enabled: false,
+        mfa_setup_required: false,
+        ai_enabled: false,
+      },
+      clinics: [],
+      activeClinicId: null,
+    })
+
+    renderPage()
+    await screen.findByText('Jose Perez')
+
+    expect(screen.queryByRole('button', { name: 'Uso del asistente IA' })).not.toBeInTheDocument()
   })
 
   it('muestra el reporte de pacientes por defecto', async () => {
