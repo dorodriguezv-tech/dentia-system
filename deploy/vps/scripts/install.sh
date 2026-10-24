@@ -10,7 +10,8 @@
 # inaccesible; esa parte siempre la hace una persona, a mano, probando en una
 # segunda ventana antes de cerrar la original.
 #
-# Uso (como root o con sudo, en el VPS, parado en deploy/vps):
+# Uso (como root o con sudo, en el VPS, parado en ~/vps tras extraer el
+# paquete dentia-vps-<version>.tar.gz):
 #   sudo ./scripts/install.sh --domain app.dentia.digital --project dentia-prod \
 #     --admin-ip 203.0.113.10 --ssh-port 2222
 #
