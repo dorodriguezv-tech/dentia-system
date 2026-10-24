@@ -26,7 +26,13 @@ fi
 GHCR_NAMESPACE="$(grep -E '^GHCR_NAMESPACE=' "$ENV_FILE" | cut -d= -f2)"
 
 log "1/6 Respaldo inmediato antes de actualizar..."
-"$SCRIPT_DIR/backup.sh" "$PROJECT_NAME"
+if [ -n "$(compose ps -q)" ]; then
+    "$SCRIPT_DIR/backup.sh" "$PROJECT_NAME"
+else
+    log "   Primer despliegue (todavia no hay contenedores de ${PROJECT_NAME}) -- nada que" \
+        "respaldar, se omite. Configurar restic.env antes del PROXIMO despliegue (sec." \
+        "'Respaldos' de INSTALACION_VPS.md)."
+fi
 
 log "2/6 Autenticando con GitHub Container Registry..."
 cat "$SECRETS_DIR/ghcr_token" | docker login ghcr.io -u "$GHCR_NAMESPACE" --password-stdin
