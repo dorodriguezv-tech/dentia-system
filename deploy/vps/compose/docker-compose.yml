@@ -1,0 +1,88 @@
+# Fase "Publicacion en Hostinger" sec. 10.1. Variables sin valor por defecto
+# (${VERSION}, ${DOMAIN}) vienen de .env (ver .env.example) -- install.sh lo
+# genera a partir de ese ejemplo, nunca se versiona con valores reales.
+services:
+  caddy:
+    image: ghcr.io/${GHCR_NAMESPACE:-dorodriguezv-tech}/dentia-web:${VERSION}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "0.0.0.0:443:443" # unico puerto publicado, solo IPv4 (DOCKER-USER lo filtra a Cloudflare)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/dentia/${PROJECT_NAME:-dentia}/tls:/etc/caddy/tls:ro # certificado de origen y CA de Cloudflare
+      - caddy_data:/data
+    read_only: true
+    tmpfs: ["/tmp", "/config"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    networks: [edge, app]
+    depends_on:
+      api: { condition: service_healthy }
+
+  api:
+    image: ghcr.io/${GHCR_NAMESPACE:-dorodriguezv-tech}/dentia-api:${VERSION}
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://dentia@db:5432/dentia
+      DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      CORS_ORIGINS: '["https://${DOMAIN}"]'
+      STORAGE_DIR: /data/storage
+      # Asistente de IA y app movil deshabilitados en esta fase (sec. 1).
+      AI_ENABLED: "false"
+      AI_FAKE_MODE: "false"
+      AI_STORE_AUDIO: "false"
+    secrets: [db_password, jwt_secret]
+    volumes:
+      - storage:/data/storage
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [app] # sin acceso desde internet (red "app" es internal)
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dentia
+      POSTGRES_USER: dentia
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    secrets: [db_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentia -d dentia"]
+      interval: 10s
+      retries: 5
+    networks: [app] # sin "ports": nunca se publica, ni siquiera en localhost
+
+networks:
+  edge: {}
+  app:
+    internal: true # red sin salida a internet
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+
+secrets:
+  db_password:
+    file: /etc/dentia/${PROJECT_NAME:-dentia}/secrets/db_password
+  jwt_secret:
+    file: /etc/dentia/${PROJECT_NAME:-dentia}/secrets/jwt_secret

@@ -1,0 +1,49 @@
+# Servidor web local de produccion (docs/INSTALACION_PRODUCCION.md).
+# Escucha SOLO en localhost: el unico camino desde internet es el tunel de
+# Cloudflare (cloudflared), que apunta a localhost:8080. Ningun puerto de este
+# servidor queda expuesto a la red de la clinica ni a internet directamente.
+{
+	admin off
+	auto_https off
+	servers {
+		trusted_proxies static 127.0.0.1/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+:8080 {
+	bind 127.0.0.1
+	encode gzip
+
+	# Asistente de IA apagado en esta fase (AI_ENABLED=false en backend\.env):
+	# sus rutas ni siquiera se publican, para que no quede un boton roto ni un
+	# 503 -- simplemente no existen desde afuera.
+	handle /api/v1/ai/* {
+		respond 404
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy 127.0.0.1:8001 {
+			header_up X-Forwarded-For {client_ip}
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		root * C:/Dentia/www
+		try_files {path} /index.html
+		file_server
+		header {
+			Strict-Transport-Security "max-age=63072000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "microphone=(), camera=(), geolocation=(), payment=(), usb=()"
+			Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src https://challenges.cloudflare.com; script-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			-Server
+		}
+	}
+}

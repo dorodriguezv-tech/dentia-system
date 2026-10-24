@@ -4,6 +4,10 @@
 backend/.env
 frontend/.env
 
+# Documentos de planeacion con datos reales de la infraestructura (IP del
+# servidor, cuentas de administracion) -- el repo es publico, estos no.
+docs/DENT-IA — Instalación segura en la nube*.pdf
+
 # Python
 .venv/
 __pycache__/
@@ -32,6 +36,7 @@ voices/*
 backups/
 
 # IDE / OS
+.idea/
 .DS_Store
 Thumbs.db
 

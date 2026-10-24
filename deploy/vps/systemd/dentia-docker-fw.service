@@ -1,0 +1,12 @@
+[Unit]
+Description=DENT-IA: filtra el 443 de Docker a solo IPs de Cloudflare
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dentia-docker-fw.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

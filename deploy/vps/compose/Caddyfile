@@ -1,0 +1,49 @@
+# Fase "Publicacion en Hostinger" sec. 10.2. $DOMAIN la pone docker-compose.yml
+# (environment: DOMAIN) -- nunca hardcodeado aqui, para que el mismo paquete
+# sirva tanto demo.dentia.digital como app.dentia.digital.
+{
+	servers {
+		trusted_proxies cloudflare
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+{$DOMAIN} {
+	tls /etc/caddy/tls/origin.pem /etc/caddy/tls/origin.key {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /etc/caddy/tls/cloudflare-origin-pull-ca.pem # Authenticated Origin Pulls
+		}
+	}
+	encode gzip
+	request_body { max_size 25MB }
+
+	# Asistente de IA apagado en esta fase: sus rutas ni siquiera se publican
+	# (backend/app/ai/router.py ya las rechaza con 503, pero bloquearlas aqui
+	# evita hasta el intento -- ver tambien Permissions-Policy abajo).
+	handle /api/v1/ai/* {
+		respond 404
+	}
+
+	handle /api/* {
+		reverse_proxy api:8001 {
+			header_up X-Forwarded-For {client_ip}
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+		header {
+			Strict-Transport-Security "max-age=63072000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "microphone=(), camera=(), geolocation=(), payment=(), usb=()"
+			Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			-Server
+		}
+	}
+}

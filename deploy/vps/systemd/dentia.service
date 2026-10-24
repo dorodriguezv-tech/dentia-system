@@ -1,0 +1,18 @@
+[Unit]
+Description=DENT-IA (__PROJECT_NAME__): docker compose up
+After=docker.service network-online.target dentia-docker-fw.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=__VPS_ROOT__/compose
+Environment=COMPOSE_PROJECT_NAME=__PROJECT_NAME__
+EnvironmentFile=__VPS_ROOT__/compose/.env
+ExecStart=/usr/bin/docker compose --project-name __PROJECT_NAME__ up -d
+ExecStop=/usr/bin/docker compose --project-name __PROJECT_NAME__ down
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=DENT-IA (__PROJECT_NAME__): respaldo diario cifrado
+After=dentia@__PROJECT_NAME__.service
+Requires=dentia@__PROJECT_NAME__.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=__VPS_ROOT__
+ExecStart=__VPS_ROOT__/scripts/backup.sh __PROJECT_NAME__
+# Root porque necesita leer los secretos de este proyecto (chown root:root,
+# chmod 600 -- ver install.sh) para pasar la contrasena de Postgres a
+# "docker exec", y correr restic/rclone.
+User=root

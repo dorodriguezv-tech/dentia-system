@@ -19,6 +19,13 @@ import { defineConfig, devices } from '@playwright/test'
 const BACKEND_PORT = 8011
 const FRONTEND_PORT = 5185
 
+// El venv de Python tiene una estructura distinta en Windows (donde se ha
+// corrido este proyecto hasta ahora) que en Linux/Mac (donde corre el CI de
+// GitHub Actions, ver .github/workflows/release.yml) -- Scripts/python.exe
+// vs bin/python.
+const BACKEND_PYTHON =
+  process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python'
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -41,7 +48,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `"../backend/.venv/Scripts/python.exe" -m uvicorn app.main:app --port ${BACKEND_PORT}`,
+      command: `"${BACKEND_PYTHON}" -m uvicorn app.main:app --port ${BACKEND_PORT}`,
       cwd: '../backend',
       url: `http://localhost:${BACKEND_PORT}/api/v1/health`,
       reuseExistingServer: !process.env.CI,
