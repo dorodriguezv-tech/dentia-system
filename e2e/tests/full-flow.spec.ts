@@ -240,16 +240,15 @@ test('flujo completo: paciente, cita, atencion, IA, odontograma, diagnostico, pl
     await expect(page.getByText('realizado')).toBeVisible()
   })
 
-  await test.step('Odontologo: crear plantilla y firmar consentimiento', async () => {
+  await test.step('Odontologo: ver una plantilla existente y firmar consentimiento', async () => {
     await page.getByRole('button', { name: 'Consentimientos' }).click()
     await page.getByText('Plantillas de consentimiento').click()
 
-    await page.getByPlaceholder('Nombre de la plantilla').fill('Consentimiento general E2E')
-    await page
-      .getByPlaceholder(/Contenido HTML/)
-      .fill('Yo, {{paciente.nombre}}, autorizo el tratamiento propuesto por {{profesional.nombre}}.')
-    await page.getByRole('button', { name: 'Guardar nueva version' }).click()
-    await expect(page.getByText(/Consentimiento general E2E/)).toBeVisible()
+    // Las plantillas ya no se crean desde la ficha del paciente (contenido
+    // legal, a cargo de la clinica) -- solo se consultan y se puede ver como
+    // se verian; aqui se usa la "General" ya sembrada.
+    await page.getByRole('button', { name: /^General:/ }).click()
+    await expect(page.getByText('Asi se vera para este paciente')).toBeVisible()
 
     // El formulario de nuevo consentimiento vive en otro <details> que el de
     // plantillas (que tambien tiene su propio combobox de codigo) -- hay que
@@ -268,16 +267,20 @@ test('flujo completo: paciente, cita, atencion, IA, odontograma, diagnostico, pl
     // page.mouse usa coordenadas absolutas del viewport y, a diferencia de
     // locator.click(), no hace scroll automatico -- sin esto el canvas puede
     // quedar fuera de pantalla y el trazo nunca llega al elemento correcto.
+    // Coordenadas relativas al tamano real (ahora 7x7cm, cuadrado -- antes un
+    // rectangulo ancho fijo) para no depender de un tamano en px concreto.
     await canvas.scrollIntoViewIfNeeded()
     const box = (await canvas.boundingBox())!
-    await page.mouse.move(box.x + 20, box.y + 20)
+    await page.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.15)
     await page.mouse.down()
-    await page.mouse.move(box.x + 150, box.y + 60)
-    await page.mouse.move(box.x + 250, box.y + 30)
+    await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.45)
+    await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.25)
     await page.mouse.up()
 
     await page.getByRole('button', { name: 'Firmar y generar PDF' }).click()
-    await expect(page.getByText(/Consentimiento general E2E/).last()).toBeVisible()
+    await expect(
+      newConsentSection.getByText(`${PATIENT_FIRST_NAME} ${PATIENT_LAST_NAME}`).first(),
+    ).toBeVisible()
   })
 
   await test.step('Odontologo: agendar cita de seguimiento', async () => {

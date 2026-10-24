@@ -232,7 +232,11 @@ export function ResumenTab({ patientId }: { patientId: string }) {
             >
               <h2>Cambiar estado</h2>
               {statusError && <div className={styles.errorBox}>{statusError}</div>}
-              <select value={status} onChange={(e) => setStatus(e.target.value as StatusCode | '')}>
+              <select
+                aria-label="Cambiar estado"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as StatusCode | '')}
+              >
                 <option value="">Selecciona un estado...</option>
                 {Object.entries(STATUS_LABELS).map(([code, label]) => (
                   <option key={code} value={code}>
@@ -339,7 +343,11 @@ export function ResumenTab({ patientId }: { patientId: string }) {
               addContactMutation.mutate()
             }}
           >
-            <select value={contactRole} onChange={(e) => setContactRole(e.target.value as ContactRole)}>
+            <select
+              aria-label="Rol del contacto"
+              value={contactRole}
+              onChange={(e) => setContactRole(e.target.value as ContactRole)}
+            >
               {Object.entries(CONTACT_ROLE_LABELS).map(([code, label]) => (
                 <option key={code} value={code}>
                   {label}

@@ -72,7 +72,11 @@ export function FindingQuickMenu({
             </button>
           </div>
 
-          <select value={encounterId} onChange={(e) => setEncounterId(e.target.value)}>
+          <select
+            aria-label="Atencion"
+            value={encounterId}
+            onChange={(e) => setEncounterId(e.target.value)}
+          >
             <option value="">Selecciona una atencion...</option>
             {encounters.map((encounter) => (
               <option key={encounter.id} value={encounter.id}>

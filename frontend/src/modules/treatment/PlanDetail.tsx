@@ -104,7 +104,11 @@ function AddItemForm({
       }}
     >
       <EncounterPickerField encounterPicker={encounterPicker} />
-      <select value={procedureCode} onChange={(e) => setProcedureCode(e.target.value)}>
+      <select
+        aria-label="Procedimiento"
+        value={procedureCode}
+        onChange={(e) => setProcedureCode(e.target.value)}
+      >
         <option value="">Selecciona un procedimiento...</option>
         {catalogQuery.data?.map((proc) => (
           <option key={proc.code} value={proc.code}>
@@ -120,7 +124,11 @@ function AddItemForm({
       />
       {toothFdi && (
         <>
-          <select value={surface} onChange={(e) => setSurface(e.target.value as Surface | '')}>
+          <select
+            aria-label="Superficie"
+            value={surface}
+            onChange={(e) => setSurface(e.target.value as Surface | '')}
+          >
             <option value="">Toda la pieza</option>
             {SURFACES.map((s) => (
               <option key={s} value={s}>
@@ -129,6 +137,7 @@ function AddItemForm({
             ))}
           </select>
           <select
+            aria-label="Hallazgo del odontograma"
             value={findingCode}
             onChange={(e) => setFindingCode(e.target.value as FindingCode | '')}
           >
@@ -531,7 +540,11 @@ export function PlanDetail({
                 value={phaseName}
                 onChange={(e) => setPhaseName(e.target.value)}
               />
-              <select value={phasePriority} onChange={(e) => setPhasePriority(e.target.value as Priority)}>
+              <select
+                aria-label="Prioridad de la fase"
+                value={phasePriority}
+                onChange={(e) => setPhasePriority(e.target.value as Priority)}
+              >
                 {Object.entries(PRIORITY_LABELS).map(([code, label]) => (
                   <option key={code} value={code}>
                     {label}
