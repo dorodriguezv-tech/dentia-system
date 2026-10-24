@@ -324,8 +324,8 @@ ssh -p 2222 deploy@179.236.83.142
 
 ```bash
 tar xzf dentia-vps-1.0.0.tar.gz
-cp ~/origin.pem ~/origin.key ~/cloudflare-origin-pull-ca.pem deploy/vps/
-cd deploy/vps
+cp ~/origin.pem ~/origin.key ~/cloudflare-origin-pull-ca.pem vps/
+cd vps
 chmod +x scripts/*.sh
 ```
 
@@ -426,7 +426,7 @@ base de datos, sus propios secretos, su propio respaldo). Todo lo de esta
 sección corre **dentro del servidor** — si ya cerraste la sesión SSH,
 reconéctate primero desde tu PowerShell: `ssh -p 2222 deploy@179.236.83.142`.
 
-**Dentro del servidor**, parado en `deploy/vps` (donde ya quedaste tras la
+**Dentro del servidor**, parado en `~/vps` (donde ya quedaste tras la
 sección 3):
 
 ```bash
@@ -604,7 +604,7 @@ web — GitHub**: pestaña "Actions" del repositorio
 y firma las imágenes, y publica el release automáticamente).
 
 **Dentro del servidor** (conectarse si no tienes ya una sesión abierta:
-`ssh -p 2222 deploy@179.236.83.142`, y entrar a `deploy/vps`):
+`ssh -p 2222 deploy@179.236.83.142`, y entrar a `~/vps`):
 
 ```bash
 sudo ./scripts/deploy.sh 1.1.0 dentia-demo
