@@ -88,6 +88,35 @@ Si en algún momento una de estas verificaciones falla, ese es el punto a
 corregir antes de continuar — los pasos de abajo asumen que las cinco siguen
 en pie.
 
+> **Hallazgo real (24-oct-2026), por si el servidor se reaprovisiona algún
+> día:** el punto 2 de la tabla estaba marcado como completado, pero
+> `PasswordAuthentication` seguía efectivamente en `yes` en la práctica, por
+> dos causas independientes:
+> 1. `/etc/ssh/sshd_config.d/50-cloud-init.conf` (artefacto del
+>    aprovisionamiento inicial del VPS) forzaba `PasswordAuthentication yes`
+>    con más prioridad que cualquier otro archivo de configuración — en
+>    OpenSSH, dentro de un mismo `Include`, el archivo que se procesa
+>    **primero** (orden alfabético) es el que vale para cada directiva; los
+>    que vienen después se ignoran silenciosamente para esa misma directiva.
+>    Se eliminó ese archivo.
+> 2. `/home/deploy/.ssh/authorized_keys` era propiedad de `root:root`.
+>    `sshd` lee ese archivo actuando **temporalmente como el propio usuario**
+>    (protección estándar para que un proceso root no pueda ser engañado a
+>    leer archivos arbitrarios) — con ese propietario, `deploy` no podía leer
+>    su propia llave autorizada, así que la autenticación por llave fallaba
+>    siempre y caía a contraseña sin ningún aviso explícito en los logs
+>    normales (solo aparece con `LogLevel DEBUG3`). Se corrigió con
+>    `chown -R deploy:deploy ~/.ssh && chmod 700 ~/.ssh && chmod 600
+>    ~/.ssh/authorized_keys` — el patrón estándar correcto.
+>
+> La verificación de la tabla (`ssh -p 2222 deploy@...` debe entrar,
+> probar) no detecta este problema porque usa `ssh` por defecto, que
+> intenta la llave y, si falla, cae a contraseña sin que el usuario lo
+> note. Para detectar esto en una reinstalación futura, forzar sin llave:
+> `ssh -p 2222 -o PubkeyAuthentication=no -o BatchMode=yes deploy@<ip> echo ok`
+> — debe fallar con `Permission denied (publickey)`, nunca pedir
+> contraseña.
+
 > **Nota sobre `<TU_IP>`:** en los comandos de este documento, `<TU_IP>` es
 > la IP pública de donde te conectas en ese momento (oficina o casa del
 > administrador) — se usa en comandos que corren **en tu computadora** o
