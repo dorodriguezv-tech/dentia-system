@@ -18,12 +18,26 @@ httpx==0.28.1
 python-dotenv==1.2.2
 faker==33.1.0
 # Fase 12 (pip-audit): 11.0.0 tenia varias CVE abiertas.
-pillow==12.3.0
+# v1.0.0 release (pip-audit): 12.3.0 tenia varias CVE abiertas.
+pillow==13.0.0
 reportlab==4.5.1
 # xhtml2pdf (Fase 9: plantillas de consentimiento en HTML -> PDF) exige una version mas
 # nueva de reportlab que la que fijaba la Fase 7; las pruebas de treatment/pdf.py pasan
 # igual con esta version.
-xhtml2pdf==0.2.16
+# v1.0.0 release (pip-audit): 0.2.16 tenia una CVE sin fix version publicada; se sube
+# a la ultima (0.2.27), las pruebas de generacion de PDF/consentimientos pasan igual.
+xhtml2pdf==0.2.27
+# v1.0.0 release (pip-audit): pypdf llega como dependencia de xhtml2pdf y la version
+# que este trae por defecto (6.19.0) tenia varias CVE abiertas; se fija aqui la version
+# con fix.
+pypdf==6.21.2
+# v1.0.0 release (pip-audit): certifi (via httpx/requests) tenia una CVE abierta.
+certifi==2026.10.19
+# v1.0.0 release (pip-audit): filelock (via huggingface_hub, usado por faster-whisper)
+# tenia varias CVE abiertas.
+filelock==4.2.1
+# v1.0.0 release (pip-audit): opentelemetry-api (via fastapi) tenia una CVE abierta.
+opentelemetry-api==1.45.1
 faster-whisper==1.1.1
 # faster-whisper no fija un limite superior para av y pip instala la ultima (19.x), cuyo
 # av.open() ya no acepta metadata_errors (lo que usa faster_whisper.audio.decode_audio) y
@@ -59,7 +73,8 @@ pip-system-certs==5.3; sys_platform == "win32"
 
 ruff==0.8.4
 # Fase 12 (pip-audit): 24.10.0 tenia una CVE abierta.
-black==26.3.1
+# v1.0.0 release (pip-audit): 26.3.1 tenia una CVE abierta.
+black==26.10.1
 mypy==1.14.1
 # Fase 12 (revision de seguridad): dependencias vulnerables, ver docs/SEGURIDAD.md.
 pip-audit==2.10.1

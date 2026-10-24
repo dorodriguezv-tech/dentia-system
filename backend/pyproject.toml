@@ -13,6 +13,14 @@ src = ["app", "tests"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# Salida cruda de `alembic revision --autogenerate`: nunca paso por
+# black/ruff. Son snapshots historicos ya aplicados -- se ignoran solo las
+# reglas cosmeticas (orden de imports, largo de linea); el resto de reglas
+# (F, B, SIM, UP) se mantiene activo por si hay un bug real.
+"alembic/env.py" = ["E501", "I001"]
+"alembic/versions/*.py" = ["E501", "I001"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
