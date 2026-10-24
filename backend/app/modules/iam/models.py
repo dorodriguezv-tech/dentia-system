@@ -70,6 +70,10 @@ class User(AuditedMixin, Base):
 
     email: Mapped[str] = mapped_column(String(255), unique=True)
     full_name: Mapped[str] = mapped_column(String(200))
+    # Obligatoria al dar de alta un odontologo/especialista (agenda_rules.PROVIDER_ROLES
+    # -- ver iam/service.py::create_clinic_user); se usa en documentos firmados
+    # (plantillas de consentimiento) para identificar a quien atiende.
+    professional_license: Mapped[str | None] = mapped_column(String(50), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     # Politica de contrasenas (sec. 6, cambio #1): hashes de las ultimas
     # PASSWORD_HISTORY_SIZE contrasenas (sin contar la actual), mas vieja

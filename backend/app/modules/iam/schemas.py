@@ -77,6 +77,7 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: Email
     full_name: str
+    professional_license: str | None = None
     is_active: bool
     mfa_enabled: bool
     mfa_setup_required: bool = False
@@ -134,6 +135,9 @@ class UserCreateRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
     role_code: str
+    # Obligatoria si role_code es odontologo/especialista -- validado en el
+    # service (agenda_rules.PROVIDER_ROLES), no aqui, porque depende de otro campo.
+    professional_license: str | None = Field(default=None, max_length=50)
 
     @field_validator("password")
     @classmethod
@@ -154,6 +158,7 @@ class UserUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     is_active: bool | None = None
     role_code: str | None = None
+    professional_license: str | None = Field(default=None, max_length=50)
 
 
 class ChangePasswordRequest(BaseModel):

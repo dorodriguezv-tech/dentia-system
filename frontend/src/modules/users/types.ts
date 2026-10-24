@@ -10,6 +10,7 @@ export interface CreateUserInput {
   full_name: string
   password: string
   role_code: string
+  professional_license?: string | null
   default_resource_id?: string | null
   additional_clinics?: ClinicAssignmentInput[]
 }
@@ -18,4 +19,5 @@ export interface UpdateUserInput {
   full_name?: string
   is_active?: boolean
   role_code?: string
+  professional_license?: string | null
 }

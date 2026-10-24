@@ -2,6 +2,7 @@ export interface UserOut {
   id: string
   email: string
   full_name: string
+  professional_license: string | null
   is_active: boolean
   mfa_enabled: boolean
   mfa_setup_required: boolean

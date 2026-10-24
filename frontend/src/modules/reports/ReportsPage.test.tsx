@@ -65,6 +65,7 @@ describe('ReportsPage', () => {
         id: 'u1',
         email: 'admin@example.com',
         full_name: 'Admin',
+        professional_license: null,
         is_active: true,
         mfa_enabled: false,
         mfa_setup_required: false,

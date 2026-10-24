@@ -1,18 +1,59 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '../auth/store'
 import { EncounterPickerField } from '../encounters/EncounterPicker'
 import { useEncounterPicker } from '../encounters/useEncounterPicker'
 import * as treatmentApi from '../treatment/api'
+import { useThemeStore } from '../../theme/store'
 import * as api from './api'
 import { SIGNER_RELATIONSHIP_LABELS, TEMPLATE_CODE_LABELS } from './catalog'
 import styles from './ConsentsTab.module.css'
 import { SignaturePad } from './SignaturePad'
 import type { ConsentOut, DocumentTemplateOut, SignerRelationship, TemplateCode } from './types'
 
+// Copia minima, solo para la vista previa, de documents/rules.py::render_template
+// (fuente de verdad real: sustitucion literal de {{a.b}}, sin condicionales ni
+// expresiones). Se duplica aqui a proposito para previsualizar sin pedirle nada
+// al backend -- la plantilla ya la tenemos completa en el navegador.
+const PREVIEW_VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g
+
+function lookupPreviewValue(variables: Record<string, unknown>, path: string): unknown {
+  let value: unknown = variables
+  for (const part of path.split('.')) {
+    if (typeof value !== 'object' || value === null || !(part in value)) return ''
+    value = (value as Record<string, unknown>)[part]
+  }
+  return value
+}
+
+function escapePreviewHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function renderTemplatePreview(htmlContent: string, variables: Record<string, unknown>): string {
+  return htmlContent.replace(PREVIEW_VARIABLE_PATTERN, (_match, path: string) => {
+    const value = lookupPreviewValue(variables, path)
+    return value === '' || value === null || value === undefined
+      ? ''
+      : escapePreviewHtml(String(value))
+  })
+}
+
 // Las plantillas de consentimiento son contenido legal de la clinica: no se crean
 // ni editan desde la ficha de un paciente (eso quedo fuera de este submenu a
 // peticion expresa). Aqui solo se consultan y se puede ver como se verian.
-function TemplatesSection() {
+function TemplatesSection({
+  patientName,
+  patientAge,
+}: {
+  patientName: string
+  patientAge: number
+}) {
   const templatesQuery = useQuery({ queryKey: ['document-templates'], queryFn: api.listTemplates })
   const [previewId, setPreviewId] = useState<string | null>(null)
   const previewTemplate = templatesQuery.data?.find((t) => t.id === previewId) ?? null
@@ -33,23 +74,54 @@ function TemplatesSection() {
       ))}
       {!templatesQuery.data?.length && <p>Sin plantillas configuradas todavia.</p>}
 
-      {previewTemplate && <TemplatePreview template={previewTemplate} />}
+      {previewTemplate && (
+        <TemplatePreview
+          template={previewTemplate}
+          patientName={patientName}
+          patientAge={patientAge}
+        />
+      )}
     </details>
   )
 }
 
-function TemplatePreview({ template }: { template: DocumentTemplateOut }) {
+function TemplatePreview({
+  template,
+  patientName,
+  patientAge,
+}: {
+  template: DocumentTemplateOut
+  patientName: string
+  patientAge: number
+}) {
+  const user = useAuthStore((s) => s.user)
+  const branding = useThemeStore((s) => s.branding)
+
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const fecha =
+    `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+  const previewHtml = renderTemplatePreview(template.html_content, {
+    paciente: { nombre: patientName, edad: patientAge },
+    clinica: { nombre: branding?.display_name ?? '' },
+    profesional: { nombre: user?.full_name ?? '', cedula: user?.professional_license ?? '' },
+    fecha,
+  })
+
   return (
     <div className={styles.templatePreview}>
       <p className={styles.templatePreviewHint}>
-        Asi se vera el contenido (los datos entre llaves, como {'{{paciente.nombre}}'}, se
-        completan automaticamente al firmar):
+        Asi se vera para este paciente (si la plantilla se liga a un procedimiento o
+        a un plan de tratamiento, esos datos se completan hasta firmar):
       </p>
-      {/* Contenido de confianza: lo escribe quien administra la clinica, no viene de
-          un paciente ni de un formulario publico. */}
+      {/* Contenido de confianza: la plantilla la escribe quien administra la
+          clinica; los datos que se sustituyen (paciente, profesional, clinica) ya
+          se muestran en otras pantallas, no vienen de un formulario publico. */}
       <div
         className={styles.templatePreviewContent}
-        dangerouslySetInnerHTML={{ __html: template.html_content }}
+        dangerouslySetInnerHTML={{ __html: previewHtml }}
       />
     </div>
   )
@@ -78,6 +150,11 @@ function NewConsentForm({ patientId }: { patientId: string }) {
   const [signerName, setSignerName] = useState('')
   const [signerRelationship, setSignerRelationship] = useState<SignerRelationship>('paciente')
   const [signature, setSignature] = useState<string | null>(null)
+  // A peticion del operador: al crear el PDF, la firma debe borrarse sola (antes
+  // quedaba dibujada, lista para firmarse "encima" sin querer en el siguiente
+  // consentimiento). Remonta el SignaturePad (canvas en blanco de verdad, no solo
+  // el valor exportado) en vez de depender de un metodo imperativo expuesto.
+  const [signaturePadKey, setSignaturePadKey] = useState(0)
   const pendingTabRef = useRef<Window | null>(null)
 
   const createMutation = useMutation({
@@ -93,6 +170,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
     onSuccess: (consent) => {
       setSignerName('')
       setSignature(null)
+      setSignaturePadKey((k) => k + 1)
       queryClient.invalidateQueries({ queryKey: ['consents', patientId] })
       // El consentimiento ya queda guardado en el expediente al crearse (no hay un
       // paso de "previsualizar antes de guardar" aparte): se muestra el PDF de una
@@ -153,7 +231,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
           </option>
         ))}
       </select>
-      <SignaturePad onChange={setSignature} />
+      <SignaturePad key={signaturePadKey} onChange={setSignature} />
       <button
         className={styles.primaryButton}
         type="submit"
@@ -236,10 +314,14 @@ function ConsentRow({ consent, canWrite }: { consent: ConsentOut; canWrite: bool
 
 export function ConsentsTab({
   patientId,
+  patientName,
+  patientAge,
   canWrite,
   canSign,
 }: {
   patientId: string
+  patientName: string
+  patientAge: number
   canWrite: boolean
   canSign: boolean
 }) {
@@ -250,7 +332,7 @@ export function ConsentsTab({
 
   return (
     <div className={styles.grid}>
-      <TemplatesSection />
+      <TemplatesSection patientName={patientName} patientAge={patientAge} />
       <details className={styles.card} open>
         <summary>Consentimientos firmados</summary>
         {consentsQuery.data?.map((consent) => (

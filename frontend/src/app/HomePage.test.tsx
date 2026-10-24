@@ -26,6 +26,7 @@ function setAuthState(roleCode: string) {
       id: 'u1',
       email: 'u@example.com',
       full_name: 'Usuario de prueba',
+      professional_license: null,
       is_active: true,
       mfa_enabled: false,
       mfa_setup_required: false,

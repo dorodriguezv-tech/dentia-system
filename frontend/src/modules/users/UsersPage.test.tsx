@@ -44,6 +44,7 @@ describe('UsersPage', () => {
         id: 'u1',
         email: 'nuevo@example.com',
         full_name: 'Nuevo Usuario',
+        professional_license: '1234567',
         is_active: true,
         mfa_enabled: false,
         mfa_setup_required: false,
@@ -84,6 +85,8 @@ describe('UsersPage', () => {
     await userEvent.type(screen.getByLabelText('Contrasena temporal'), 'Contrasena123')
     await userEvent.selectOptions(screen.getByLabelText('Rol'), 'odontologo')
 
+    await userEvent.type(await screen.findByLabelText('Cedula profesional'), '1234567')
+
     await userEvent.selectOptions(
       await screen.findByLabelText('Gabinete por defecto'),
       'res-active',
@@ -102,6 +105,7 @@ describe('UsersPage', () => {
       full_name: 'Nuevo Usuario',
       password: 'Contrasena123',
       role_code: 'odontologo',
+      professional_license: '1234567',
       default_resource_id: 'res-active',
       additional_clinics: [{ clinic_id: 'clinic-2', default_resource_id: 'res-norte' }],
     })

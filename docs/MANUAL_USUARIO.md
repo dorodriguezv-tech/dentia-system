@@ -5,6 +5,11 @@ Guía para el personal de la clínica (no para desarrolladores: la parte técnic
 ejemplo (ficticios) que crea `python -m app.seed` — con datos reales la pantalla se ve
 igual, solo cambia la información.
 
+> Este mismo contenido (adaptado y con un resumen de qué puede hacer cada rol) está
+> disponible dentro del propio sistema, en el menú **Ayuda** de la barra lateral —
+> visible para cualquier usuario con sesión iniciada, sin tener que salir de la
+> aplicación.
+
 ## 1. Entrar al sistema
 
 Abre la dirección que te dé tu clínica (en una instalación local,
@@ -73,8 +78,9 @@ pestaña en la que estés: nombre, edad, número de expediente y, a la derecha, 
 
 Debajo del encabezado hay pestañas:
 
-- **Resumen** — datos generales, contactos y la línea de tiempo clínica (todas las
-  atenciones del paciente). Desde aquí se abre una atención nueva con **Iniciar
+- **Resumen** — datos generales, contactos, la línea de tiempo clínica (todas las
+  atenciones del paciente) y sus **citas** con su estado (reservada, confirmada,
+  terminada, no se presentó...). Desde aquí se abre una atención nueva con **Iniciar
   atención** (o desde una cita en la Agenda, sección 6). Si tu rol puede editar al
   paciente, también puedes cambiar su profesional tratante o su gabinete por defecto —
   como cualquier cambio de este tipo, el sistema te pide un motivo antes de guardarlo.
@@ -145,7 +151,9 @@ fecha pasada — nada se sobrescribe, cada hallazgo nuevo queda en el historial.
 ![Planes de tratamiento](./manual/08-tratamientos.png)
 
 Un plan de tratamiento se organiza en **fases**, y cada fase tiene procedimientos
-(pieza, superficie, precio del catálogo de la clínica). El flujo:
+(pieza, superficie, precio del catálogo de la clínica). Tanto el listado como el
+detalle del plan muestran su situación (borrador, presentado, aceptado, en progreso,
+terminado...) y **quién atiende** (el profesional responsable del plan). El flujo:
 
 1. Crear el plan y agregar procedimientos → queda **planificado**.
 2. **Presentar al paciente** → genera el presupuesto en PDF con el logo de la clínica.
@@ -161,9 +169,12 @@ procedimiento planificado que todavía no se hizo nunca se confunde con uno ya h
 
 Antes de un procedimiento que lo requiera (una extracción, una endodoncia...), el
 paciente firma un consentimiento en la pantalla (con el dedo o el mouse, sobre una
-plantilla de texto configurable). Al firmar se genera un PDF con un identificador
-(hash) único — **ese PDF ya no se puede modificar**; si el consentimiento cambia, se
-firma uno nuevo.
+plantilla de texto ya configurada por la clínica). Las plantillas no se crean ni se
+editan desde la ficha de un paciente — es contenido legal que debe revisar la
+clínica —, pero puedes hacer clic en cualquiera para ver cómo se vería su contenido.
+Al firmar se genera un PDF con un identificador (hash) único y se abre de inmediato
+para revisarlo e imprimirlo — **ese PDF ya no se puede modificar**; si el
+consentimiento cambia, se firma uno nuevo.
 
 ### 5.6 Imágenes y radiografías
 
@@ -275,6 +286,23 @@ tipo de cita, o si un hallazgo exige indicar una superficie del diente).
   sucursal. No sirve para dar de alta una sucursal nueva ni para editar otra
   distinta a la que tienes seleccionada — eso lo sigue administrando quien opera el
   sistema completo.
+
+### 10.1 Configuración → Horarios
+
+Solo para administradores. El horario laboral es **informativo**: sombrea el
+calendario de la Agenda para mostrar cuándo un profesional suele atender, pero
+**no bloquea** agendar una cita fuera de esas horas. Desde aquí defines, por
+profesional, los días y horas en los que aparece disponible, o usas el botón
+"Horario abierto toda la semana" para dejarlo disponible las 24 horas, los 7 días,
+de un solo clic.
+
+### 10.2 Configuración → Apariencia
+
+Solo para administradores. Cambia el nombre comercial de la clínica (se muestra
+junto al logo, en la barra lateral y en la pantalla de inicio de sesión), el
+subtítulo, el logo, los colores, el modo oscuro y el radio de bordes. Si subes tu
+propio logo, el logo de DENT-IA no desaparece: queda como "con tecnología DENT-IA"
+al pie de la barra lateral y en el login.
 
 ## 12. Dentia (asistente de voz) — en construcción
 

@@ -97,8 +97,8 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
     <div className={styles.wrapper}>
       <canvas
         ref={canvasRef}
-        width={400}
-        height={150}
+        width={265}
+        height={265}
         role="img"
         aria-label={
           hasStroke

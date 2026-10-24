@@ -19,6 +19,7 @@ function odontologoUser(aiEnabled: boolean) {
     id: 'u1',
     email: 'odonto@example.com',
     full_name: 'Odontologo de prueba',
+    professional_license: null,
     is_active: true,
     mfa_enabled: false,
     mfa_setup_required: false,

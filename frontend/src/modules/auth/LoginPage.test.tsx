@@ -23,6 +23,7 @@ const tokens: TokenResponse = {
     id: 'u1',
     email: 'odonto@example.com',
     full_name: 'Dra. Prueba',
+    professional_license: null,
     is_active: true,
     mfa_enabled: false,
     mfa_setup_required: false,

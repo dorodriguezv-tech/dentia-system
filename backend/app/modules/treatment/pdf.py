@@ -62,23 +62,33 @@ def build_budget_pdf(
     acceptance_label: str | None,
 ) -> bytes:
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=20 * mm, bottomMargin=20 * mm)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=14 * mm, bottomMargin=16 * mm)
     styles = getSampleStyleSheet()
     story = []
 
+    # A peticion del operador: el logo se veia inmenso -- pequeno y a la
+    # izquierda de el nombre de la clinica (misma fila), igual que los demas
+    # PDF del sistema (ver documents/pdf.py, billing/pdf.py).
+    clinic_name_paragraph = Paragraph(clinic_name, styles["Heading1"])
     if logo is not None:
         logo_bytes, _content_type = logo
         try:
-            story.append(
-                Image(io.BytesIO(logo_bytes), width=30 * mm, height=30 * mm, kind="proportional")
+            logo_flowable = Image(
+                io.BytesIO(logo_bytes), width=12 * mm, height=12 * mm, kind="proportional"
             )
-            story.append(Spacer(1, 4 * mm))
+            header_table = Table(
+                [[logo_flowable, clinic_name_paragraph]], colWidths=[16 * mm, None]
+            )
+            header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+            story.append(header_table)
         except Exception:
             # El logo puede ser SVG (branding lo acepta, Fase 2); reportlab solo
             # dibuja rasters. Se omite en vez de romper la generacion del PDF.
-            pass
+            story.append(clinic_name_paragraph)
+    else:
+        story.append(clinic_name_paragraph)
+    story.append(Spacer(1, 3 * mm))
 
-    story.append(Paragraph(clinic_name, styles["Title"]))
     story.append(Paragraph(f"Presupuesto: {plan_title}", styles["Heading2"]))
     story.append(Paragraph(f"Paciente: {patient_name}", styles["Normal"]))
     story.append(Paragraph(f"Fecha: {created_at_label}", styles["Normal"]))

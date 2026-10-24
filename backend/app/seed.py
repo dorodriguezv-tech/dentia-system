@@ -983,22 +983,24 @@ DOCUMENT_TEMPLATE_SEEDS: list[tuple[TemplateCode, str, str]] = [
         "general",
         "Ejemplo — validar con la clinica: consentimiento general",
         "<p>Yo, {{paciente.nombre}}, de {{paciente.edad}} anos, autorizo a "
-        "{{clinica.nombre}} y al profesional {{profesional.nombre}} a realizar el "
-        "tratamiento dental que se me explico, incluidos sus riesgos y alternativas. "
-        "Fecha: {{fecha}}.</p>",
+        "{{clinica.nombre}} y al profesional {{profesional.nombre}} (cedula "
+        "profesional {{profesional.cedula}}) a realizar el tratamiento dental que "
+        "se me explico, incluidos sus riesgos y alternativas. Fecha: {{fecha}}.</p>",
     ),
     (
         "extraccion",
         "Ejemplo — validar con la clinica: extraccion dental",
-        "<p>Autorizo a {{profesional.nombre}} a realizar la extraccion de la pieza "
-        "indicada en mi expediente. Entiendo los riesgos (sangrado, infeccion, dano a "
-        "piezas vecinas) y las alternativas de tratamiento. Procedimiento: "
+        "<p>Autorizo a {{profesional.nombre}} (cedula profesional "
+        "{{profesional.cedula}}) a realizar la extraccion de la pieza indicada en "
+        "mi expediente. Entiendo los riesgos (sangrado, infeccion, dano a piezas "
+        "vecinas) y las alternativas de tratamiento. Procedimiento: "
         "{{procedimiento.nombre}}. Fecha: {{fecha}}.</p>",
     ),
     (
         "endodoncia",
         "Ejemplo — validar con la clinica: endodoncia (tratamiento de conductos)",
-        "<p>Autorizo a {{profesional.nombre}} a realizar el tratamiento de conductos "
+        "<p>Autorizo a {{profesional.nombre}} (cedula profesional "
+        "{{profesional.cedula}}) a realizar el tratamiento de conductos "
         "(endodoncia) indicado en mi plan de tratamiento "
         "{{plan.titulo}}. Entiendo que puede requerir mas de una cita y que existe "
         "riesgo de fractura o perdida de la pieza. Fecha: {{fecha}}.</p>",
@@ -1007,8 +1009,9 @@ DOCUMENT_TEMPLATE_SEEDS: list[tuple[TemplateCode, str, str]] = [
         "anestesia",
         "Ejemplo — validar con la clinica: anestesia local",
         "<p>Autorizo la aplicacion de anestesia local para mi tratamiento en "
-        "{{clinica.nombre}}. He informado al profesional {{profesional.nombre}} de "
-        "mis alergias y antecedentes medicos conocidos. Fecha: {{fecha}}.</p>",
+        "{{clinica.nombre}}. He informado al profesional {{profesional.nombre}} "
+        "(cedula profesional {{profesional.cedula}}) de mis alergias y "
+        "antecedentes medicos conocidos. Fecha: {{fecha}}.</p>",
     ),
 ]
 
@@ -1352,6 +1355,10 @@ async def seed() -> None:
         odontologo = User(
             email=ODONTOLOGO_EMAIL,
             full_name=fake.name(),
+            # De ejemplo, para que la vista previa de plantillas de consentimiento y
+            # los PDF firmados muestren una cedula real (ahora obligatoria al dar de
+            # alta un odontologo/especialista, ver iam/service.py).
+            professional_license="DGP1234567",
             hashed_password=hash_password(DEMO_PASSWORD),
         )
         # recepcion y caja (Fase 12): sin estos dos no se puede recorrer el flujo

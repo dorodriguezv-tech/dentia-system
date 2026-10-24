@@ -408,6 +408,16 @@ async def create_clinic_user(
     if role is None:
         raise AppError("INVALID_ROLE", "Rol no configurado en el catalogo", status_code=400)
 
+    # Un odontologo/especialista siempre atiende pacientes y firma documentos a su
+    # nombre (plantillas de consentimiento) -- su cedula profesional es obligatoria
+    # desde el alta, no un dato que se pueda completar "despues".
+    if role.code in agenda_rules.PROVIDER_ROLES and not (data.professional_license or "").strip():
+        raise AppError(
+            "VALIDATION_ERROR",
+            "La cedula profesional es obligatoria para odontologos y especialistas",
+            status_code=422,
+        )
+
     existing = (await db.execute(select(User).where(User.email == data.email))).scalar_one_or_none()
     if existing is not None:
         raise AppError("EMAIL_TAKEN", "Ya existe un usuario con ese correo", status_code=409)
@@ -415,6 +425,7 @@ async def create_clinic_user(
     user = User(
         email=data.email,
         full_name=data.full_name,
+        professional_license=(data.professional_license or "").strip() or None,
         hashed_password=hash_password(data.password),
         created_by=created_by,
     )
@@ -518,6 +529,8 @@ async def update_clinic_user(
 
     if data.full_name is not None:
         user.full_name = data.full_name
+    if data.professional_license is not None:
+        user.professional_license = data.professional_license.strip() or None
     if data.is_active is not None:
         user.is_active = data.is_active
     if data.role_code is not None:

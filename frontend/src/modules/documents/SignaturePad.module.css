@@ -2,15 +2,24 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  /* Sin esto, el contenedor flex en columna (ConsentsTab .form) estira este
+     bloque a todo el ancho (align-items: stretch por defecto) y con el un
+     canvas cuadrado deja de verse cuadrado. */
+  align-self: flex-start;
 }
 
 .canvas {
+  /* Cuadro de firma ~7x7 cm (a peticion del operador, antes era un rectangulo
+     ancho de 400x150px) -- aspect-ratio lo mantiene cuadrado aunque max-width
+     lo encoja en una pantalla muy angosta. */
+  width: 7cm;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
   border: 1px solid var(--color-border);
   border-radius: calc(var(--radius) * 0.5);
   background-color: var(--color-surface);
   touch-action: none;
   cursor: crosshair;
-  max-width: 100%;
 }
 
 .actions {

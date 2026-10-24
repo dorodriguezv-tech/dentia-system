@@ -131,6 +131,8 @@ export function PatientDetailPage() {
       {tab === 'consentimientos' && (
         <ConsentsTab
           patientId={patientId}
+          patientName={summaryQuery.data.full_name}
+          patientAge={summaryQuery.data.age}
           canWrite={canWriteDocuments(activeRole)}
           canSign={canSignDocuments(activeRole)}
         />

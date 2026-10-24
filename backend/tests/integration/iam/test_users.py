@@ -31,6 +31,7 @@ async def test_new_odontologo_gets_a_provider_automatically(
             "full_name": "Nueva Odontologa",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
         },
     )
     assert create_response.status_code == 201
@@ -113,6 +114,7 @@ async def test_deactivating_an_odontologo_hides_their_provider(
             "full_name": "Odontologo De Baja",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
         },
     )
     user_id = create_response.json()["user"]["id"]
@@ -154,6 +156,7 @@ async def test_creating_an_odontologo_with_a_default_resource_sets_it_on_their_p
             "full_name": "Nuevo Odontologo",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
             "default_resource_id": resource_id,
         },
     )
@@ -192,6 +195,7 @@ async def test_creating_a_user_in_additional_clinics_assigns_them_there_too(
             "full_name": "Profesional Multisucursal",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
             "additional_clinics": [{"clinic_id": str(other_clinic.id)}],
         },
     )
@@ -235,6 +239,7 @@ async def test_cannot_assign_a_new_user_to_a_clinic_without_manage_users_permiss
             "full_name": "Intento Fallido",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
             "additional_clinics": [{"clinic_id": str(foreign_clinic.id)}],
         },
     )
@@ -343,6 +348,7 @@ async def test_duplicate_clinic_in_additional_clinics_is_rejected(
             "full_name": "Duplicado",
             "password": "Contrasena123",
             "role_code": "odontologo",
+            "professional_license": "1234567",
             "additional_clinics": [{"clinic_id": str(clinic.id)}],
         },
     )

@@ -57,6 +57,7 @@ export function UsersPage() {
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [roleCode, setRoleCode] = useState(ROLES[0].code)
+  const [professionalLicense, setProfessionalLicense] = useState('')
   const [defaultResourceId, setDefaultResourceId] = useState('')
   const [extraClinicIds, setExtraClinicIds] = useState<Set<string>>(new Set())
   const [extraDefaultResources, setExtraDefaultResources] = useState<Record<string, string>>({})
@@ -72,6 +73,7 @@ export function UsersPage() {
       setEmail('')
       setFullName('')
       setPassword('')
+      setProfessionalLicense('')
       setDefaultResourceId('')
       setExtraClinicIds(new Set())
       setExtraDefaultResources({})
@@ -108,6 +110,7 @@ export function UsersPage() {
       full_name: fullName,
       password,
       role_code: roleCode,
+      professional_license: isProviderRole ? professionalLicense : null,
       default_resource_id: defaultResourceId || null,
       additional_clinics,
     })
@@ -159,6 +162,18 @@ export function UsersPage() {
               ))}
             </select>
           </label>
+
+          {isProviderRole && (
+            <label>
+              Cedula profesional
+              <input
+                type="text"
+                required
+                value={professionalLicense}
+                onChange={(e) => setProfessionalLicense(e.target.value)}
+              />
+            </label>
+          )}
 
           {isProviderRole && (
             <label>
@@ -216,6 +231,7 @@ export function UsersPage() {
               <th>Nombre</th>
               <th>Correo</th>
               <th>Rol</th>
+              <th>Cedula</th>
               <th>Estado</th>
               <th></th>
             </tr>
@@ -226,6 +242,7 @@ export function UsersPage() {
                 <td>{user.full_name}</td>
                 <td>{user.email}</td>
                 <td>{role.name}</td>
+                <td>{user.professional_license ?? '-'}</td>
                 <td>{user.is_active ? 'Activo' : 'Inactivo'}</td>
                 <td>
                   <button

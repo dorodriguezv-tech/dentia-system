@@ -6,6 +6,7 @@ const baseUser: UserOut = {
   id: '1',
   email: 'a@example.com',
   full_name: 'Usuario',
+  professional_license: null,
   is_active: true,
   mfa_enabled: false,
   mfa_setup_required: false,

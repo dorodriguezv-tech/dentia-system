@@ -137,3 +137,12 @@
   padding: 0.5rem 0.7rem;
   font-size: 0.85rem;
 }
+
+.complianceNote {
+  grid-column: 1 / -1;
+  background-color: var(--color-primary-soft);
+  color: var(--color-text-muted);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.8rem;
+  font-size: 0.8rem;
+}

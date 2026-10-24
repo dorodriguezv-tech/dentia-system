@@ -195,15 +195,17 @@ async def create_consent(
         "plan": {"titulo": plan_title} if plan_title else "",
         "clinica": {"nombre": branding.display_name},
         "fecha": signed_at.strftime("%d/%m/%Y %H:%M"),
-        "profesional": {"nombre": actor.full_name},
+        "profesional": {"nombre": actor.full_name, "cedula": actor.professional_license or ""},
     }
 
     try:
         pdf_bytes = build_consent_pdf(
+            template_name=template.name,
             html_content=template.html_content,
             variables=variables,
             signature_png=signature_bytes,
             clinic_name=branding.display_name,
+            patient_name=patient.full_name,
             signer_name=data.signer_name,
             signer_relationship_label=_SIGNER_RELATIONSHIP_LABELS[data.signer_relationship],
             signed_at_label=signed_at.strftime("%d/%m/%Y %H:%M"),

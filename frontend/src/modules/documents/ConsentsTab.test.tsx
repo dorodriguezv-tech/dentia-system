@@ -42,7 +42,13 @@ function renderTab(canWrite = true, canSign = true) {
   const queryClient = new QueryClient()
   render(
     <QueryClientProvider client={queryClient}>
-      <ConsentsTab patientId="pat-1" canWrite={canWrite} canSign={canSign} />
+      <ConsentsTab
+        patientId="pat-1"
+        patientName="Jose Perez"
+        patientAge={30}
+        canWrite={canWrite}
+        canSign={canSign}
+      />
     </QueryClientProvider>,
   )
 }

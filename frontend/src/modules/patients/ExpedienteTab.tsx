@@ -608,6 +608,11 @@ export function ExpedienteTab({ patientId }: { patientId: string }) {
 
   return (
     <div className={styles.grid}>
+      <p className={styles.complianceNote}>
+        Expediente clinico estructurado conforme a la NOM-004-SSA3-2012 (antecedentes,
+        alergias, medicamentos, signos vitales, diagnosticos y notas clinicas, cada
+        uno con fecha, autor y atencion de origen).
+      </p>
       <HistorySection patientId={patientId} canWrite={canWrite} encounterPicker={encounterPicker} />
       <AllergiesSection
         patientId={patientId}
