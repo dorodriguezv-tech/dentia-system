@@ -90,9 +90,22 @@ export function AgendaPage() {
 
   const createMutation = useMutation({
     mutationFn: api.createAppointment,
-    onSuccess: () => {
+    onSuccess: (appointment) => {
       invalidateAppointments()
       setPanel(null)
+      // El formulario puede reasignar la cita al profesional/gabinete propio del
+      // paciente (ver NewAppointmentForm::handleSelectPatient), distinto del que
+      // se esta viendo aqui -- sin esto la cita se guarda bien pero "desaparece"
+      // porque la vista sigue filtrada al profesional/gabinete anterior.
+      if (groupBy === 'profesional' && appointment.provider_id !== effectiveProviderId) {
+        setSelectedProviderId(appointment.provider_id)
+      } else if (
+        groupBy === 'gabinete' &&
+        appointment.resource_id &&
+        appointment.resource_id !== selectedResourceId
+      ) {
+        setSelectedResourceId(appointment.resource_id)
+      }
     },
   })
 

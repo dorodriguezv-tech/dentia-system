@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as catalogsApi from '../catalogs/api'
 import * as patientsApi from '../patients/api'
@@ -6,6 +6,9 @@ import type { PatientListItemOut } from '../patients/types'
 import { combineDateAndTime } from './dateUtils'
 import styles from './NewAppointmentForm.module.css'
 import type { AppointmentType, ProviderOut, ResourceOut } from './types'
+
+const SEARCH_DEBOUNCE_MS = 250
+const MIN_QUERY_LENGTH = 2
 
 interface NewAppointmentFormProps {
   date: Date
@@ -59,15 +62,35 @@ export function NewAppointmentForm({
 
   const starts = combineDateAndTime(date, hour, minute)
 
-  async function handleSearch(value: string) {
+  // Antes disparaba una busqueda por cada tecla, sin cancelar la anterior --
+  // con conexiones lentas las respuestas podian llegar desordenadas y la UI se
+  // sentia trabada. Mismo patron que GlobalSearch (debounce + abort).
+  useEffect(() => {
+    const trimmed = query.trim()
+    // No hace falta limpiar `results` aqui: `visibleResults` (abajo) ya lo
+    // ignora mientras el texto sea mas corto que el minimo (mismo patron que
+    // GlobalSearch) -- evita un setState sincrono dentro del efecto.
+    if (trimmed.length < MIN_QUERY_LENGTH) return
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      patientsApi
+        .searchPatients(trimmed, controller.signal)
+        .then(setResults)
+        .catch(() => undefined)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [query])
+
+  function handleQueryChange(value: string) {
     setQuery(value)
     setSelectedPatient(null)
-    if (value.trim().length < 2) {
-      setResults([])
-      return
-    }
-    setResults(await patientsApi.searchPatients(value))
   }
+
+  const trimmedQuery = query.trim()
+  const visibleResults = trimmedQuery.length >= MIN_QUERY_LENGTH ? results : []
 
   function defaultResourceForProvider(id: string): string | null {
     return providers.find((p) => p.id === id)?.default_resource_id ?? null
@@ -124,11 +147,11 @@ export function NewAppointmentForm({
             aria-label="Buscar paciente por nombre"
             placeholder="Buscar paciente por nombre..."
             value={query}
-            onChange={(e) => void handleSearch(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
           />
-          {results.length > 0 && (
+          {visibleResults.length > 0 && (
             <ul className={styles.results}>
-              {results.map((patient) => (
+              {visibleResults.map((patient) => (
                 <li key={patient.id}>
                   <button type="button" onClick={() => handleSelectPatient(patient)}>
                     {patient.full_name} — exp. {patient.expediente_number}
