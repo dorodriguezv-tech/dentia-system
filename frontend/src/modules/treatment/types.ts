@@ -30,6 +30,7 @@ export interface PlanOut {
   patient_id: string
   encounter_id: string
   professional_id: string
+  professional_name: string
   title: string
   status: PlanStatus
   notes: string | null
@@ -97,6 +98,7 @@ export interface PlanDetailOut {
   patient_id: string
   encounter_id: string
   professional_id: string
+  professional_name: string
   title: string
   status: PlanStatus
   notes: string | null
@@ -113,6 +115,7 @@ export interface ProcedurePerformedOut {
   patient_id: string
   encounter_id: string
   planned_id: string | null
+  professional_name: string
   tooth_fdi: number | null
   surface: Surface | null
   procedure_code: string

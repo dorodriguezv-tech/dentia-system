@@ -399,11 +399,15 @@ async def _seed_example_patient(
     resource_id: uuid.UUID,
 ) -> None:
     """Paciente de ejemplo (a peticion del operador) con expediente completo:
-    varias consultas, cada una con nota SOAP finalizada, y un odontograma con
-    varios trabajos y observaciones en distintas piezas -- para tener algo
-    representativo que mostrar sin tener que armar el expediente a mano. Trae
-    ademas dos citas en dias fijos de la semana (proximo lunes 9:00, proximo
-    martes 11:00), pedidas explicitamente para verlas pobladas en la agenda.
+    varias consultas, cada una con nota SOAP finalizada, un odontograma con
+    varios trabajos y observaciones en distintas piezas, alergia/medicamento/
+    signos vitales/diagnostico, y un plan de tratamiento (2 fases) llevado hasta
+    TERMINADO -- para tener algo representativo que mostrar sin tener que armar
+    el expediente a mano. Trae ademas dos citas pasadas (una TERMINADA, una
+    NO_SHOW, para ver los dos estados de asistencia) y dos citas futuras en dias
+    fijos de la semana (proximo lunes 9:00, proximo martes 11:00), pedidas
+    explicitamente para verlas pobladas en la agenda. Requiere que el catalogo de
+    procedimientos ya exista (ver orden de _seed_treatment en seed()).
     """
     patient = await patients_service.create_patient(
         db,
@@ -438,6 +442,41 @@ async def _seed_example_patient(
             encounter_id=encounter1.id,
             category="odontologico",
             text="Tratamiento de ortodoncia hace 10 anos, sin complicaciones.",
+        ),
+        actor_id=professional_id,
+    )
+    # Alergia, medicamento y signos vitales de muestra -- para que el expediente
+    # completo tenga algo que mostrar en cada seccion, no solo en antecedentes.
+    await records_service.create_allergy(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=AllergyCreateRequest(
+            encounter_id=encounter1.id,
+            substance="Penicilina",
+            reaction="Urticaria",
+            severity="moderada",
+        ),
+        actor_id=professional_id,
+    )
+    await records_service.create_medication(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=MedicationCreateRequest(
+            encounter_id=encounter1.id,
+            name="Losartan",
+            dose="50mg",
+            frequency="Cada 24 horas",
+        ),
+        actor_id=professional_id,
+    )
+    await records_service.create_vital_signs(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=VitalSignsCreateRequest(
+            encounter_id=encounter1.id, bp_systolic=124, bp_diastolic=80, heart_rate=72
         ),
         actor_id=professional_id,
     )
@@ -548,6 +587,19 @@ async def _seed_example_patient(
         ),
         actor_id=professional_id,
     )
+    await diagnosis_service.create_diagnosis(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        data=DiagnosisCreateRequest(
+            encounter_id=encounter2.id,
+            tooth_fdi=26,
+            surface="O",
+            code="caries",
+            text="Caries oclusal en 26, se propone restauracion con resina.",
+        ),
+        actor_id=professional_id,
+    )
 
     # Consulta 3: se coloca la corona en 16 y se resuelve la caries de 26.
     encounter3 = await encounters_service.create_encounter(
@@ -604,10 +656,168 @@ async def _seed_example_patient(
         actor_id=professional_id,
     )
 
-    # Dos citas, pedidas explicitamente: proximo lunes 9:00 y proximo martes
-    # 11:00 (nunca el mismo dia de hoy, aunque hoy sea lunes o martes -- ver
-    # _next_weekday).
+    # Plan de tratamiento de muestra (misma pieza 16 que el odontograma de arriba):
+    # dos fases, ambas presentadas, aceptadas, realizadas y el plan marcado como
+    # TERMINADO -- para que se vea un plan completo con su situacion, quien
+    # atiende y que ya concluyo, no solo uno en borrador.
+    plan = await treatment_service.create_plan(
+        db,
+        clinic_id=clinic_id,
+        data=PlanCreateRequest(
+            patient_id=patient.id, encounter_id=encounter1.id, title="Rehabilitacion pieza 16"
+        ),
+        actor_id=professional_id,
+    )
+    plan_phase1 = await treatment_service.add_phase(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=PhaseCreateRequest(name="Fase 1: endodoncia", sort_order=1, priority="alta"),
+        actor_id=professional_id,
+    )
+    plan_item1 = await treatment_service.add_item(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        phase_id=plan_phase1.id,
+        data=ItemCreateRequest(
+            encounter_id=encounter2.id,
+            tooth_fdi=16,
+            surface="O",
+            procedure_code="endodoncia_unirradicular",
+            finding_code="endodoncia",
+        ),
+        actor_id=professional_id,
+    )
+    plan_phase2 = await treatment_service.add_phase(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=PhaseCreateRequest(name="Fase 2: corona", sort_order=2, priority="media"),
+        actor_id=professional_id,
+    )
+    plan_item2 = await treatment_service.add_item(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        phase_id=plan_phase2.id,
+        data=ItemCreateRequest(
+            encounter_id=encounter3.id,
+            tooth_fdi=16,
+            surface="O",
+            procedure_code="corona_metal_porcelana",
+            finding_code="corona",
+        ),
+        actor_id=professional_id,
+    )
+    await treatment_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=TreatmentStatusChangeRequest(status="PRESENTADO"),
+        actor_id=professional_id,
+    )
+    await treatment_service.accept_plan(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=AcceptPlanRequest(
+            accepted_item_ids=[plan_item1.id, plan_item2.id], accepted_by_name=patient.full_name
+        ),
+        actor_id=professional_id,
+    )
+    await treatment_service.register_performed(
+        db,
+        clinic_id=clinic_id,
+        data=ProcedurePerformedCreateRequest(
+            patient_id=patient.id, encounter_id=encounter2.id, planned_id=plan_item1.id
+        ),
+        actor_id=professional_id,
+    )
+    await treatment_service.register_performed(
+        db,
+        clinic_id=clinic_id,
+        data=ProcedurePerformedCreateRequest(
+            patient_id=patient.id, encounter_id=encounter3.id, planned_id=plan_item2.id
+        ),
+        actor_id=professional_id,
+    )
+    await treatment_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=TreatmentStatusChangeRequest(status="EN_PROGRESO"),
+        actor_id=professional_id,
+    )
+    await treatment_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        plan_id=plan.id,
+        data=TreatmentStatusChangeRequest(status="TERMINADO"),
+        actor_id=professional_id,
+    )
+
+    # Dos citas pasadas, para que el historial de citas del paciente muestre los
+    # estados de asistencia (una atendida, una no-show) y no solo reservas futuras.
     now = datetime.now().astimezone()
+    past_attended_at = (now - timedelta(days=12)).replace(
+        hour=10, minute=30, second=0, microsecond=0
+    )
+    past_no_show_at = (now - timedelta(days=5)).replace(hour=16, minute=0, second=0, microsecond=0)
+
+    past_attended, _w1 = await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patient.id,
+            provider_id=provider_id,
+            resource_id=resource_id,
+            appointment_type="consulta",
+            starts_at=past_attended_at,
+            notes="Valoracion inicial, paciente con expediente de ejemplo.",
+        ),
+        actor_id=admin_id,
+    )
+    await agenda_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        appointment_id=past_attended.id,
+        data=StatusChangeRequest(status="EN_ATENCION"),
+        actor_id=professional_id,
+    )
+    await agenda_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        appointment_id=past_attended.id,
+        data=StatusChangeRequest(status="TERMINADA"),
+        actor_id=professional_id,
+    )
+
+    past_no_show, _w2 = await agenda_service.create_appointment(
+        db,
+        clinic_id=clinic_id,
+        data=AppointmentCreateRequest(
+            patient_id=patient.id,
+            provider_id=provider_id,
+            resource_id=resource_id,
+            appointment_type="limpieza",
+            starts_at=past_no_show_at,
+            notes="Limpieza programada, paciente con expediente de ejemplo.",
+        ),
+        actor_id=admin_id,
+    )
+    await agenda_service.change_status(
+        db,
+        clinic_id=clinic_id,
+        appointment_id=past_no_show.id,
+        data=StatusChangeRequest(status="NO_SHOW", reason="El paciente no se presento ni aviso."),
+        actor_id=admin_id,
+    )
+
+    # Dos citas futuras, pedidas explicitamente: proximo lunes 9:00 y proximo
+    # martes 11:00 (nunca el mismo dia de hoy, aunque hoy sea lunes o martes --
+    # ver _next_weekday). Quedan en RESERVADA, como corresponde a una cita que
+    # todavia no ocurre.
     next_monday_9am = _next_weekday(now, 0).replace(hour=9, minute=0, second=0, microsecond=0)
     next_tuesday_11am = _next_weekday(now, 1).replace(hour=11, minute=0, second=0, microsecond=0)
 
@@ -1189,6 +1399,16 @@ async def seed() -> None:
             odontologo_id=odontologo.id,
             patients=patients,
         )
+        # _seed_treatment va antes: crea el catalogo de procedimientos (tabla
+        # procedure_catalog) que _seed_example_patient necesita para su propio plan
+        # de tratamiento de muestra.
+        await _seed_treatment(
+            db,
+            clinic_id=clinic.id,
+            admin_id=admin.id,
+            professional_id=odontologo.id,
+            patients=patients,
+        )
         await _seed_example_patient(
             db,
             clinic_id=clinic.id,
@@ -1196,13 +1416,6 @@ async def seed() -> None:
             professional_id=odontologo.id,
             provider_id=provider.id,
             resource_id=resource.id,
-        )
-        await _seed_treatment(
-            db,
-            clinic_id=clinic.id,
-            admin_id=admin.id,
-            professional_id=odontologo.id,
-            patients=patients,
         )
         await _seed_document_templates(db, clinic_id=clinic.id, actor_id=admin.id)
 
@@ -1228,7 +1441,9 @@ async def seed() -> None:
         print(
             "Paciente de ejemplo con expediente completo: Roberto Fernandez Castillo "
             "-- 3 consultas (endodoncia y corona en pieza 16, caries y sellador en "
-            "otras piezas), y 2 citas: proximo lunes 9:00 y proximo martes 11:00."
+            "otras piezas), alergia/medicamento/signos vitales, un plan de "
+            "tratamiento ya TERMINADO, 2 citas pasadas (una TERMINADA, una NO_SHOW) "
+            "y 2 citas futuras: proximo lunes 9:00 y proximo martes 11:00."
         )
         print(
             "Plan de tratamiento de muestra (Fase 7): catalogo de 5 procedimientos, "

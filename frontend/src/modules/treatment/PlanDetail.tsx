@@ -340,7 +340,8 @@ export function PlanDetail({
       </button>
       <h2>{plan.title}</h2>
       <p>
-        Estado: <strong>{PLAN_STATUS_LABELS[plan.status]}</strong> · Total: ${plan.total}
+        Estado: <strong>{PLAN_STATUS_LABELS[plan.status]}</strong> · Atiende:{' '}
+        {plan.professional_name} · Total: ${plan.total}
         {plan.accepted_at && (
           <>
             {' '}

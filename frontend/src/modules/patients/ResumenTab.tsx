@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
 import * as agendaApi from '../agenda/api'
+import { STATUS_LABELS as APPOINTMENT_STATUS_LABELS } from '../agenda/catalog'
 import * as encountersApi from '../encounters/api'
 import { NOTE_STATUS_LABELS } from '../encounters/types'
 import { canWritePatients, canWriteRecords } from '../auth/roles'
@@ -31,6 +32,23 @@ export function ResumenTab({ patientId }: { patientId: string }) {
   const timelineQuery = useQuery({
     queryKey: ['patient-timeline', patientId],
     queryFn: () => encountersApi.getPatientTimeline(patientId),
+  })
+  // Historial de citas del paciente (asistio/no asistio/etc.): rango amplio fijo
+  // (2 anos atras, 1 ano adelante) porque el endpoint exige starts_from/starts_to.
+  const appointmentsQuery = useQuery({
+    queryKey: ['patient-appointments', patientId],
+    queryFn: () => {
+      const now = new Date()
+      const startsFrom = new Date(now)
+      startsFrom.setFullYear(startsFrom.getFullYear() - 2)
+      const startsTo = new Date(now)
+      startsTo.setFullYear(startsTo.getFullYear() + 1)
+      return agendaApi.listAppointments({
+        startsFrom: startsFrom.toISOString(),
+        startsTo: startsTo.toISOString(),
+        patientId,
+      })
+    },
   })
   // B3 (Parte B, Fase 12.2): para mostrar el nombre (no solo el id) del profesional
   // tratante y el gabinete por defecto, y para ofrecerlos en el formulario de abajo.
@@ -400,6 +418,22 @@ export function ResumenTab({ patientId }: { patientId: string }) {
             </button>
           </div>
         ))}
+      </div>
+
+      <div className={styles.card}>
+        <h2>Citas</h2>
+        {appointmentsQuery.data?.length === 0 && <p>Sin citas registradas.</p>}
+        {appointmentsQuery.data
+          ?.slice()
+          .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
+          .map((appt) => (
+            <div key={appt.id} className={styles.contactItem}>
+              <span>
+                {new Date(appt.starts_at).toLocaleString('es-MX')} — {appt.appointment_type} ·{' '}
+                {APPOINTMENT_STATUS_LABELS[appt.status]}
+              </span>
+            </div>
+          ))}
       </div>
     </div>
   )

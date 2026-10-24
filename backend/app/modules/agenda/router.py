@@ -214,6 +214,7 @@ async def list_appointments(
     starts_to: datetime = Query(...),
     provider_id: uuid.UUID | None = Query(default=None),
     resource_id: uuid.UUID | None = Query(default=None),
+    patient_id: uuid.UUID | None = Query(default=None),
     clinic_id: uuid.UUID = Depends(get_clinic_id),
     _actor: User = Depends(require_permission("agenda.read")),
     db: AsyncSession = Depends(get_db),
@@ -225,6 +226,7 @@ async def list_appointments(
         starts_to=starts_to,
         provider_id=provider_id,
         resource_id=resource_id,
+        patient_id=patient_id,
     )
     return [AppointmentListItemOut(**i) for i in items]
 

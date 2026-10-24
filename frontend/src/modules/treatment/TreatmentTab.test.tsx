@@ -50,6 +50,7 @@ describe('TreatmentTab: Nuevo plan sin atenciones (A3/A4)', () => {
       patient_id: 'pat-1',
       encounter_id: 'enc-nueva',
       professional_id: 'prof-1',
+      professional_name: 'Dr. Prueba',
       title: 'Plan nuevo',
       status: 'BORRADOR',
       notes: null,

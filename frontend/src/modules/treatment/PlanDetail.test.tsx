@@ -16,6 +16,7 @@ const planPresentado: PlanDetailOut = {
   patient_id: 'pat-1',
   encounter_id: 'enc-1',
   professional_id: 'prof-1',
+  professional_name: 'Dra. Rodriguez',
   title: 'Rehabilitacion pieza 46',
   status: 'PRESENTADO',
   notes: null,

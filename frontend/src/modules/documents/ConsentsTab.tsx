@@ -1,83 +1,63 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { EncounterPickerField } from '../encounters/EncounterPicker'
 import { useEncounterPicker } from '../encounters/useEncounterPicker'
 import * as treatmentApi from '../treatment/api'
 import * as api from './api'
-import { SIGNER_RELATIONSHIP_LABELS, TEMPLATE_CODE_LABELS, TEMPLATE_CODES } from './catalog'
+import { SIGNER_RELATIONSHIP_LABELS, TEMPLATE_CODE_LABELS } from './catalog'
 import styles from './ConsentsTab.module.css'
 import { SignaturePad } from './SignaturePad'
-import type { ConsentOut, SignerRelationship, TemplateCode } from './types'
+import type { ConsentOut, DocumentTemplateOut, SignerRelationship, TemplateCode } from './types'
 
-function TemplatesSection({ canWrite }: { canWrite: boolean }) {
-  const queryClient = useQueryClient()
+// Las plantillas de consentimiento son contenido legal de la clinica: no se crean
+// ni editan desde la ficha de un paciente (eso quedo fuera de este submenu a
+// peticion expresa). Aqui solo se consultan y se puede ver como se verian.
+function TemplatesSection() {
   const templatesQuery = useQuery({ queryKey: ['document-templates'], queryFn: api.listTemplates })
-
-  const [code, setCode] = useState<TemplateCode>('general')
-  const [name, setName] = useState('')
-  const [htmlContent, setHtmlContent] = useState('')
-
-  const createMutation = useMutation({
-    mutationFn: () => api.createTemplateVersion({ code, name, html_content: htmlContent }),
-    onSuccess: () => {
-      setName('')
-      setHtmlContent('')
-      queryClient.invalidateQueries({ queryKey: ['document-templates'] })
-    },
-  })
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const previewTemplate = templatesQuery.data?.find((t) => t.id === previewId) ?? null
 
   return (
     <details className={styles.card}>
       <summary>Plantillas de consentimiento</summary>
       {templatesQuery.data?.map((template) => (
         <div key={template.id} className={styles.contactItem}>
-          <span>
+          <button
+            type="button"
+            className={styles.linkButton}
+            onClick={() => setPreviewId(previewId === template.id ? null : template.id)}
+          >
             {TEMPLATE_CODE_LABELS[template.code]}: {template.name} (version {template.version})
-          </span>
+          </button>
         </div>
       ))}
       {!templatesQuery.data?.length && <p>Sin plantillas configuradas todavia.</p>}
 
-      {canWrite && (
-        <form
-          className={styles.form}
-          onSubmit={(e) => {
-            e.preventDefault()
-            createMutation.mutate()
-          }}
-        >
-          <select value={code} onChange={(e) => setCode(e.target.value as TemplateCode)}>
-            {TEMPLATE_CODES.map((c) => (
-              <option key={c} value={c}>
-                {TEMPLATE_CODE_LABELS[c]}
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="Nombre de la plantilla"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <textarea
-            placeholder="Contenido HTML (usa {{paciente.nombre}}, {{procedimiento.nombre}}, {{plan.titulo}}, {{clinica.nombre}}, {{fecha}}, {{profesional.nombre}})"
-            required
-            rows={5}
-            value={htmlContent}
-            onChange={(e) => setHtmlContent(e.target.value)}
-          />
-          <button
-            className={styles.primaryButton}
-            type="submit"
-            disabled={!name.trim() || !htmlContent.trim() || createMutation.isPending}
-          >
-            Guardar nueva version
-          </button>
-        </form>
-      )}
+      {previewTemplate && <TemplatePreview template={previewTemplate} />}
     </details>
   )
+}
+
+function TemplatePreview({ template }: { template: DocumentTemplateOut }) {
+  return (
+    <div className={styles.templatePreview}>
+      <p className={styles.templatePreviewHint}>
+        Asi se vera el contenido (los datos entre llaves, como {'{{paciente.nombre}}'}, se
+        completan automaticamente al firmar):
+      </p>
+      {/* Contenido de confianza: lo escribe quien administra la clinica, no viene de
+          un paciente ni de un formulario publico. */}
+      <div
+        className={styles.templatePreviewContent}
+        dangerouslySetInnerHTML={{ __html: template.html_content }}
+      />
+    </div>
+  )
+}
+
+async function showConsentPdf(consentId: string, newTab: Window | null) {
+  const url = await api.getConsentPdfBlobUrl(consentId)
+  if (newTab) newTab.location.href = url
 }
 
 function NewConsentForm({ patientId }: { patientId: string }) {
@@ -98,6 +78,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
   const [signerName, setSignerName] = useState('')
   const [signerRelationship, setSignerRelationship] = useState<SignerRelationship>('paciente')
   const [signature, setSignature] = useState<string | null>(null)
+  const pendingTabRef = useRef<Window | null>(null)
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -109,10 +90,21 @@ function NewConsentForm({ patientId }: { patientId: string }) {
         signer_relationship: signerRelationship,
         signature_png_base64: signature as string,
       }),
-    onSuccess: () => {
+    onSuccess: (consent) => {
       setSignerName('')
       setSignature(null)
       queryClient.invalidateQueries({ queryKey: ['consents', patientId] })
+      // El consentimiento ya queda guardado en el expediente al crearse (no hay un
+      // paso de "previsualizar antes de guardar" aparte): se muestra el PDF de una
+      // vez para poder revisarlo e imprimirlo sin tener que buscarlo despues en la
+      // lista de abajo. La pestana ya se abrio sincronica en el submit (mas abajo)
+      // para que el bloqueador de ventanas emergentes no la descarte.
+      void showConsentPdf(consent.id, pendingTabRef.current)
+      pendingTabRef.current = null
+    },
+    onError: () => {
+      pendingTabRef.current?.close()
+      pendingTabRef.current = null
     },
   })
 
@@ -123,6 +115,7 @@ function NewConsentForm({ patientId }: { patientId: string }) {
       className={styles.form}
       onSubmit={(e) => {
         e.preventDefault()
+        pendingTabRef.current = window.open('', '_blank')
         createMutation.mutate()
       }}
     >
@@ -175,6 +168,9 @@ function NewConsentForm({ patientId }: { patientId: string }) {
       >
         Firmar y generar PDF
       </button>
+      {createMutation.isError && (
+        <p className={styles.errorBox}>No se pudo generar el consentimiento. Intenta de nuevo.</p>
+      )}
     </form>
   )
 }
@@ -192,13 +188,11 @@ function ConsentRow({ consent, canWrite }: { consent: ConsentOut; canWrite: bool
     },
   })
 
-  async function openPdf() {
-    // window.open se llama sincronico, antes del await, para no perder el gesto del
-    // usuario y que el bloqueador de ventanas emergentes no lo descarte (mismo patron
-    // que el PDF del presupuesto en la Fase 7).
-    const newTab = window.open('', '_blank')
-    const url = await api.getConsentPdfBlobUrl(consent.id)
-    if (newTab) newTab.location.href = url
+  function openPdf() {
+    // window.open se llama sincronico, antes del await (dentro de showConsentPdf),
+    // para no perder el gesto del usuario y que el bloqueador de ventanas
+    // emergentes no lo descarte (mismo patron que el PDF del presupuesto en la Fase 7).
+    void showConsentPdf(consent.id, window.open('', '_blank'))
   }
 
   return (
@@ -256,7 +250,7 @@ export function ConsentsTab({
 
   return (
     <div className={styles.grid}>
-      <TemplatesSection canWrite={canWrite} />
+      <TemplatesSection />
       <details className={styles.card} open>
         <summary>Consentimientos firmados</summary>
         {consentsQuery.data?.map((consent) => (

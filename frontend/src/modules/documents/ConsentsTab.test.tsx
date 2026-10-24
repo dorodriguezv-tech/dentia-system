@@ -92,4 +92,18 @@ describe('ConsentsTab', () => {
     await screen.findByText(/Jose Perez/)
     expect(screen.queryByText('Firmar y generar PDF')).not.toBeInTheDocument()
   })
+
+  it('no permite crear plantillas nuevas, pero si ver como se verian al hacer clic', async () => {
+    renderTab()
+    await screen.findByText(/Jose Perez/)
+    expect(screen.queryByText('Guardar nueva version')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Nombre de la plantilla')).not.toBeInTheDocument()
+
+    expect(screen.queryByText('Autorizo')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Consentimiento general/ }))
+    expect(await screen.findByText('Autorizo')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Consentimiento general/ }))
+    expect(screen.queryByText('Autorizo')).not.toBeInTheDocument()
+  })
 })

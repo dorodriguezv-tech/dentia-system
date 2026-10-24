@@ -60,7 +60,8 @@ export function TreatmentTab({ patientId }: { patientId: string }) {
       {plansQuery.data?.map((plan) => (
         <div key={plan.id} className={styles.contactItem}>
           <span>
-            {plan.title} — {PLAN_STATUS_LABELS[plan.status]} · ${plan.total}
+            {plan.title} — {PLAN_STATUS_LABELS[plan.status]} · {plan.professional_name} · $
+            {plan.total}
           </span>
           <button className={styles.linkButton} type="button" onClick={() => setSelectedPlanId(plan.id)}>
             Ver

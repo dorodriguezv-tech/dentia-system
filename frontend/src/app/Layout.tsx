@@ -69,11 +69,6 @@ export function Layout() {
               Pacientes
             </NavLink>
           </li>
-          <li>
-            <NavLink to="/ayuda" className={styles.navLink}>
-              Ayuda
-            </NavLink>
-          </li>
           {canReadAgenda(activeRole) && (
             <li>
               <NavLink to="/agenda" className={styles.navLink}>
@@ -137,6 +132,11 @@ export function Layout() {
               </NavLink>
             </li>
           )}
+          <li>
+            <NavLink to="/ayuda" className={styles.navLink}>
+              Ayuda
+            </NavLink>
+          </li>
         </ul>
         {hasCustomLogo && (
           <div className={styles.sidebarFooter}>

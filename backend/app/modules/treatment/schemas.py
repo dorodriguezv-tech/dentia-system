@@ -42,6 +42,7 @@ class PlanOut(BaseModel):
     patient_id: uuid.UUID
     encounter_id: uuid.UUID
     professional_id: uuid.UUID
+    professional_name: str
     title: str
     status: PlanStatus
     notes: str | None
@@ -105,6 +106,7 @@ class PlanDetailOut(BaseModel):
     patient_id: uuid.UUID
     encounter_id: uuid.UUID
     professional_id: uuid.UUID
+    professional_name: str
     title: str
     status: PlanStatus
     notes: str | None
@@ -152,6 +154,7 @@ class ProcedurePerformedOut(BaseModel):
     patient_id: uuid.UUID
     encounter_id: uuid.UUID
     planned_id: uuid.UUID | None
+    professional_name: str
     tooth_fdi: int | None
     surface: Surface | None
     procedure_code: str

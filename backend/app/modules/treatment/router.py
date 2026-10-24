@@ -64,12 +64,14 @@ def _item_out(item) -> ItemOut:  # type: ignore[no-untyped-def]
     )
 
 
-def _plan_out(plan, total) -> PlanOut:  # type: ignore[no-untyped-def]
+async def _plan_out(db: AsyncSession, plan, total) -> PlanOut:  # type: ignore[no-untyped-def]
+    professional = await db.get(User, plan.professional_id)
     return PlanOut(
         id=plan.id,
         patient_id=plan.patient_id,
         encounter_id=plan.encounter_id,
         professional_id=plan.professional_id,
+        professional_name=professional.full_name if professional else "",
         title=plan.title,
         status=plan.status,
         notes=plan.notes,
@@ -112,7 +114,7 @@ async def list_plans(
     db: AsyncSession = Depends(get_db),
 ) -> list[PlanOut]:
     rows = await service.list_plans(db, clinic_id=clinic_id, patient_id=patient_id)
-    return [_plan_out(plan, total) for plan, total in rows]
+    return [await _plan_out(db, plan, total) for plan, total in rows]
 
 
 @router.post("/treatment-plans", response_model=PlanOut, status_code=201)
@@ -123,7 +125,7 @@ async def create_plan(
     db: AsyncSession = Depends(get_db),
 ) -> PlanOut:
     plan = await service.create_plan(db, clinic_id=clinic_id, data=payload, actor_id=actor.id)
-    return _plan_out(plan, Decimal("0"))
+    return await _plan_out(db, plan, Decimal("0"))
 
 
 @router.get("/treatment-plans/{plan_id}", response_model=PlanDetailOut)
@@ -134,6 +136,7 @@ async def get_plan_detail(
     db: AsyncSession = Depends(get_db),
 ) -> PlanDetailOut:
     plan, phases = await service.get_plan_detail(db, clinic_id=clinic_id, plan_id=plan_id)
+    professional = await db.get(User, plan.professional_id)
     phase_outs = []
     grand_total = Decimal("0")
     for phase, items in phases:
@@ -155,6 +158,7 @@ async def get_plan_detail(
         patient_id=plan.patient_id,
         encounter_id=plan.encounter_id,
         professional_id=plan.professional_id,
+        professional_name=professional.full_name if professional else "",
         title=plan.title,
         status=plan.status,
         notes=plan.notes,
@@ -179,7 +183,7 @@ async def change_status(
         db, clinic_id=clinic_id, plan_id=plan_id, data=payload, actor_id=actor.id
     )
     total = await service.plan_total(db, plan_id=plan.id)
-    return _plan_out(plan, total)
+    return await _plan_out(db, plan, total)
 
 
 @router.post("/treatment-plans/{plan_id}/accept", response_model=PlanOut)
@@ -194,7 +198,7 @@ async def accept_plan(
         db, clinic_id=clinic_id, plan_id=plan_id, data=payload, actor_id=actor.id
     )
     total = await service.plan_total(db, plan_id=plan.id)
-    return _plan_out(plan, total)
+    return await _plan_out(db, plan, total)
 
 
 @router.post("/treatment-plans/{plan_id}/phases", response_model=PhaseWithItemsOut, status_code=201)
@@ -295,6 +299,7 @@ async def register_performed(
         patient_id=performed.patient_id,
         encounter_id=performed.encounter_id,
         planned_id=performed.planned_id,
+        professional_name=actor.full_name,
         tooth_fdi=performed.tooth_fdi,
         surface=performed.surface,
         procedure_code=performed.procedure_code,
@@ -316,23 +321,27 @@ async def list_performed(
     db: AsyncSession = Depends(get_db),
 ) -> list[ProcedurePerformedOut]:
     rows = await service.list_performed(db, clinic_id=clinic_id, patient_id=patient_id)
-    return [
-        ProcedurePerformedOut(
-            id=performed.id,
-            patient_id=performed.patient_id,
-            encounter_id=performed.encounter_id,
-            planned_id=performed.planned_id,
-            tooth_fdi=performed.tooth_fdi,
-            surface=performed.surface,
-            procedure_code=performed.procedure_code,
-            procedure_name=performed.procedure_name,
-            material=performed.material,
-            performed_at=performed.performed_at,
-            origin=performed.origin,
-            charge_amount=amount,
+    outs = []
+    for performed, amount in rows:
+        professional = await db.get(User, performed.professional_id)
+        outs.append(
+            ProcedurePerformedOut(
+                id=performed.id,
+                patient_id=performed.patient_id,
+                encounter_id=performed.encounter_id,
+                planned_id=performed.planned_id,
+                professional_name=professional.full_name if professional else "",
+                tooth_fdi=performed.tooth_fdi,
+                surface=performed.surface,
+                procedure_code=performed.procedure_code,
+                procedure_name=performed.procedure_name,
+                material=performed.material,
+                performed_at=performed.performed_at,
+                origin=performed.origin,
+                charge_amount=amount,
+            )
         )
-        for performed, amount in rows
-    ]
+    return outs
 
 
 @router.get("/treatment-plans/{plan_id}/pdf")

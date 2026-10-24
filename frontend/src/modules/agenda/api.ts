@@ -80,6 +80,7 @@ export function listAppointments(params: {
   startsTo: string
   providerId?: string | null
   resourceId?: string | null
+  patientId?: string | null
 }): Promise<AppointmentListItemOut[]> {
   const query = new URLSearchParams({
     starts_from: params.startsFrom,
@@ -87,6 +88,7 @@ export function listAppointments(params: {
   })
   if (params.providerId) query.set('provider_id', params.providerId)
   if (params.resourceId) query.set('resource_id', params.resourceId)
+  if (params.patientId) query.set('patient_id', params.patientId)
   return apiRequest<AppointmentListItemOut[]>(`/appointments?${query.toString()}`)
 }
 

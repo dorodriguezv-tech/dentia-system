@@ -633,6 +633,7 @@ async def list_appointments(
     starts_to: datetime,
     provider_id: uuid.UUID | None = None,
     resource_id: uuid.UUID | None = None,
+    patient_id: uuid.UUID | None = None,
 ) -> list[dict[str, object]]:
     stmt = select(Appointment).where(
         Appointment.clinic_id == clinic_id,
@@ -643,6 +644,8 @@ async def list_appointments(
         stmt = stmt.where(Appointment.provider_id == provider_id)
     if resource_id is not None:
         stmt = stmt.where(Appointment.resource_id == resource_id)
+    if patient_id is not None:
+        stmt = stmt.where(Appointment.patient_id == patient_id)
     stmt = stmt.order_by(Appointment.starts_at)
     appointments = list((await db.execute(stmt)).scalars().all())
 

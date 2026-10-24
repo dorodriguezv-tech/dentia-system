@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import styles from './SignaturePad.module.css'
 
 /**
@@ -10,6 +10,35 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef(false)
   const [hasStroke, setHasStroke] = useState(false)
+
+  // El canvas es responsive (max-width:100%, y dentro de un contenedor flex en
+  // columna se estira a todo el ancho), pero su resolucion interna (width/height)
+  // es fija. Sin igualar ambas, las coordenadas del mouse/dedo no corresponden a
+  // donde realmente se dibuja: solo la esquina superior izquierda responde y el
+  // resto del area visible no deja firmar. El PNG ya capturado (onChange) no se
+  // invalida aqui: un reajuste de tamano solo debe afectar al proximo trazo, nunca
+  // una firma que ya se exporto.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    function resize() {
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      const width = Math.max(1, Math.round(rect.width * dpr))
+      const height = Math.max(1, Math.round(rect.height * dpr))
+      if (width === canvas.width && height === canvas.height) return
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d')?.scale(dpr, dpr)
+    }
+
+    resize()
+    const observer = new ResizeObserver(resize)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [])
 
   function getContext(): CanvasRenderingContext2D | null {
     return canvasRef.current?.getContext('2d') ?? null
