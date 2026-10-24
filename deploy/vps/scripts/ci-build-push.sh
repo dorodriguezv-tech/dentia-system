@@ -16,8 +16,13 @@ echo "=== Construyendo ${API_IMAGE}:${VERSION} ==="
 docker build -f "$REPO_ROOT/deploy/vps/images/api.Dockerfile" -t "${API_IMAGE}:${VERSION}" "$REPO_ROOT"
 
 echo "=== Construyendo ${WEB_IMAGE}:${VERSION} ==="
+# Sin --build-arg VITE_API_URL: se deja el default de web.Dockerfile
+# (/api/v1, ruta relativa) a proposito. demo.dentia.digital y
+# app.dentia.digital usan la MISMA imagen (Caddyfile, comentario inicial);
+# una URL absoluta con un dominio fijo horneada en el build rompería eso.
+# Caddy ya sirve la API en el mismo origen que el frontend (handle /api/*),
+# asi que una ruta relativa resuelve sola contra el dominio que sea.
 docker build -f "$REPO_ROOT/deploy/vps/images/web.Dockerfile" \
-    --build-arg "VITE_API_URL=https://\${DOMAIN}/api/v1" \
     -t "${WEB_IMAGE}:${VERSION}" "$REPO_ROOT"
 
 echo "=== Escaneando con Trivy (vulnerabilidades CRITICAL detienen la publicacion) ==="
