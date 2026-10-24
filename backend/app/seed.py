@@ -919,6 +919,13 @@ async def seed() -> None:
         )
         await db.commit()
 
+        # Los catalogos (history_category, diagnosis, appointment_type, ...) se
+        # siembran primero: _seed_clinical_records/_seed_agenda/_seed_treatment
+        # crean registros que referencian esos codigos y fallan con
+        # INVALID_HISTORY_CATEGORY (u otro catalogo invalido) si todavia no
+        # existen en esta sucursal.
+        await _seed_catalogs(db, clinic_id=clinic.id, actor_id=admin.id)
+
         patients = await _seed_patients(db, clinic_id=clinic.id, actor_id=admin.id)
         await _seed_clinical_records(
             db, clinic_id=clinic.id, professional_id=odontologo.id, patients=patients
@@ -938,7 +945,6 @@ async def seed() -> None:
             patients=patients,
         )
         await _seed_document_templates(db, clinic_id=clinic.id, actor_id=admin.id)
-        await _seed_catalogs(db, clinic_id=clinic.id, actor_id=admin.id)
 
         print(f"Organizacion: {organization.name}")
         print(f"Sucursal: {clinic.name}")
