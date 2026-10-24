@@ -16,7 +16,9 @@
 		}
 	}
 	encode gzip
-	request_body { max_size 25MB }
+	request_body {
+		max_size 25MB
+	}
 
 	# Asistente de IA apagado en esta fase: sus rutas ni siquiera se publican
 	# (backend/app/ai/router.py ya las rechaza con 503, pero bloquearlas aqui
