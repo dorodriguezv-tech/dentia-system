@@ -33,6 +33,7 @@ const existingUser = {
     mfa_enabled: false,
     mfa_setup_required: false,
     ai_enabled: true,
+    has_photo: false,
   },
   role: { code: 'recepcion', name: 'Recepcion' },
 }
@@ -63,6 +64,7 @@ describe('UsersPage', () => {
         mfa_enabled: false,
         mfa_setup_required: false,
         ai_enabled: true,
+        has_photo: false,
       },
       role: { code: 'odontologo', name: 'Odontologo' },
     })
@@ -145,12 +147,32 @@ describe('UsersPage', () => {
       'u-existente',
       {
         full_name: 'Usuario Renombrado',
+        email: 'existente@example.com',
         role_code: 'recepcion',
         professional_license: null,
         new_password: 'NuevaContrasena123',
       },
     ])
   })
+
+  it(
+    'el formulario de editar muestra el usuario (correo) con el que accesa, ' +
+      'sin importar el rol, y permite cambiarlo',
+    async () => {
+      vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Editar' }))
+      const emailInput = screen.getByDisplayValue('existente@example.com')
+      await userEvent.clear(emailInput)
+      await userEvent.type(emailInput, 'nuevo-correo@example.com')
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(vi.mocked(api.updateUser).mock.calls[0]?.[1]).toMatchObject({
+        email: 'nuevo-correo@example.com',
+      })
+    },
+  )
 
   it('borrar un usuario pide confirmar antes de llamar a la API', async () => {
     vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])

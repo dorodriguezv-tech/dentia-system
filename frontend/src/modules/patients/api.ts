@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest } from '../../api/client'
+import { apiRequest, apiRequestFormData } from '../../api/client'
 import type {
   ContactCreateInput,
   ContactOut,
@@ -68,25 +68,8 @@ export function deleteContact(patientId: string, contactId: string): Promise<voi
   return apiRequest<void>(`/patients/${patientId}/contacts/${contactId}`, { method: 'DELETE' })
 }
 
-export async function uploadPatientPhoto(
-  patientId: string,
-  file: File,
-  accessToken: string,
-  clinicId: string,
-): Promise<PatientOut> {
+export function uploadPatientPhoto(patientId: string, file: File): Promise<PatientOut> {
   const form = new FormData()
   form.append('file', file)
-
-  const response = await fetch(`${API_BASE_URL}/patients/${patientId}/photo`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'X-Clinic-Id': clinicId },
-    body: form,
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => null)
-    throw new Error(error?.message ?? 'No se pudo subir la foto')
-  }
-
-  return (await response.json()) as PatientOut
+  return apiRequestFormData<PatientOut>(`/patients/${patientId}/photo`, form)
 }

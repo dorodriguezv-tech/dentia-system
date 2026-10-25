@@ -17,6 +17,7 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   full_name?: string
+  email?: string
   is_active?: boolean
   role_code?: string
   professional_license?: string | null

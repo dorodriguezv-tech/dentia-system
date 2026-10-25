@@ -28,6 +28,7 @@ const tokens: TokenResponse = {
     mfa_enabled: false,
     mfa_setup_required: false,
     ai_enabled: true,
+    has_photo: false,
   },
 }
 

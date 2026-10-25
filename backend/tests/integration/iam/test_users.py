@@ -353,3 +353,49 @@ async def test_duplicate_clinic_in_additional_clinics_is_rejected(
         },
     )
     assert response.status_code == 400
+
+
+async def test_admin_can_change_a_users_login_email(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    """El formulario de editar usuario no mostraba el correo de acceso en ningun
+    rol (reportado por el operador) -- ademas de agregarlo en pantalla, el backend
+    debe aceptar el cambio."""
+    await make_user(email="admin@example.com", password="Contrasena123", role_code="admin_clinica")
+    target = await make_user(email="viejo@example.com", role_code="recepcion")
+    target_id = target.id  # ver nota en login() sobre expire_on_commit
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+
+    response = await client.patch(
+        f"/api/v1/users/{target_id}",
+        headers=headers,
+        json={"email": "nuevo@example.com"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["email"] == "nuevo@example.com"
+
+
+async def test_cannot_change_a_users_email_to_one_already_taken(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    await make_user(email="admin@example.com", password="Contrasena123", role_code="admin_clinica")
+    target = await make_user(email="objetivo@example.com", role_code="recepcion")
+    target_id = target.id  # ver nota en login() sobre expire_on_commit
+    await make_user(email="ocupado@example.com", role_code="caja")
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+
+    response = await client.patch(
+        f"/api/v1/users/{target_id}",
+        headers=headers,
+        json={"email": "ocupado@example.com"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "EMAIL_TAKEN"

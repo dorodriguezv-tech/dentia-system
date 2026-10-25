@@ -70,6 +70,7 @@ describe('ReportsPage', () => {
         mfa_enabled: false,
         mfa_setup_required: false,
         ai_enabled: false,
+        has_photo: false,
       },
       clinics: [],
       activeClinicId: null,

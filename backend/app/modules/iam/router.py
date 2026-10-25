@@ -1,11 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response
 
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, get_current_user, require_permission
+from app.core.errors import AppError
+from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.iam import service
 from app.modules.iam.models import User
 from app.modules.iam.schemas import (
@@ -227,3 +230,39 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     await service.delete_user(db, clinic_id=clinic_id, user_id=user_id, actor=actor)
+
+
+@router.post("/users/{user_id}/photo", response_model=UserOut)
+async def upload_user_photo(
+    user_id: uuid.UUID,
+    file: UploadFile,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("iam.manage_users")),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage_backend),
+) -> UserOut:
+    data = await file.read()
+    user = await service.upload_user_photo(
+        db,
+        storage,
+        clinic_id=clinic_id,
+        user_id=user_id,
+        content_type=file.content_type or "application/octet-stream",
+        data=data,
+        actor=actor,
+    )
+    return await _user_out(db, user)
+
+
+@router.get("/users/{user_id}/photo")
+async def get_user_photo(
+    user_id: uuid.UUID,
+    _actor: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage_backend),
+) -> Response:
+    asset = await service.read_user_photo(db, storage, user_id=user_id)
+    if asset is None:
+        raise AppError("NOT_FOUND", "El usuario no tiene foto", status_code=404)
+    data, content_type = asset
+    return Response(content=data, media_type=content_type)

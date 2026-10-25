@@ -24,6 +24,7 @@ function odontologoUser(aiEnabled: boolean) {
     mfa_enabled: false,
     mfa_setup_required: false,
     ai_enabled: aiEnabled,
+    has_photo: false,
   }
 }
 

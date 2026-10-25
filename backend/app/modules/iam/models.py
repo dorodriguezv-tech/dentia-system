@@ -94,6 +94,11 @@ class User(AuditedMixin, Base):
     # (reset_demo_clinic), asi que el resto de sus acciones si "funcionan" dentro
     # de esa sucursal, pero nunca sobreviven a la siguiente sesion.
     is_sandboxed: Mapped[bool] = mapped_column(Boolean, default=False)
+    photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    @property
+    def has_photo(self) -> bool:
+        return self.photo_path is not None
 
 
 class UserClinic(AuditedMixin, Base):

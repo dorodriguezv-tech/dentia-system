@@ -99,6 +99,13 @@
   color: var(--color-text-muted);
 }
 
+.ownPhoto {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
 .logoutButton {
   border: 1px solid var(--color-border);
   background-color: var(--color-bg);

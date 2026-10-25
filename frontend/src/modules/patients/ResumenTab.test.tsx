@@ -107,6 +107,31 @@ describe('ResumenTab: Iniciar atencion (A4)', () => {
 
     await waitFor(() => expect(encountersApi.createEncounter).toHaveBeenCalled())
   })
+
+  it(
+    'subir una foto que falla (antes era un try/finally sin catch, el error de ' +
+      '"mas de 2 MB" quedaba invisible) ahora se ve en pantalla',
+    async () => {
+      vi.mocked(api.uploadPatientPhoto)
+        .mockReset()
+        .mockRejectedValue(
+          new ApiRequestError(400, {
+            code: 'FILE_TOO_LARGE',
+            message: 'La foto no puede pesar mas de 2 MB',
+          }),
+        )
+
+      renderResumen()
+
+      const changeButton = await screen.findByRole('button', { name: 'Cambiar foto' })
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['x'], 'foto.png', { type: 'image/png' })
+      await userEvent.upload(input, file)
+
+      expect(await screen.findByText('La foto no puede pesar mas de 2 MB')).toBeInTheDocument()
+      expect(changeButton).not.toBeDisabled()
+    },
+  )
 })
 
 describe('ResumenTab: profesional y gabinete por defecto (B3)', () => {

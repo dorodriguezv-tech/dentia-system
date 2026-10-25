@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { apiRequestBlobUrl } from '../api/client'
 import { ClinicLogo, PoweredByDentia } from '../components/brand/Brand'
 import {
   canConfigureAi,
@@ -19,6 +21,34 @@ import { DentiaOrb } from '../modules/voice/DentiaOrb'
 import { useThemeStore } from '../theme/store'
 import styles from './Layout.module.css'
 
+// Igual que patients/PatientHeader.tsx::usePhotoUrl -- un <img src> directo no puede
+// mandar el Authorization header, asi que hay que pedir el archivo con fetch
+// autenticado y convertirlo a blob URL.
+function useOwnPhotoUrl(userId: string | undefined, hasPhoto: boolean | undefined): string | null {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!userId || !hasPhoto) return
+
+    let objectUrl: string | null = null
+    let cancelled = false
+    apiRequestBlobUrl(`/users/${userId}/photo`).then((u) => {
+      if (cancelled) {
+        URL.revokeObjectURL(u)
+        return
+      }
+      objectUrl = u
+      setUrl(u)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [userId, hasPhoto])
+
+  return url
+}
+
 export function Layout() {
   const navigate = useNavigate()
   useInactivityLogout()
@@ -32,6 +62,7 @@ export function Layout() {
   const activeClinic = clinics.find((c) => c.clinic.id === activeClinicId)
   const activeRole = activeClinic?.role.code ?? null
   const hasCustomLogo = branding?.has_custom_logo ?? false
+  const ownPhotoUrl = useOwnPhotoUrl(user?.id, user?.has_photo)
 
   async function handleLogout() {
     await logout()
@@ -150,6 +181,7 @@ export function Layout() {
         </button>
         <div className={styles.headerUser}>
           <span>{activeClinic?.clinic.name}</span>
+          {ownPhotoUrl && <img className={styles.ownPhoto} src={ownPhotoUrl} alt="" />}
           <span>{user?.full_name}</span>
           <button className={styles.logoutButton} type="button" onClick={handleLogout}>
             Salir

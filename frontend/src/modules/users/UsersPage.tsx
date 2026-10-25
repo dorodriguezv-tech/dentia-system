@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiRequestError } from '../../api/client'
+import { apiRequestBlobUrl, ApiRequestError } from '../../api/client'
 import * as agendaApi from '../agenda/api'
 import type { RoleOut, UserOut } from '../auth/types'
 import { ROLES } from '../auth/roles'
@@ -13,6 +13,52 @@ import type { ClinicAssignmentInput } from './types'
 // de verdad real) -- solo estos roles tienen un Provider, asi que solo ellos
 // necesitan elegir un gabinete por defecto.
 const PROVIDER_ROLE_CODES = new Set(['odontologo', 'especialista'])
+
+function initials(fullName: string): string {
+  return fullName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('')
+}
+
+// Igual que patients/PatientHeader.tsx::usePhotoUrl -- un <img src> directo no puede
+// mandar el Authorization header, asi que hay que pedir el archivo con fetch
+// autenticado y convertirlo a blob URL.
+function usePhotoUrl(userId: string, hasPhoto: boolean): string | null {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!hasPhoto) return
+
+    let objectUrl: string | null = null
+    let cancelled = false
+    apiRequestBlobUrl(`/users/${userId}/photo`).then((u) => {
+      if (cancelled) {
+        URL.revokeObjectURL(u)
+        return
+      }
+      objectUrl = u
+      setUrl(u)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [userId, hasPhoto])
+
+  return url
+}
+
+function UserAvatar({ user }: { user: UserOut }) {
+  const photoUrl = usePhotoUrl(user.id, user.has_photo)
+  return photoUrl ? (
+    <img className={styles.avatar} src={photoUrl} alt="" />
+  ) : (
+    <div className={styles.avatar}>{initials(user.full_name)}</div>
+  )
+}
 
 function ResourcePicker({
   clinicId,
@@ -46,6 +92,7 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [fullName, setFullName] = useState(user.full_name)
+  const [email, setEmail] = useState(user.email)
   const [roleCode, setRoleCode] = useState(role.code)
   const [professionalLicense, setProfessionalLicense] = useState(user.professional_license ?? '')
   const [newPassword, setNewPassword] = useState('')
@@ -57,6 +104,7 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
     mutationFn: () =>
       api.updateUser(user.id, {
         full_name: fullName,
+        email,
         role_code: roleCode,
         professional_license: isProviderRole ? professionalLicense : null,
         ...(newPassword.trim() ? { new_password: newPassword } : {}),
@@ -86,6 +134,19 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
     },
   })
 
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const uploadPhotoMutation = useMutation({
+    mutationFn: (file: File) => api.uploadUserPhoto(user.id, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+
+  function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    uploadPhotoMutation.mutate(file)
+  }
+
   if (editing) {
     return (
       <tr>
@@ -105,6 +166,15 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+              />
+            </label>
+            <label>
+              Usuario (correo de acceso)
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </label>
             <label>
@@ -152,7 +222,10 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
   return (
     <>
       <tr className={user.is_active ? undefined : styles.inactive}>
-        <td>{user.full_name}</td>
+        <td className={styles.nameCell}>
+          <UserAvatar user={user} />
+          {user.full_name}
+        </td>
         <td>{user.email}</td>
         <td>{role.name}</td>
         <td>{user.professional_license ?? '-'}</td>
@@ -161,6 +234,21 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
           <button className={styles.linkButton} type="button" onClick={() => setEditing(true)}>
             Editar
           </button>
+          <button
+            className={styles.linkButton}
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadPhotoMutation.isPending}
+          >
+            {uploadPhotoMutation.isPending ? 'Subiendo...' : 'Cambiar foto'}
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            hidden
+            onChange={handlePhotoSelected}
+          />
           <button
             className={styles.linkButton}
             type="button"

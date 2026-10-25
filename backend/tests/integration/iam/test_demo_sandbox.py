@@ -189,3 +189,15 @@ async def test_sandboxed_actor_cannot_really_delete_or_edit_a_user(
         )
     ).scalar_one_or_none()
     assert membership is not None
+
+    photo_response = await client.post(
+        f"/api/v1/users/{target_id}/photo",
+        headers=headers,
+        files={"file": ("foto.png", b"", "image/png")},
+    )
+    assert photo_response.status_code == 200
+    assert photo_response.json()["has_photo"] is False
+
+    still_there_again = await db_session.get(User, target_id)
+    assert still_there_again is not None
+    assert still_there_again.photo_path is None

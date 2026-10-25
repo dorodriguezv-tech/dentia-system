@@ -7,7 +7,7 @@ import { STATUS_LABELS as APPOINTMENT_STATUS_LABELS } from '../agenda/catalog'
 import * as encountersApi from '../encounters/api'
 import { NOTE_STATUS_LABELS } from '../encounters/types'
 import { canWritePatients, canWriteRecords } from '../auth/roles'
-import { useActiveRole, useAuthStore } from '../auth/store'
+import { useActiveRole } from '../auth/store'
 import * as api from './api'
 import styles from './PatientDetailPage.module.css'
 import {
@@ -128,8 +128,6 @@ function EditPatientForm({ patientId, patient }: { patientId: string; patient: P
 export function ResumenTab({ patientId }: { patientId: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const accessToken = useAuthStore((s) => s.accessToken)
-  const activeClinicId = useAuthStore((s) => s.activeClinicId)
   const activeRole = useActiveRole()
   const canWrite = canWritePatients(activeRole)
   const canStartEncounter = canWriteRecords(activeRole)
@@ -246,19 +244,22 @@ export function ResumenTab({ patientId }: { patientId: string }) {
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
 
-  async function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+  // A4: subir la foto era una funcion async "a mano" (sin useMutation), asi que un
+  // error del servidor (p.ej. "La foto no puede pesar mas de 2 MB") quedaba como una
+  // promesa rechazada sin capturar -- nada en pantalla, el boton volvia a su estado
+  // normal y parecia que "la foto no se guarda". useMutation, sin su propio onError,
+  // cae en la red de seguridad global (app/globalMutationErrorHandling.ts).
+  const uploadPhotoMutation = useMutation({
+    mutationFn: (file: File) => api.uploadPatientPhoto(patientId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['patient-summary', patientId] }),
+  })
+
+  function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !accessToken || !activeClinicId) return
-    setUploading(true)
-    try {
-      await api.uploadPatientPhoto(patientId, file, accessToken, activeClinicId)
-      queryClient.invalidateQueries({ queryKey: ['patient-summary', patientId] })
-    } finally {
-      setUploading(false)
-    }
+    if (!file) return
+    uploadPhotoMutation.mutate(file)
   }
 
   const [chiefComplaint, setChiefComplaint] = useState('')
@@ -324,9 +325,9 @@ export function ResumenTab({ patientId }: { patientId: string }) {
               className={styles.primaryButton}
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={uploadPhotoMutation.isPending}
             >
-              {uploading ? 'Subiendo...' : 'Cambiar foto'}
+              {uploadPhotoMutation.isPending ? 'Subiendo...' : 'Cambiar foto'}
             </button>
             <input
               ref={fileInputRef}

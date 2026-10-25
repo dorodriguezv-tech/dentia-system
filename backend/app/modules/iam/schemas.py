@@ -86,6 +86,7 @@ class UserOut(BaseModel):
     # todo lo de IA sin una peticion aparte ni depender del permiso
     # ai.configure (que no tienen odontologo/especialista).
     ai_enabled: bool = True
+    has_photo: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -156,6 +157,7 @@ class UserCreateRequest(BaseModel):
 
 class UserUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    email: Email | None = None
     is_active: bool | None = None
     role_code: str | None = None
     professional_license: str | None = Field(default=None, max_length=50)

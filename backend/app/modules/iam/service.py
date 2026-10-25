@@ -1,7 +1,9 @@
+import io
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pyotp
+from PIL import Image
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.storage import StorageBackend
 from app.modules.agenda import rules as agenda_rules
 from app.modules.agenda import service as agenda_service
 from app.modules.iam import rules
@@ -575,6 +578,13 @@ async def update_clinic_user(
 
     if data.full_name is not None:
         user.full_name = data.full_name
+    if data.email is not None and data.email != user.email:
+        existing = (
+            await db.execute(select(User).where(User.email == data.email, User.id != user.id))
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise AppError("EMAIL_TAKEN", "Ya existe un usuario con ese correo", status_code=409)
+        user.email = data.email
     if data.professional_license is not None:
         user.professional_license = data.professional_license.strip() or None
     if data.new_password is not None:
@@ -675,3 +685,68 @@ async def delete_user(
         entity_id=str(user_id),
     )
     await db.commit()
+
+
+MAX_PHOTO_BYTES = 2_000_000
+ALLOWED_PHOTO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg"}
+
+
+async def upload_user_photo(
+    db: AsyncSession,
+    storage: StorageBackend,
+    *,
+    clinic_id: uuid.UUID,
+    user_id: uuid.UUID,
+    content_type: str,
+    data: bytes,
+    actor: User,
+) -> User:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise AppError("NOT_FOUND", "Usuario no encontrado", status_code=404)
+
+    if actor.is_sandboxed:
+        return user  # visible en la UI, pero no hace nada de verdad (cuenta de demo)
+
+    if len(data) > MAX_PHOTO_BYTES:
+        raise AppError("FILE_TOO_LARGE", "La foto no puede pesar mas de 2 MB", status_code=400)
+    suffix = ALLOWED_PHOTO_TYPES.get(content_type)
+    if suffix is None:
+        raise AppError("INVALID_FILE_TYPE", "La foto debe ser PNG o JPG", status_code=400)
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+    except Exception as exc:
+        raise AppError(
+            "INVALID_IMAGE", "El archivo no es una imagen valida", status_code=400
+        ) from exc
+
+    old_photo = user.photo_path
+    user.photo_path = storage.save(data, subdir=f"users/{user_id}", suffix=suffix)
+
+    await audit_service.log(
+        db,
+        action="iam.user_photo_updated",
+        actor_user_id=actor.id,
+        clinic_id=clinic_id,
+        entity_type="user",
+        entity_id=str(user_id),
+    )
+    await db.commit()
+
+    if old_photo:
+        storage.delete(old_photo)
+
+    refreshed = await db.get(User, user_id)
+    assert refreshed is not None
+    return refreshed
+
+
+async def read_user_photo(
+    db: AsyncSession, storage: StorageBackend, *, user_id: uuid.UUID
+) -> tuple[bytes, str] | None:
+    user = await db.get(User, user_id)
+    if user is None or not user.photo_path:
+        return None
+    content_type = "image/jpeg" if user.photo_path.endswith(".jpg") else "image/png"
+    return storage.read(user.photo_path), content_type
