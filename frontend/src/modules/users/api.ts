@@ -13,3 +13,7 @@ export function createUser(input: CreateUserInput): Promise<UserWithRoleOut> {
 export function updateUser(userId: string, input: UpdateUserInput): Promise<UserWithRoleOut> {
   return apiRequest<UserWithRoleOut>(`/users/${userId}`, { method: 'PATCH', body: input })
 }
+
+export function deleteUser(userId: string): Promise<void> {
+  return apiRequest<void>(`/users/${userId}`, { method: 'DELETE' })
+}

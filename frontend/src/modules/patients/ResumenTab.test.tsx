@@ -194,4 +194,46 @@ describe('ResumenTab: profesional y gabinete por defecto (B3)', () => {
       }),
     )
   })
+
+  it('edita los datos generales del paciente', async () => {
+    vi.mocked(api.updatePatient).mockResolvedValue({
+      id: 'pat-1',
+      expediente_number: '000001',
+      first_name: 'Juana',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Juana Perez',
+      date_of_birth: '1990-01-01',
+      sex: 'F',
+      phone: '555-0000',
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderResumen()
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar datos' }))
+
+    const firstNameInput = screen.getByPlaceholderText('Nombre(s)')
+    await userEvent.clear(firstNameInput)
+    await userEvent.type(firstNameInput, 'Juana')
+    await userEvent.selectOptions(screen.getByLabelText('Sexo'), 'F')
+    await userEvent.type(screen.getByPlaceholderText('Telefono del paciente'), '555-0000')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar datos' }))
+
+    await waitFor(() =>
+      expect(api.updatePatient).toHaveBeenCalledWith('pat-1', {
+        first_name: 'Juana',
+        last_name_paternal: 'Perez',
+        last_name_maternal: null,
+        sex: 'F',
+        phone: '555-0000',
+        email: null,
+        address: null,
+      }),
+    )
+  })
 })

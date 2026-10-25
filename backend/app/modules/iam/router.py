@@ -214,6 +214,16 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ) -> UserWithRoleOut:
     user, role = await service.update_clinic_user(
-        db, clinic_id=clinic_id, user_id=user_id, data=payload, updated_by=actor.id
+        db, clinic_id=clinic_id, user_id=user_id, data=payload, actor=actor
     )
     return UserWithRoleOut(user=user, role=role)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: uuid.UUID,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("iam.manage_users")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await service.delete_user(db, clinic_id=clinic_id, user_id=user_id, actor=actor)

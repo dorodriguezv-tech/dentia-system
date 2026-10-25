@@ -18,6 +18,7 @@ ROLE_CODES = (
     "asistente",
     "recepcion",
     "caja",
+    "demo",
 )
 
 # Fase 12 (temporal): MFA deshabilitada por completo a peticion del dueno del

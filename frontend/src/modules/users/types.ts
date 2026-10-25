@@ -20,4 +20,5 @@ export interface UpdateUserInput {
   is_active?: boolean
   role_code?: string
   professional_license?: string | null
+  new_password?: string
 }

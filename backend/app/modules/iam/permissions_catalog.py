@@ -14,6 +14,14 @@ ROLES: dict[str, str] = {
     "asistente": "Asistente dental",
     "recepcion": "Recepcion",
     "caja": "Caja",
+    # A peticion del operador: cuenta de demostracion de tiempo limitado
+    # (User.expires_at) que ve y puede entrar a cualquier pantalla del
+    # sistema -- unico rol con TODOS los permisos. Vive en su propia
+    # sucursal dedicada que se reinicia a un estado de ejemplo en cada login
+    # (ver iam/service.py::reset_demo_clinic); ademas, las acciones que
+    # podrian afectar el funcionamiento (borrar/editar otros usuarios) quedan
+    # visibles pero no se ejecutan de verdad para este rol (misma funcion).
+    "demo": "Demostracion (temporal)",
 }
 
 PERMISSIONS: dict[str, str] = {
@@ -148,4 +156,5 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "billing.write",
         "reports.read",
     ),
+    "demo": tuple(PERMISSIONS.keys()),
 }

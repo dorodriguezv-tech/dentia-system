@@ -83,6 +83,17 @@ class User(AuditedMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Cuenta de demostracion de tiempo limitado (rol "demo", ver
+    # permissions_catalog.py): expires_at bloquea el login solo (no hace falta un
+    # job periodico) en cuanto pase la fecha -- ver iam/service.py::login.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # is_sandboxed: sus acciones administrativas sensibles (borrar/editar otro
+    # usuario) quedan visibles en la UI pero no se ejecutan de verdad -- ver
+    # iam/service.py::delete_user/update_clinic_user. Su propia sucursal, por
+    # separado, se reinicia a un estado de ejemplo en cada login/logout
+    # (reset_demo_clinic), asi que el resto de sus acciones si "funcionan" dentro
+    # de esa sucursal, pero nunca sobreviven a la siguiente sesion.
+    is_sandboxed: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class UserClinic(AuditedMixin, Base):

@@ -94,6 +94,22 @@
   padding: 0;
 }
 
+.linkButtonDanger {
+  border: none;
+  background: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .clinicsBlock {
   grid-column: 1 / -1;
   display: flex;

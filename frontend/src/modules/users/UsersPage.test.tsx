@@ -23,6 +23,20 @@ function renderPage() {
 const activeResource: ResourceOut = { id: 'res-active', name: 'Gabinete Centro', is_active: true }
 const otherResource: ResourceOut = { id: 'res-norte', name: 'Gabinete Norte', is_active: true }
 
+const existingUser = {
+  user: {
+    id: 'u-existente',
+    email: 'existente@example.com',
+    full_name: 'Usuario Existente',
+    professional_license: null,
+    is_active: true,
+    mfa_enabled: false,
+    mfa_setup_required: false,
+    ai_enabled: true,
+  },
+  role: { code: 'recepcion', name: 'Recepcion' },
+}
+
 describe('UsersPage', () => {
   beforeEach(() => {
     useAuthStore.setState({
@@ -55,6 +69,8 @@ describe('UsersPage', () => {
     vi.mocked(agendaApi.listResources).mockReset().mockImplementation((clinicId) =>
       Promise.resolve(clinicId === 'clinic-2' ? [otherResource] : [activeResource]),
     )
+    vi.mocked(api.updateUser).mockReset().mockResolvedValue(existingUser)
+    vi.mocked(api.deleteUser).mockReset().mockResolvedValue(undefined)
   })
 
   it('el gabinete por defecto solo se muestra para roles que atienden pacientes', async () => {
@@ -109,5 +125,41 @@ describe('UsersPage', () => {
       default_resource_id: 'res-active',
       additional_clinics: [{ clinic_id: 'clinic-2', default_resource_id: 'res-norte' }],
     })
+  })
+
+  it('edita un usuario existente, incluida la contrasena', async () => {
+    vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar' }))
+    const nameInput = screen.getByDisplayValue('Usuario Existente')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Usuario Renombrado')
+    await userEvent.type(
+      screen.getByLabelText('Nueva contrasena (dejar en blanco para no cambiarla)'),
+      'NuevaContrasena123',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(vi.mocked(api.updateUser).mock.calls[0]).toEqual([
+      'u-existente',
+      {
+        full_name: 'Usuario Renombrado',
+        role_code: 'recepcion',
+        professional_license: null,
+        new_password: 'NuevaContrasena123',
+      },
+    ])
+  })
+
+  it('borrar un usuario pide confirmar antes de llamar a la API', async () => {
+    vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Borrar' }))
+    expect(api.deleteUser).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+    expect(api.deleteUser).toHaveBeenCalledWith('u-existente')
   })
 })

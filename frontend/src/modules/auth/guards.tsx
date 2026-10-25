@@ -37,7 +37,12 @@ export function RequireRole({ roles }: { roles: string[] }) {
   const activeClinicId = useAuthStore((s) => s.activeClinicId)
   const activeRole = clinics.find((c) => c.clinic.id === activeClinicId)?.role.code ?? null
 
-  if (!activeRole || !roles.includes(activeRole)) {
+  // Cuenta de demostracion de tiempo limitado (ver roles.ts::hasRole): unico rol
+  // con todos los permisos, asi que tambien pasa cualquier guardia de ruta por
+  // rol explicito, sin tener que repetirlo en cada `roles={[...]}` de router.tsx.
+  const isDemoRole = activeRole === 'demo'
+
+  if (!activeRole || (!isDemoRole && !roles.includes(activeRole))) {
     return <p>No tienes permiso para ver esta pantalla.</p>
   }
 

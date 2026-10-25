@@ -159,6 +159,20 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
     role_code: str | None = None
     professional_license: str | None = Field(default=None, max_length=50)
+    # Restablecimiento de contrasena iniciado por un administrador
+    # (iam.manage_users), sin pedir la contrasena actual -- distinto del
+    # autoservicio de ChangePasswordRequest.
+    new_password: str | None = Field(default=None, min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password_strength(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        violations = password_policy_violations(value)
+        if violations:
+            raise ValueError(violations[0])
+        return value
 
 
 class ChangePasswordRequest(BaseModel):

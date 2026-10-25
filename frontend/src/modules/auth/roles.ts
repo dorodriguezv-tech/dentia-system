@@ -12,53 +12,63 @@ export const ROLES: { code: string; name: string }[] = [
   { code: 'caja', name: 'Caja' },
 ]
 
+// Cuenta de demostracion de tiempo limitado (backend/app/modules/iam/permissions_catalog.py):
+// unico rol con TODOS los permisos -- en vez de repetir 'demo' en cada uno de los
+// Set de abajo (fuente real de desincronizacion si se olvida uno), toda funcion
+// can*() de este archivo pasa por este helper.
+const DEMO_ROLE_CODE = 'demo'
+
+function hasRole(roleCode: string | null, allowed: Set<string>): boolean {
+  return roleCode !== null && (roleCode === DEMO_ROLE_CODE || allowed.has(roleCode))
+}
+
 /** Roles con el permiso `iam.manage_users` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_MANAGE_USERS = new Set(['superadmin', 'admin_clinica'])
 
 export function canManageUsers(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_MANAGE_USERS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_MANAGE_USERS)
 }
 
 /** Roles con el permiso `branding.manage` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_MANAGE_BRANDING = new Set(['superadmin', 'admin_clinica'])
 
 export function canManageBranding(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_MANAGE_BRANDING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_MANAGE_BRANDING)
 }
 
 /** Roles con el permiso `patients.write` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion', 'odontologo'])
 
 export function canWritePatients(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_PATIENTS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_PATIENTS)
 }
 
 /** Roles con el permiso `records.write` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_RECORDS = new Set(['odontologo', 'especialista'])
 
 export function canWriteRecords(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_RECORDS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_RECORDS)
 }
 
 /** Roles con el permiso `records.read` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_READ_RECORDS = new Set(['odontologo', 'especialista'])
 
 export function canReadRecords(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_RECORDS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_RECORDS)
 }
 
 /** Roles con el permiso `odontogram.write` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_ODONTOGRAM = new Set(['odontologo', 'especialista'])
 
 export function canWriteOdontogram(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_ODONTOGRAM.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_ODONTOGRAM)
 }
 
 /** Roles con el permiso `odontogram.read` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_READ_ODONTOGRAM = new Set(['odontologo', 'especialista', 'asistente'])
 
 export function canReadOdontogram(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_ODONTOGRAM.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_ODONTOGRAM)
 }
 
 /** Roles con el permiso `agenda.write` (ver docs/MATRIZ_PERMISOS.md). */
@@ -70,7 +80,7 @@ const ROLES_THAT_WRITE_AGENDA = new Set([
 ])
 
 export function canWriteAgenda(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_AGENDA.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_AGENDA)
 }
 
 /** Roles con el permiso `agenda.read` (ver docs/MATRIZ_PERMISOS.md). */
@@ -83,7 +93,7 @@ const ROLES_THAT_READ_AGENDA = new Set([
 ])
 
 export function canReadAgenda(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_AGENDA.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_AGENDA)
 }
 
 /** Roles con los permisos `diagnosis.write`/`diagnosis.read` (ver docs/MATRIZ_PERMISOS.md). */
@@ -91,11 +101,11 @@ const ROLES_THAT_WRITE_DIAGNOSIS = new Set(['odontologo', 'especialista'])
 const ROLES_THAT_READ_DIAGNOSIS = new Set(['odontologo', 'especialista'])
 
 export function canWriteDiagnosis(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_DIAGNOSIS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_DIAGNOSIS)
 }
 
 export function canReadDiagnosis(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_DIAGNOSIS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_DIAGNOSIS)
 }
 
 /** Roles con los permisos `treatment.*` (ver docs/MATRIZ_PERMISOS.md). */
@@ -104,15 +114,15 @@ const ROLES_THAT_READ_TREATMENT = new Set(['admin_clinica', 'odontologo', 'espec
 const ROLES_THAT_ACCEPT_BUDGET = new Set(['odontologo', 'especialista'])
 
 export function canWriteTreatment(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_TREATMENT.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_TREATMENT)
 }
 
 export function canReadTreatment(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_TREATMENT.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_TREATMENT)
 }
 
 export function canAcceptBudget(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_ACCEPT_BUDGET.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_ACCEPT_BUDGET)
 }
 
 /** Roles con los permisos `ai.use`/`ai.configure` (ver docs/MATRIZ_PERMISOS.md). */
@@ -120,11 +130,11 @@ const ROLES_THAT_USE_AI = new Set(['odontologo', 'especialista'])
 const ROLES_THAT_CONFIGURE_AI = new Set(['admin_clinica'])
 
 export function canUseAi(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_USE_AI.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_USE_AI)
 }
 
 export function canConfigureAi(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_CONFIGURE_AI.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_CONFIGURE_AI)
 }
 
 /** Roles con los permisos `documents.*` (ver docs/MATRIZ_PERMISOS.md). */
@@ -133,15 +143,15 @@ const ROLES_THAT_WRITE_DOCUMENTS = new Set(['odontologo', 'especialista'])
 const ROLES_THAT_SIGN_DOCUMENTS = new Set(['odontologo', 'especialista'])
 
 export function canReadDocuments(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_DOCUMENTS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_DOCUMENTS)
 }
 
 export function canWriteDocuments(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_DOCUMENTS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_DOCUMENTS)
 }
 
 export function canSignDocuments(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_SIGN_DOCUMENTS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_SIGN_DOCUMENTS)
 }
 
 /** Roles con los permisos `imaging.*` (ver docs/MATRIZ_PERMISOS.md). */
@@ -149,11 +159,11 @@ const ROLES_THAT_READ_IMAGING = new Set(['odontologo', 'especialista', 'asistent
 const ROLES_THAT_WRITE_IMAGING = new Set(['odontologo', 'especialista', 'asistente'])
 
 export function canReadImaging(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_IMAGING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_IMAGING)
 }
 
 export function canWriteImaging(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_IMAGING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_IMAGING)
 }
 
 /** Roles con los permisos `billing.*` (ver docs/MATRIZ_PERMISOS.md). */
@@ -162,22 +172,22 @@ const ROLES_THAT_WRITE_BILLING = new Set(['admin_clinica', 'caja'])
 const ROLES_THAT_CONFIGURE_BILLING = new Set(['admin_clinica'])
 
 export function canReadBilling(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_BILLING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_BILLING)
 }
 
 export function canWriteBilling(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_WRITE_BILLING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_WRITE_BILLING)
 }
 
 export function canConfigureBilling(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_CONFIGURE_BILLING.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_CONFIGURE_BILLING)
 }
 
 /** Roles con el permiso `reports.read` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_READ_REPORTS = new Set(['superadmin', 'admin_clinica', 'caja'])
 
 export function canReadReports(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_READ_REPORTS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_READ_REPORTS)
 }
 
 /** Roles con el permiso `catalogs.manage` (ver docs/MATRIZ_PERMISOS.md). Solo
@@ -186,7 +196,7 @@ export function canReadReports(roleCode: string | null): boolean {
 const ROLES_THAT_MANAGE_CATALOGS = new Set(['admin_clinica'])
 
 export function canManageCatalogs(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_MANAGE_CATALOGS.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_MANAGE_CATALOGS)
 }
 
 /** Roles con el permiso `voice.use` (ver docs/MATRIZ_PERMISOS.md) -- Fase 13
@@ -197,5 +207,5 @@ export function canManageCatalogs(roleCode: string | null): boolean {
 const ROLES_THAT_USE_VOICE = new Set(['odontologo', 'especialista', 'recepcion'])
 
 export function canUseVoice(roleCode: string | null): boolean {
-  return roleCode !== null && ROLES_THAT_USE_VOICE.has(roleCode)
+  return hasRole(roleCode, ROLES_THAT_USE_VOICE)
 }

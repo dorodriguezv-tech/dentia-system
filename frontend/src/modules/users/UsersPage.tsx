@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiRequestError } from '../../api/client'
 import * as agendaApi from '../agenda/api'
+import type { RoleOut, UserOut } from '../auth/types'
 import { ROLES } from '../auth/roles'
 import { useAuthStore } from '../auth/store'
 import styles from './UsersPage.module.css'
@@ -37,6 +38,170 @@ function ResourcePicker({
         </option>
       ))}
     </select>
+  )
+}
+
+function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [fullName, setFullName] = useState(user.full_name)
+  const [roleCode, setRoleCode] = useState(role.code)
+  const [professionalLicense, setProfessionalLicense] = useState(user.professional_license ?? '')
+  const [newPassword, setNewPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const isProviderRole = PROVIDER_ROLE_CODES.has(roleCode)
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      api.updateUser(user.id, {
+        full_name: fullName,
+        role_code: roleCode,
+        professional_license: isProviderRole ? professionalLicense : null,
+        ...(newPassword.trim() ? { new_password: newPassword } : {}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setEditing(false)
+      setNewPassword('')
+      setError(null)
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof ApiRequestError ? err.message : 'No se pudo guardar')
+    },
+  })
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: (isActive: boolean) => api.updateUser(user.id, { is_active: isActive }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteUser(user.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err: unknown) => {
+      setError(err instanceof ApiRequestError ? err.message : 'No se pudo borrar')
+      setDeleting(false)
+    },
+  })
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={6}>
+          {error && <div className={styles.error}>{error}</div>}
+          <form
+            className={styles.form}
+            onSubmit={(e) => {
+              e.preventDefault()
+              updateMutation.mutate()
+            }}
+          >
+            <label>
+              Nombre completo
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </label>
+            <label>
+              Rol
+              <select value={roleCode} onChange={(e) => setRoleCode(e.target.value)}>
+                {ROLES.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isProviderRole && (
+              <label>
+                Cedula profesional
+                <input
+                  type="text"
+                  required
+                  value={professionalLicense}
+                  onChange={(e) => setProfessionalLicense(e.target.value)}
+                />
+              </label>
+            )}
+            <label>
+              Nueva contrasena (dejar en blanco para no cambiarla)
+              <input
+                type="password"
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </label>
+            <button className={styles.addButton} type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+            </button>
+            <button className={styles.linkButton} type="button" onClick={() => setEditing(false)}>
+              Cancelar
+            </button>
+          </form>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <>
+      <tr className={user.is_active ? undefined : styles.inactive}>
+        <td>{user.full_name}</td>
+        <td>{user.email}</td>
+        <td>{role.name}</td>
+        <td>{user.professional_license ?? '-'}</td>
+        <td>{user.is_active ? 'Activo' : 'Inactivo'}</td>
+        <td className={styles.rowActions}>
+          <button className={styles.linkButton} type="button" onClick={() => setEditing(true)}>
+            Editar
+          </button>
+          <button
+            className={styles.linkButton}
+            type="button"
+            onClick={() => toggleActiveMutation.mutate(!user.is_active)}
+          >
+            {user.is_active ? 'Desactivar' : 'Activar'}
+          </button>
+          {!deleting ? (
+            <button
+              className={styles.linkButtonDanger}
+              type="button"
+              onClick={() => setDeleting(true)}
+            >
+              Borrar
+            </button>
+          ) : (
+            <>
+              <span>¿Seguro?</span>
+              <button
+                className={styles.linkButtonDanger}
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+              >
+                Confirmar
+              </button>
+              <button className={styles.linkButton} type="button" onClick={() => setDeleting(false)}>
+                Cancelar
+              </button>
+            </>
+          )}
+        </td>
+      </tr>
+      {error && (
+        <tr>
+          <td colSpan={6}>
+            <div className={styles.error}>{error}</div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -81,12 +246,6 @@ export function UsersPage() {
     onError: (err: unknown) => {
       setError(err instanceof ApiRequestError ? err.message : 'No se pudo crear el usuario')
     },
-  })
-
-  const toggleActiveMutation = useMutation({
-    mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
-      api.updateUser(userId, { is_active: isActive }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   })
 
   function toggleExtraClinic(clinicId: string) {
@@ -238,24 +397,7 @@ export function UsersPage() {
           </thead>
           <tbody>
             {usersQuery.data.map(({ user, role }) => (
-              <tr key={user.id} className={user.is_active ? undefined : styles.inactive}>
-                <td>{user.full_name}</td>
-                <td>{user.email}</td>
-                <td>{role.name}</td>
-                <td>{user.professional_license ?? '-'}</td>
-                <td>{user.is_active ? 'Activo' : 'Inactivo'}</td>
-                <td>
-                  <button
-                    className={styles.linkButton}
-                    type="button"
-                    onClick={() =>
-                      toggleActiveMutation.mutate({ userId: user.id, isActive: !user.is_active })
-                    }
-                  >
-                    {user.is_active ? 'Desactivar' : 'Activar'}
-                  </button>
-                </td>
-              </tr>
+              <UserRow key={user.id} user={user} role={role} />
             ))}
           </tbody>
         </table>

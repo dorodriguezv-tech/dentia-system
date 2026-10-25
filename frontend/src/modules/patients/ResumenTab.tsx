@@ -10,7 +10,120 @@ import { canWritePatients, canWriteRecords } from '../auth/roles'
 import { useActiveRole, useAuthStore } from '../auth/store'
 import * as api from './api'
 import styles from './PatientDetailPage.module.css'
-import { CONTACT_ROLE_LABELS, STATUS_LABELS, type ContactRole, type StatusCode } from './types'
+import {
+  CONTACT_ROLE_LABELS,
+  STATUS_LABELS,
+  type ContactRole,
+  type PatientOut,
+  type SexCode,
+  type StatusCode,
+} from './types'
+
+function EditPatientForm({ patientId, patient }: { patientId: string; patient: PatientOut }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [firstName, setFirstName] = useState(patient.first_name)
+  const [lastNamePaternal, setLastNamePaternal] = useState(patient.last_name_paternal)
+  const [lastNameMaternal, setLastNameMaternal] = useState(patient.last_name_maternal ?? '')
+  const [sex, setSex] = useState<SexCode | ''>(patient.sex ?? '')
+  const [phone, setPhone] = useState(patient.phone ?? '')
+  const [email, setEmail] = useState(patient.email ?? '')
+  const [address, setAddress] = useState(patient.address ?? '')
+  const [error, setError] = useState<string | null>(null)
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      api.updatePatient(patientId, {
+        first_name: firstName,
+        last_name_paternal: lastNamePaternal,
+        last_name_maternal: lastNameMaternal || null,
+        sex: sex || null,
+        phone: phone || null,
+        email: email || null,
+        address: address || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient', patientId] })
+      queryClient.invalidateQueries({ queryKey: ['patient-summary', patientId] })
+      setEditing(false)
+      setError(null)
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof ApiRequestError ? err.message : 'No se pudieron guardar los datos')
+    },
+  })
+
+  if (!editing) {
+    return (
+      <button className={styles.linkButton} type="button" onClick={() => setEditing(true)}>
+        Editar datos
+      </button>
+    )
+  }
+
+  return (
+    <form
+      className={styles.form}
+      onSubmit={(e) => {
+        e.preventDefault()
+        updateMutation.mutate()
+      }}
+    >
+      <h2>Editar datos</h2>
+      {error && <div className={styles.errorBox}>{error}</div>}
+      <input
+        type="text"
+        placeholder="Nombre(s)"
+        required
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Apellido paterno"
+        required
+        value={lastNamePaternal}
+        onChange={(e) => setLastNamePaternal(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Apellido materno"
+        value={lastNameMaternal}
+        onChange={(e) => setLastNameMaternal(e.target.value)}
+      />
+      <select aria-label="Sexo" value={sex} onChange={(e) => setSex(e.target.value as SexCode | '')}>
+        <option value="">Sexo sin especificar</option>
+        <option value="F">Femenino</option>
+        <option value="M">Masculino</option>
+        <option value="X">Otro / prefiere no decir</option>
+      </select>
+      <input
+        type="text"
+        placeholder="Telefono del paciente"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <input
+        type="email"
+        placeholder="Correo del paciente"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Direccion"
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+      />
+      <button className={styles.primaryButton} type="submit" disabled={updateMutation.isPending}>
+        {updateMutation.isPending ? 'Guardando...' : 'Guardar datos'}
+      </button>
+      <button className={styles.linkButton} type="button" onClick={() => setEditing(false)}>
+        Cancelar
+      </button>
+    </form>
+  )
+}
 
 export function ResumenTab({ patientId }: { patientId: string }) {
   const navigate = useNavigate()
@@ -222,6 +335,8 @@ export function ResumenTab({ patientId }: { patientId: string }) {
               hidden
               onChange={handlePhotoSelected}
             />
+
+            {patientQuery.data && <EditPatientForm patientId={patientId} patient={patientQuery.data} />}
 
             <form
               className={styles.form}

@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pyotp
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
@@ -25,6 +26,7 @@ from app.core.security import (
 from app.modules.agenda import rules as agenda_rules
 from app.modules.agenda import service as agenda_service
 from app.modules.iam import rules
+from app.modules.iam.demo_sandbox import reset_demo_clinic
 from app.modules.iam.models import (
     Clinic,
     Permission,
@@ -106,6 +108,16 @@ async def login(
     stmt = select(User).where(User.email == email)
     user = (await db.execute(stmt)).scalar_one_or_none()
 
+    # Cuentas de demostracion de tiempo limitado (User.expires_at, p.ej. "demo"):
+    # se desactivan solas en cuanto alguien intenta entrar despues de su fecha
+    # limite -- sin job periodico, el login es el unico punto de entrada posible.
+    user_expired = (
+        user is not None and user.expires_at is not None and datetime.now(UTC) >= user.expires_at
+    )
+    if user is not None and user.is_active and user_expired:
+        user.is_active = False
+        await db.flush()
+
     if user is None or not user.is_active or not verify_password(password, user.hashed_password):
         await audit_service.log(
             db,
@@ -119,6 +131,20 @@ async def login(
     if user.mfa_enabled and rules.MFA_ENABLED:
         await db.commit()
         return user, create_mfa_token(user.id), None
+
+    if user.is_sandboxed:
+        user_id = user.id
+        clinic_id = (
+            await db.execute(select(UserClinic.clinic_id).where(UserClinic.user_id == user_id))
+        ).scalar_one()
+        await reset_demo_clinic(db, clinic_id=clinic_id, demo_user_id=user_id)
+        # reset_demo_clinic hace varios commit() propios -- con expire_on_commit
+        # (default de SQLAlchemy), eso deja "user" expirado; se vuelve a pedir en
+        # vez de dejar que una lectura implicita de sus atributos dispare una
+        # recarga a mitad de una conexion que el pool ya dio por terminada.
+        refreshed_user = await db.get(User, user_id)
+        assert refreshed_user is not None
+        user = refreshed_user
 
     tokens = await _issue_token_pair(db, user)
     await audit_service.log(db, action="auth.login", actor_user_id=user.id, ip_address=ip_address)
@@ -184,6 +210,17 @@ async def logout(db: AsyncSession, *, refresh_token: str) -> None:
         row.revoked_at = datetime.now(UTC)
         await audit_service.log(db, action="auth.logout", actor_user_id=row.user_id)
         await db.commit()
+
+        # Respaldo del reinicio que ya ocurre en el siguiente login (sec.
+        # reset_demo_clinic): limpia de inmediato si el cierre de sesion si
+        # ocurrio limpio, en vez de dejar el contenido de ejemplo visible
+        # hasta que alguien mas vuelva a entrar.
+        user = await db.get(User, row.user_id)
+        if user is not None and user.is_sandboxed:
+            clinic_id = (
+                await db.execute(select(UserClinic.clinic_id).where(UserClinic.user_id == user.id))
+            ).scalar_one()
+            await reset_demo_clinic(db, clinic_id=clinic_id, demo_user_id=user.id)
 
 
 async def change_password(
@@ -515,7 +552,7 @@ async def update_clinic_user(
     clinic_id: uuid.UUID,
     user_id: uuid.UUID,
     data: UserUpdateRequest,
-    updated_by: uuid.UUID,
+    actor: User,
 ) -> tuple[User, Role]:
     stmt = select(UserClinic).where(
         UserClinic.clinic_id == clinic_id, UserClinic.user_id == user_id
@@ -526,11 +563,22 @@ async def update_clinic_user(
 
     user = await db.get(User, user_id)
     assert user is not None
+    updated_by = actor.id
+
+    # Cuenta de demostracion (is_sandboxed): editar a otro usuario queda visible
+    # en la pantalla y "funciona" a los ojos de quien la usa, pero no debe
+    # cambiar nada de verdad -- se devuelve el usuario tal cual esta.
+    if actor.is_sandboxed:
+        role = await db.get(Role, membership.role_id)
+        assert role is not None
+        return user, role
 
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.professional_license is not None:
         user.professional_license = data.professional_license.strip() or None
+    if data.new_password is not None:
+        user.hashed_password = hash_password(data.new_password)
     if data.is_active is not None:
         user.is_active = data.is_active
     if data.role_code is not None:
@@ -568,3 +616,62 @@ async def update_clinic_user(
     await db.commit()
 
     return user, role
+
+
+async def delete_user(
+    db: AsyncSession, *, clinic_id: uuid.UUID, user_id: uuid.UUID, actor: User
+) -> None:
+    """Borrado real (no es contenido clinico -- regla 2 de CLAUDE.md no aplica a
+    usuarios): si el usuario tiene historial asociado (citas, notas, planes...),
+    la base de datos lo rechaza (llaves foraneas RESTRICT) y se traduce a un
+    error claro en vez de dejarlo a medias. Si solo pertenece a esta sucursal,
+    se borra la cuenta completa; si pertenece a varias, solo se le quita esta."""
+    if actor.is_sandboxed:
+        return  # visible en la UI, pero no hace nada de verdad (cuenta de demo)
+
+    if user_id == actor.id:
+        raise AppError("CANNOT_DELETE_SELF", "No puedes borrar tu propia cuenta", status_code=400)
+
+    membership = (
+        await db.execute(
+            select(UserClinic).where(
+                UserClinic.clinic_id == clinic_id, UserClinic.user_id == user_id
+            )
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise AppError("NOT_FOUND", "El usuario no pertenece a esta clinica", status_code=404)
+
+    await db.delete(membership)
+    await db.flush()
+
+    remaining = (
+        await db.execute(
+            select(func.count()).select_from(UserClinic).where(UserClinic.user_id == user_id)
+        )
+    ).scalar_one()
+
+    if remaining == 0:
+        user = await db.get(User, user_id)
+        if user is not None:
+            try:
+                await db.delete(user)
+                await db.flush()
+            except IntegrityError as exc:
+                await db.rollback()
+                raise AppError(
+                    "USER_HAS_HISTORY",
+                    "No se puede borrar: tiene historial asociado (citas, notas, planes de "
+                    "tratamiento...). Desactivalo en su lugar.",
+                    status_code=409,
+                ) from exc
+
+    await audit_service.log(
+        db,
+        action="iam.user_deleted",
+        actor_user_id=actor.id,
+        clinic_id=clinic_id,
+        entity_type="user",
+        entity_id=str(user_id),
+    )
+    await db.commit()
