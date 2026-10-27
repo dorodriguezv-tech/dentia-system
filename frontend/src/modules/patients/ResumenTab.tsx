@@ -12,9 +12,11 @@ import * as api from './api'
 import styles from './PatientDetailPage.module.css'
 import {
   CONTACT_ROLE_LABELS,
+  PATIENT_TYPE_LABELS,
   STATUS_LABELS,
   type ContactRole,
   type PatientOut,
+  type PatientTypeCode,
   type SexCode,
   type StatusCode,
 } from './types'
@@ -26,9 +28,24 @@ function EditPatientForm({ patientId, patient }: { patientId: string; patient: P
   const [lastNamePaternal, setLastNamePaternal] = useState(patient.last_name_paternal)
   const [lastNameMaternal, setLastNameMaternal] = useState(patient.last_name_maternal ?? '')
   const [sex, setSex] = useState<SexCode | ''>(patient.sex ?? '')
+  // Anotacion del expediente (pendiente #73 de docs/PENDIENTES_CLINICOS.md): se
+  // inicializa con lo ya guardado (calculado o elegido a mano al dar de alta).
+  // Dejarlo en '' al guardar significa "no tocar" -- nunca se recalcula solo.
+  const [patientType, setPatientType] = useState<PatientTypeCode | ''>(patient.patient_type ?? '')
   const [phone, setPhone] = useState(patient.phone ?? '')
   const [email, setEmail] = useState(patient.email ?? '')
   const [address, setAddress] = useState(patient.address ?? '')
+  // Fase A (rediseno del expediente, docs/clinica): campos compartidos que
+  // autollenan la Historia Clinica General -- texto libre (ver NewPatientPage).
+  const [birthPlace, setBirthPlace] = useState(patient.birth_place ?? '')
+  const [bloodType, setBloodType] = useState(patient.blood_type ?? '')
+  const [educationLevel, setEducationLevel] = useState(patient.education_level ?? '')
+  const [canReadWrite, setCanReadWrite] = useState<boolean | null>(patient.can_read_write ?? null)
+  const [religion, setReligion] = useState(patient.religion ?? '')
+  const [ethnicGroup, setEthnicGroup] = useState(patient.ethnic_group ?? '')
+  const [race, setRace] = useState(patient.race ?? '')
+  const [occupation, setOccupation] = useState(patient.occupation ?? '')
+  const [maritalStatus, setMaritalStatus] = useState(patient.marital_status ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const updateMutation = useMutation({
@@ -38,9 +55,19 @@ function EditPatientForm({ patientId, patient }: { patientId: string; patient: P
         last_name_paternal: lastNamePaternal,
         last_name_maternal: lastNameMaternal || null,
         sex: sex || null,
+        patient_type: patientType || null,
         phone: phone || null,
         email: email || null,
         address: address || null,
+        birth_place: birthPlace || null,
+        blood_type: bloodType || null,
+        education_level: educationLevel || null,
+        can_read_write: canReadWrite,
+        religion: religion || null,
+        ethnic_group: ethnicGroup || null,
+        race: race || null,
+        occupation: occupation || null,
+        marital_status: maritalStatus || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patient', patientId] })
@@ -97,23 +124,99 @@ function EditPatientForm({ patientId, patient }: { patientId: string; patient: P
         <option value="M">Masculino</option>
         <option value="X">Otro / prefiere no decir</option>
       </select>
+      <select
+        aria-label="Tipo de paciente"
+        value={patientType}
+        onChange={(e) => setPatientType(e.target.value as PatientTypeCode | '')}
+      >
+        <option value="">
+          Calcular automáticamente
+          {patient.patient_type ? ` (actual: ${PATIENT_TYPE_LABELS[patient.patient_type]})` : ''}
+        </option>
+        <option value="pediatrico">{PATIENT_TYPE_LABELS.pediatrico}</option>
+        <option value="adulto">{PATIENT_TYPE_LABELS.adulto}</option>
+      </select>
       <input
         type="text"
         placeholder="Telefono del paciente"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
       />
+      {(patientType || patient.patient_type) === 'pediatrico' && (
+        <small className={styles.helpText}>
+          Opcional para pacientes pediátricos — se recomienda capturar el teléfono del tutor en
+          la sección de Contactos.
+        </small>
+      )}
       <input
         type="email"
         placeholder="Correo del paciente"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
+      {(patientType || patient.patient_type) === 'pediatrico' && (
+        <small className={styles.helpText}>
+          Opcional para pacientes pediátricos — se recomienda capturar el correo del tutor en la
+          sección de Contactos.
+        </small>
+      )}
       <input
         type="text"
         placeholder="Direccion"
         value={address}
         onChange={(e) => setAddress(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Lugar de nacimiento"
+        value={birthPlace}
+        onChange={(e) => setBirthPlace(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Tipo sanguíneo"
+        value={bloodType}
+        onChange={(e) => setBloodType(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Escolaridad"
+        value={educationLevel}
+        onChange={(e) => setEducationLevel(e.target.value)}
+      />
+      <select
+        aria-label="Sabe leer y escribir"
+        value={canReadWrite === null ? '' : String(canReadWrite)}
+        onChange={(e) => setCanReadWrite(e.target.value === '' ? null : e.target.value === 'true')}
+      >
+        <option value="">Sabe leer y escribir: sin especificar</option>
+        <option value="true">Sabe leer y escribir: sí</option>
+        <option value="false">Sabe leer y escribir: no</option>
+      </select>
+      <input
+        type="text"
+        placeholder="Religión"
+        value={religion}
+        onChange={(e) => setReligion(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Grupo étnico"
+        value={ethnicGroup}
+        onChange={(e) => setEthnicGroup(e.target.value)}
+      />
+      <input type="text" placeholder="Raza" value={race} onChange={(e) => setRace(e.target.value)} />
+      <input
+        type="text"
+        placeholder="Ocupación"
+        value={occupation}
+        onChange={(e) => setOccupation(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Estado civil"
+        value={maritalStatus}
+        onChange={(e) => setMaritalStatus(e.target.value)}
       />
       <button className={styles.primaryButton} type="submit" disabled={updateMutation.isPending}>
         {updateMutation.isPending ? 'Guardando...' : 'Guardar datos'}
@@ -301,6 +404,14 @@ export function ResumenTab({ patientId }: { patientId: string }) {
             <div className={styles.infoRow}>
               <dt>Sexo</dt>
               <dd>{patientQuery.data.sex ?? '-'}</dd>
+            </div>
+            <div className={styles.infoRow}>
+              <dt>Tipo de paciente</dt>
+              <dd>
+                {patientQuery.data.patient_type
+                  ? PATIENT_TYPE_LABELS[patientQuery.data.patient_type]
+                  : '-'}
+              </dd>
             </div>
             <div className={styles.infoRow}>
               <dt>Profesional tratante</dt>

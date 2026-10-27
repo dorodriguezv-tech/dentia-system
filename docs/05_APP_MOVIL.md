@@ -4,6 +4,30 @@ Desarrollo, pruebas, integración con Claude Code y publicación en Google Play.
 Fecha de verificación de requisitos externos: **11 de octubre de 2026** (Google Play,
 Expo y Claude Code cambian sus requisitos; revísalos de nuevo antes de publicar).
 
+
+comanddos de reincio para app 
+
+Apagar:
+.\scripts\stop-dentia.ps1 -StopMobile
+
+Levantar de nuevo:
+.\scripts\start-dentia.ps1 -SkipFrontend -SkipDb -Mobile
+
+en la app, en la pantalla Servidor, usa http://100.104.141.21:8001
+
+Administrador de la clínica
+admin@dentalcare-demo.mx
+Dentia2025!
+Odontólogo
+odontologo@dentalcare-demo.mx
+Dentia2025!
+Recepción
+recepcion@dentalcare-demo.mx
+Dentia2025!
+Caja
+caja@dentalcare-demo.mx
+Dentia2025!
+
 ---
 
 ## 0. Decisiones de arquitectura

@@ -5,6 +5,7 @@ resuelto por el servicio/router para poder probarse sin fixtures de base de dato
 import io
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -12,6 +13,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+from app.modules.documents.pdf_header import PdfHeaderInfo, place_and_date_label
 
 
 @dataclass
@@ -48,11 +51,45 @@ def _draw_footer(canvas: Canvas, doc: SimpleDocTemplate) -> None:
     canvas.restoreState()
 
 
+def _logo_flowable(logo: tuple[bytes, str] | None) -> Image | None:
+    if logo is None:
+        return None
+    logo_bytes, _content_type = logo
+    try:
+        return Image(io.BytesIO(logo_bytes), width=12 * mm, height=12 * mm, kind="proportional")
+    except Exception:
+        # El logo puede ser SVG (branding/document_settings lo aceptan); reportlab
+        # solo dibuja rasters. Se omite en vez de romper la generacion del PDF.
+        return None
+
+
+def _header_table(header: PdfHeaderInfo, styles: dict[str, Any]) -> Table:
+    """Logo izquierdo + titulo institucional + logo derecho (Fase A, decision
+    confirmada #2: un unico par de logos para todos los documentos imprimibles)."""
+    title_paragraph = Paragraph(header.institutional_title, styles["Heading1"])
+    left_cell = _logo_flowable(header.logo_left) or ""
+    right_cell = _logo_flowable(header.logo_right) or ""
+    table = Table(
+        [[left_cell, title_paragraph, right_cell]],
+        colWidths=[16 * mm, None, 16 * mm],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (1, 0), (1, 0), "CENTER"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+            ]
+        )
+    )
+    return table
+
+
 def build_budget_pdf(
     *,
-    clinic_name: str,
+    header: PdfHeaderInfo,
     primary_color_hex: str,
-    logo: tuple[bytes, str] | None,
     patient_name: str,
     plan_title: str,
     plan_status_label: str,
@@ -66,27 +103,11 @@ def build_budget_pdf(
     styles = getSampleStyleSheet()
     story = []
 
-    # A peticion del operador: el logo se veia inmenso -- pequeno y a la
-    # izquierda de el nombre de la clinica (misma fila), igual que los demas
-    # PDF del sistema (ver documents/pdf.py, billing/pdf.py).
-    clinic_name_paragraph = Paragraph(clinic_name, styles["Heading1"])
-    if logo is not None:
-        logo_bytes, _content_type = logo
-        try:
-            logo_flowable = Image(
-                io.BytesIO(logo_bytes), width=12 * mm, height=12 * mm, kind="proportional"
-            )
-            header_table = Table(
-                [[logo_flowable, clinic_name_paragraph]], colWidths=[16 * mm, None]
-            )
-            header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-            story.append(header_table)
-        except Exception:
-            # El logo puede ser SVG (branding lo acepta, Fase 2); reportlab solo
-            # dibuja rasters. Se omite en vez de romper la generacion del PDF.
-            story.append(clinic_name_paragraph)
-    else:
-        story.append(clinic_name_paragraph)
+    story.append(_header_table(header, styles))
+    story.append(Spacer(1, 3 * mm))
+    story.append(
+        Paragraph(place_and_date_label(header.place_label, created_at_label), styles["Normal"])
+    )
     story.append(Spacer(1, 3 * mm))
 
     story.append(Paragraph(f"Presupuesto: {plan_title}", styles["Heading2"]))

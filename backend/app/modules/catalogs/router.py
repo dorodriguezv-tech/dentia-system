@@ -36,6 +36,16 @@ READ_PERMISSION_BY_TYPE: dict[str, str] = {
     "history_category": "records.read",
     "condition_alert_keyword": "records.read",
     "medication_alert_keyword": "records.read",
+    "family_relationship": "records.read",
+    "family_condition": "records.read",
+    "pathological_condition": "records.read",
+    "systems_review_finding": "records.read",
+    "skull_type": "records.read",
+    "facial_biotype": "records.read",
+    "periodontal_anamnesis_question": "records.read",
+    "pediatric_character": "records.read",
+    "terminal_plane": "records.read",
+    "pediatric_tooth_anomaly": "records.read",
 }
 
 

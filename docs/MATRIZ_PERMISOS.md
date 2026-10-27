@@ -14,6 +14,7 @@ por defecto deben validarse con la clinica antes de produccion
 | `iam.view_users` | Ver usuarios de la clinica | X | X |  |  |  |  |  |
 | `audit.read` | Consultar la bitacora de auditoria | X | X |  |  |  |  |  |
 | `branding.manage` | Editar nombre, logo y colores de la clinica | X | X |  |  |  |  |  |
+| `document_settings.manage` | Editar los logos, titulo institucional y lugar del encabezado de los documentos impresos | X | X |  |  |  |  |  |
 | `patients.read` | Ver pacientes |  | X | X | X | X | X | X |
 | `patients.write` | Crear y editar pacientes |  | X | X |  |  | X |  |
 | `records.read` | Ver el expediente clinico |  |  | X | X |  |  |  |

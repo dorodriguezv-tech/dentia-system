@@ -1,18 +1,19 @@
 .wrapper {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.4rem;
-  /* Sin esto, el contenedor flex en columna (ConsentsTab .form) estira este
-     bloque a todo el ancho (align-items: stretch por defecto) y con el un
-     canvas cuadrado deja de verse cuadrado. */
-  align-self: flex-start;
+  /* Centrado horizontal dentro del formulario (a peticion del operador): sin
+     esto, el contenedor flex en columna (ConsentsTab .form) estira este
+     bloque a todo el ancho y lo deja pegado a la izquierda. */
+  width: 100%;
 }
 
 .canvas {
-  /* Cuadro de firma ~7x7 cm (a peticion del operador, antes era un rectangulo
-     ancho de 400x150px) -- aspect-ratio lo mantiene cuadrado aunque max-width
-     lo encoja en una pantalla muy angosta. */
-  width: 7cm;
+  /* Cuadro de firma 10x10 cm (a peticion del operador, antes 7x7 cm) --
+     aspect-ratio lo mantiene cuadrado aunque max-width lo encoja en una
+     pantalla angosta. */
+  width: 10cm;
   max-width: 100%;
   aspect-ratio: 1 / 1;
   border: 1px solid var(--color-border);
@@ -26,6 +27,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
+  width: 10cm;
+  max-width: 100%;
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }

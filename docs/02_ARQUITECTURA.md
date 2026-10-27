@@ -16,7 +16,9 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `iam` | Organization, Clinic (sucursal), User, Role, Permission, UserClinic, Session, MfaSecret |
 | `branding` | ClinicBranding (nombre, logo, paleta) |
 | `patients` | Patient, PatientContact, Guardian, PatientStatus |
-| `records` | MedicalHistory, Allergy, Medication, RiskFactor, ClinicalAlert, VitalSigns |
+| `records` | MedicalHistory, Allergy, Medication, RiskFactor, ClinicalAlert, VitalSigns, FamilyHistoryEntry, PersonalPathologicalHistory, PersonalNonPathologicalHistory, SystemsReviewEntry (Fase A) |
+| `odontological_history` | OdontologicalExam, PeriodontalAnamnesis, RadiographicAnalysis, OdontogramDiagnosisDetail, ParallelometerAnalysis, RemovablePartialDentureDesign, ToothDiagnosisEntry, ToothTreatmentPlanEntry (Fase C) |
+| `pediatric_history` | PediatricPerinatalHistory, PediatricOralHabits, PediatricBehaviorMaturity, PediatricOcclusion, PediatricEruptionDentition, PediatricToothAnnotation (Fase E) |
 | `encounters` | Encounter, ClinicalNote (+ ClinicalNoteVersion) |
 | `odontogram` | ToothCatalog, SurfaceCatalog, FindingCatalog, ToothFinding (evento), OdontogramSnapshot |
 | `agenda` | Provider, Resource (gabinete), Appointment, AppointmentStatusHistory |
@@ -284,6 +286,17 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   expediente). `GET /patients/{id}/photo` exige `patients.read`, así que el frontend no puede
   usar un `<img src>` directo: la pide con `fetch` autenticado y la muestra como blob URL
   (`api/client.ts: apiRequestBlobUrl`).
+- **`patient_type` (pediátrico/adulto), anotación editable, no un campo derivado:** columna
+  nullable (`patients/models.py`, migración `9c1fdb20d7bc`). Al crear o editar un paciente, si
+  `patient_type` llega `None`/ausente en el payload, `patients/service.py` lo calcula con
+  `rules.calculate_patient_type(date_of_birth)` (reutiliza `calculate_age`; corte de
+  `PEDIATRIC_AGE_CUTOFF_YEARS = 12`, no validado con la clínica real — ver pendiente #73 de
+  `docs/PENDIENTES_CLINICOS.md`). Si se especifica explícitamente, se respeta y **no** se vuelve a
+  calcular después (mismo patrón que los demás campos opcionales de `PatientUpdateRequest`: `None`
+  en una edición posterior significa "no tocar", no "recalcular"). El teléfono y el correo del
+  paciente son y siempre fueron opcionales en el esquema (`str | None`) — el frontend ahora lo
+  deja explícito con un texto de ayuda cuando el tipo es pediátrico, en vez de que el formulario
+  luzca como si fueran obligatorios por omisión.
 
 ### 5.4 Expediente, atención y notas (Fase 4)
 - **Catálogos configurables (sec. 7 de CLAUDE.md):** `records/rules.py` define 6 categorías de
@@ -339,14 +352,28 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   Corregir/Cancelar con motivo obligatorio; las versiones anteriores de la nota se listan de solo
   lectura debajo.
 
-### 5.5 Odontograma (Fase 5)
+### 5.5 Odontograma (Fase 5; figura anatómica y paleta reconciliadas en la Fase B)
 - **Catálogos configurables (sec. 7):** `odontogram/rules.py` genera las 32 piezas FDI permanentes
   (11–48) y las 20 temporales (51–85) por fórmula (no a mano); calcula las 5 superficies clicables
   de cada pieza (P solo en piezas superiores, L en inferiores; I solo en anteriores —incisivos y
-  canino—, O en posteriores). `odontogram/finding_catalog.py` trae los 12 hallazgos por defecto
+  canino—, O en posteriores). `odontogram/finding_catalog.py` trae los 13 hallazgos por defecto
   (sano, caries, restauración, corona, endodoncia, ausente, extracción indicada, implante, prótesis
-  fija, sellador, fractura, movilidad) con color y símbolo; ninguno validado aún con la clínica
-  (pendientes #14 en `docs/PENDIENTES_CLINICOS.md`).
+  fija, sellador, fractura, movilidad, biopelícula/tártaro dental) con color y símbolo.
+- **Paleta reconciliada con la leyenda oficial (Fase B, cierra el pendiente #3 de
+  `docs/PENDIENTES_CLINICOS.md`):** los formatos de `docs/clinica` ("ODONTOGRAMA DE DIAGNÓSTICO",
+  presente en ambos PDF de referencia) traen una leyenda fija de 4 colores: rojo = caries, azul =
+  prótesis y restauraciones, negro = dientes ausentes o restos radiculares, verde = biopelícula y
+  tártaro dental. Para que el catálogo coincidiera se cambió `ausente` de gris (`#8C8C8C`) a negro
+  (`#1A1A1A`, no `#000` puro para no leerse como "color sin definir") y se agregó el hallazgo nuevo
+  `biopelicula_tartaro` (verde `#6AB04C`, el mismo que antes tenía `sellador`); `sellador` se
+  reasignó a magenta (`#A8407D`) para no competir visualmente con la leyenda oficial.
+  `restauracion`/`protesis_fija` (misma familia de azules) y `caries`/`extraccion_indicada` (mismo
+  rojo) ya coincidían y no se tocaron. El resto de hallazgos no cambia de color. Mismo patrón que
+  cualquier otro cambio de catálogo (sec. 7): hay que tocar 5 lugares de forma consistente —
+  `app/seed.py::CATALOG_SEEDS`, una migración nueva de backfill para clínicas ya existentes
+  (`9b1f4c7a0e2d`, nunca se edita una migración vieja ya corrida — regla general de este proyecto),
+  `odontogram/finding_catalog.py`, `frontend/src/modules/odontogram/findingCatalog.ts` y las
+  variables `--color-finding-*` de `frontend/src/theme/tokens.css`.
 - **`ToothFinding` como eventos, nunca sobrescritos (regla 5):** cada hallazgo nuevo para la misma
   `(paciente, pieza, superficie, tipo)` marca `is_current=False` en el anterior y guarda
   `supersedes_id` apuntando a él; el historial completo nunca se borra. Un índice único parcial en
@@ -370,20 +397,36 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   para toda la pieza en vez de las 5 zonas; los hallazgos por superficie que pudieran seguir
   vigentes para esa misma pieza no se anulan automáticamente al registrar el de toda la pieza (no
   hay cascada) — coexisten en la base aunque la UI solo muestre uno. Ver pendiente #15.
-- **Frontend — SVG propio sin librerías de terceros:** `Tooth.tsx` dibuja 5 rectángulos en cruz
+- **Frontend — SVG propio sin librerías de terceros:** `Tooth.tsx` sigue dibujando exactamente los
+  mismos 5 `<rect>` clicables de siempre, en el mismo orden del DOM y con las mismas coordenadas
   (arriba=V, abajo=P/L según si la pieza es superior o inferior, centro=O/I según sea posterior o
-  anterior, izquierda/derecha=M/D según el lado de la arcada para que mesial siempre mire a la línea
-  media) dentro de un `viewBox` de 44×44 — el recuadro completo de la pieza es el objetivo táctil
-  principal (≥44 px, CLAUDE.md Fase 5); las 5 zonas internas son más finas y pensadas para precisión
-  con mouse/stylus. El color de cada hallazgo se aplica vía `fill="var(--color-finding-<codigo>)"`
-  (variables nuevas en `theme/tokens.css`, semánticas y fijas como `--color-danger`, no derivadas de
-  la marca de la clínica) — nunca un `#hex` literal en el componente (CLAUDE.md sec. 6).
-  `kind="PLANNED"` se dibuja con `stroke-dasharray` (contorno discontinuo).
+  anterior, izquierda/derecha=M/D según el lado de la arcada) — eso no cambió en la Fase B, solo
+  cómo se dibujan alrededor. El color de cada hallazgo se aplica vía
+  `fill="var(--color-finding-<codigo>)"` (variables en `theme/tokens.css`, semánticas y fijas como
+  `--color-danger`, no derivadas de la marca de la clínica) — nunca un `#hex` literal en el
+  componente (CLAUDE.md sec. 6). `kind="PLANNED"` se dibuja con `stroke-dasharray` (contorno
+  discontinuo).
+  **Silueta anatómica corona+raíz (Fase B):** antes un cuadrado abstracto de 44×44; ahora un
+  `viewBox` de 44×66 con una raíz decorativa (no clicable, siempre `<path>`, nunca `<rect>` — así
+  `querySelectorAll('rect')` en las pruebas sigue viendo exactamente los 5 de antes) que se afina
+  hacia la encía: arriba de la corona en piezas superiores, abajo en inferiores (`toothVisualType`/
+  geometría en `toothRules.ts`/`toothShapes.ts`). El grupo de los 5 `<rect>` se encoge horizontalmente
+  (`crownScaleX`, centrado, sin tocar sus coordenadas ni su orden) según el tipo de pieza —
+  `toothVisualType(toothFdi)`: anterior (incisivos+canino, corona angosta, 1 raíz), premolar (corona
+  media, 1 raíz; en piezas temporales esas posiciones son molar, no existe premolar temporal), molar
+  (corona completa, borde con 4 cúspides decorativas tipo "trébol" como en la vista oclusal del PDF
+  de referencia; 2 raíces si es inferior, 3 si es superior —incluye una palatina central más corta—).
+  No es una réplica anatómica literal de las 3 franjas del PDF (corona/oclusal/raíz apiladas): se
+  combinó, a propósito, el mapa de superficies de siempre (vista "desde arriba") con un contorno y
+  una raíz de estilo frontal — ese nivel de detalle real (franjas separadas, sondeo por sitio)
+  queda para el periodontograma, Fase G, fuera de este encargo.
   `Arch.tsx`/`Odontograma.tsx` arman las arcadas superior/inferior y las vistas permanente/
   temporal/mixta (en mixta, la fila de temporales se dibuja sobre la de permanentes, pendiente #10).
   Elegir una pieza/superficie abre `FindingQuickMenu` (selector de atención + catálogo de hallazgos
   en botones de ≥44 px) y `ToothHistoryPanel` (historial completo de esa pieza, con autor). El
   control de fecha (`<input type="date">`) cambia `at` y pone la vista en solo lectura con un aviso.
+  `Odontograma.tsx` también muestra la leyenda oficial de 4 colores tal como aparece literal en los
+  PDF de referencia, además de la leyenda detallada por código de hallazgo que ya existía.
 
 ### 5.6 Agenda (Fase 6)
 - **`Provider` distinto de `User`:** la identidad agendable (color del calendario, activo/inactivo)
@@ -1633,6 +1676,372 @@ verificando Parte A/B en vivo (CPU al 400% por el detector de "Dentia" sin coold
 se implementó en esta misma sesión — ver `app/voice/vocab_context.py` arriba. #48 y #49
 siguen abiertos tal como están documentados arriba; #49 sigue bloqueado por falta de
 grabaciones reales de la clínica.
+
+### 5.22 Rediseño del expediente según formatos oficiales — Fase A (infraestructura compartida + Historia Clínica General)
+Primer slice de un rediseño mayor (ver `docs/clinica/` para los PDF oficiales de
+referencia: historia general, odontológica, pediátrica, endodoncia, ficha de
+tratamientos, nota de evolución, receta, referencia/contrarreferencia). Esta
+fase cubre solo la infraestructura compartida entre todos esos documentos y la
+Historia Clínica General completa; las demás historias/documentos/odontograma
+nuevo quedan para slices siguientes (ver tabla de fases en el plan de esta
+entrega).
+
+- **`Patient` — campos compartidos nuevos (todos nullable):** `birth_place`,
+  `blood_type`, `education_level`, `can_read_write`, `religion`,
+  `ethnic_group`, `race`, `occupation`, `marital_status`. Texto libre, no
+  catálogo administrable (decisión técnica, ver pendiente #54 en
+  `docs/PENDIENTES_CLINICOS.md`) — se autollenan en la Historia Clínica
+  General y, a futuro, en los demás documentos que los pidan.
+- **`app/modules/document_settings` ("Formatos de documentos"):** tabla
+  `clinic_document_settings` (una fila por sucursal, `clinic_id` PK, mismo
+  patrón que `ClinicBranding`): `logo_left_path`/`logo_right_path` (subida de
+  imagen reutilizando `StorageBackend` y `branding/svg_sanitize.py`, mismos
+  límites de tamaño/formato que el logo único de Marca y Temas),
+  `institutional_title` (separado de `display_name`/`subtitle` de branding —
+  decisión confirmada con el usuario: el encabezado impreso puede llevar una
+  razón social distinta del nombre comercial de la app) y `place_label`
+  (autocompleta "Lugar y fecha" en todo documento). Permiso nuevo
+  `document_settings.manage` (superadmin + admin_clinica, igual que
+  `branding.manage`); lectura solo requiere autenticación (la necesitan los
+  PDF y cualquier rol que imprima un documento).
+- **`app/modules/documents/pdf_header.py` — encabezado compartido de TODO
+  PDF:** `get_pdf_header_info(db, storage, clinic_id=...)` resuelve logo
+  izquierdo (con fallback al logo único de branding si "Formatos de
+  documentos" no tiene uno propio, para no romper los PDF existentes de
+  consentimientos/presupuesto), logo derecho, título institucional (cae a
+  `branding.display_name` si no hay uno propio) y lugar. `render_header_html`
+  arma la tabla HTML de 2 logos + título para los PDF basados en `xhtml2pdf`
+  (`documents/pdf.py`, `records/pdf.py`); `treatment/pdf.py` (reportlab) arma
+  su propia tabla equivalente con flowables `Image`. `place_and_date_label`
+  arma la línea "Lugar y fecha: {lugar} a {fecha}" (o solo la fecha sin
+  lugar configurado). `build_consent_pdf` y `build_budget_pdf` migraron su
+  firma de `clinic_name`/`logo` sueltos a un único `header: PdfHeaderInfo`.
+- **Historia Clínica General — modelos nuevos en `records/models.py`** (no
+  tocan `MedicalHistory`/`Allergy`/`Medication`, que se conservan intactos;
+  mismo patrón `_AnnullableMixin` + `AuditedMixin`, `clinic_id`/`patient_id`/
+  `encounter_id` por regla 6 de CLAUDE.md):
+  - `FamilyHistoryEntry`: parentesco (catálogo `family_relationship`),
+    estatus (en_vida/fallecido) y `conditions` JSONB (catálogo
+    `family_condition`) en vez de ~16 columnas booleanas.
+  - `PersonalPathologicalHistory`: campos puntuales del formato (dolor al
+    masticar, sensibilidad, sangrado de encías, extracciones,
+    complicaciones, etc.) + `diseases` JSONB `{codigo: {present, evolution}}`
+    validado contra el catálogo `pathological_condition`.
+  - `PersonalNonPathologicalHistory`: alimentación, higiene bucal, deportes,
+    derechohabiencia, estado civil, `servicios_basicos`/`adicciones` JSONB.
+  - `SystemsReviewEntry`: un JSONB por aparato (hematológico, cardiovascular,
+    neurológico, endocrino, respiratorio, genitourinario — catálogo
+    `systems_review_finding` filtrado por `extra.system`) +
+    `reproductor_masculino`/`reproductor_femenino` JSONB de forma libre (sin
+    catálogo, mezclan booleanos/fechas/conteos — ver pendiente #56).
+  - `VitalSigns` (extendida, no reemplazada): `height_m`, `weight_kg`,
+    `spo2`, `glucose_index`, `glucose_timing`, `patient_attitude`,
+    `asa_classification`. El IMC se calcula al vuelo
+    (`records/rules.py::body_mass_index`) y nunca se persiste.
+  - Ninguna de estas 4 tablas impone una fila única por `encounter_id`
+    (decisión técnica, ver pendiente #57): se corrige con anulación +
+    recaptura, igual que `MedicalHistory`.
+- **Catálogos administrables nuevos** (`app/modules/catalogs`, mismo patrón
+  que `history_category`/`odontogram_finding`): `family_relationship`,
+  `family_condition`, `pathological_condition`, `systems_review_finding`.
+  Sembrados para sucursales existentes en la migración de backfill
+  `7f28821611b0` (mismo criterio que `4d7a2e9c15f3`); valores por defecto
+  razonables, no validados con la clínica (pendiente #55).
+- **Alertas críticas (regla 8) extendidas:**
+  `records.service.get_patient_alerts` ahora también recorre
+  `PersonalPathologicalHistory` activas: `rules.pathological_history_alert_text`
+  concatena los códigos de enfermedad marcados `present` más los campos de
+  texto libre del renglón, y se reutiliza `match_alert_keywords` tal cual
+  (misma lógica que ya usaban `MedicalHistory`/`Medication`).
+- **Endpoints nuevos** bajo `/api/v1/patients/{id}/general-history/...`
+  (mismo estilo que el resto de `records/router.py`: GET para listar, POST
+  para capturar, `POST .../{item_id}/annul` con motivo obligatorio — regla 2,
+  nunca borrado físico): `family`, `pathological`, `non-pathological`,
+  `systems-review`. `vital-signs` se extendió con los campos nuevos (no es un
+  endpoint nuevo). `GET /patients/{id}/general-history/pdf` genera el PDF
+  completo (paciente + las 4 tablas nuevas + alergias/medicamentos/signos
+  vitales ya existentes + el odontograma de diagnóstico actual **tal cual
+  existe hoy**, sin el rediseño anatómico que trae la Fase B).
+- **`app/modules/records/pdf.py`:** `build_general_history_pdf` (xhtml2pdf,
+  mismo motor que `documents/pdf.py`), función pura — recibe un
+  `GeneralHistoryPdfData` ya resuelto por `records/service.py` (que hace las
+  consultas a BD, incluida la resolución de etiquetas de catálogo
+  código→nombre para mostrar texto legible en vez de códigos internos).
+
+### 5.23 Rediseño del expediente — Fase C (Historia Clínica Odontológica)
+Tercer slice del rediseño (Fase B — odontograma con figura anatómica y
+paleta reconciliada — ya estaba implementada; Fase C es solo backend, el
+frontend se construye en un slice aparte). Cubre las secciones del PDF
+"historia clinica odontologica" que **no** son el dibujo del odontograma
+(eso ya existe desde la Fase B) ni el periodontograma completo con sondeo
+por sitio (eso queda para la Fase G, el último slice — ver
+`docs/PENDIENTES_CLINICOS.md`).
+
+- **Paquete nuevo `app/modules/odontological_history/`** (no una extensión
+  de `records/`): para cuando se programó esta fase, `records/service.py`
+  ya tenía 1020 líneas y `records/router.py` 455; sumarle 8 tablas más con
+  su CRUD + anulación lo hubiera dejado en >1900/~900 líneas. Se siguió el
+  mismo patrón de paquete completo que `document_settings/`
+  (`models.py`/`schemas.py`/`rules.py`/`service.py`/`router.py`/`pdf.py`),
+  reutilizando catálogos y utilidades de fases previas (`app.modules.catalogs`,
+  `app.modules.odontogram.rules.TOOTH_FDI_PERMANENT` para validar piezas FDI)
+  en vez de duplicarlos. Mismo patrón `_AnnullableMixin` + `AuditedMixin`,
+  `clinic_id`/`patient_id`/`encounter_id` (regla 6), ninguna tabla impone fila
+  única por encuentro (se corrige anulando y recapturando).
+- **8 tablas nuevas**, una fila por `encounter_id`:
+  - `OdontologicalExam`: cráneo (catálogo `skull_type`) y biotipo facial
+    (catálogo `facial_biotype`) + observaciones; ATM (aperturas en mm,
+    chasquidos/crepitación por lado, dolor, fatiga muscular, desviación) +
+    observaciones; 9 campos de tejidos blandos (ganglios, carrillos, labios,
+    lengua, piso de boca, región retromolar, paladar, faringe, encía
+    libre/marginal) + observaciones.
+  - `PeriodontalAnamnesis`: **cuestionario de entrevista, NO sondeo
+    clínico** (el sondeo de 6 sitios/diente e índices de placa/gingival
+    calculados por cara son la Fase G). `answers` JSONB
+    `{código_pregunta: "si"|"no"|"no_recuerda"}` validado contra el catálogo
+    `periodontal_anamnesis_question` (30 códigos — ver nota de discrepancia
+    en `odontological_history/rules.py` y pendiente en
+    `docs/PENDIENTES_CLINICOS.md`) + ~12 columnas de texto libre
+    complementarias (cepillado, hábitos, última visita, salud bucal
+    autopercibida). Los campos que ya existen en Antecedentes No Patológicos
+    (Fase A: tabaco/alcohol) y Alergias no se duplican — el backend solo
+    expone lo que pide el PDF; el autollenado/referencia cruzada es
+    responsabilidad del frontend.
+  - `RadiographicAnalysis`: `findings` JSONB
+    `{tipo: {organos_dentarios, porcentaje, alteracion}}` con `tipo` fijo
+    (no catálogo administrable): `perdida_osea_horizontal`,
+    `perdida_osea_vertical`, `alteraciones_forma_longitud_radicular`,
+    `ensanchamiento_ligamento_periodontal`, `hallazgos`. `anexos_nota` es
+    solo una referencia textual — adjuntar el archivo en sí ya lo resuelve
+    `app.modules.imaging`, no se duplica.
+  - `OdontogramDiagnosisDetail`: datos complementarios del odontograma de
+    diagnóstico que **no** son el dibujo (eso ya existe, Fase B): espacio
+    interoclusal disponible, clasificación de Kennedy superior/inferior
+    (`I`/`II`/`III` + modificación) y `fixed_prosthesis_analysis` JSONB lista
+    `[{tooth_fdi, cr_relation}]` (piezas FDI permanentes validadas).
+  - `ParallelometerAnalysis`: `entries` JSONB lista
+    `[{organo_dental, caracteristicas, plan_tratamiento}]`.
+  - `RemovablePartialDentureDesign`: 6 columnas de texto libre (conector
+    mayor/menor, retenedores directos, conectores indirectos, base
+    protésica, dientes artificiales).
+  - `ToothDiagnosisEntry` / `ToothTreatmentPlanEntry`: misma estructura
+    (`diagnoses`/`plans` JSONB `{tooth_fdi: texto}` + `observaciones`),
+    claves validadas contra piezas FDI permanentes (11-18/21-28/31-38/41-48)
+    reutilizando `app.modules.odontogram.rules.TOOTH_FDI_PERMANENT` — regla 3
+    de CLAUDE.md: esto es solo el plan propuesto por pieza, `ProcedurePlanned`/
+    `ProcedurePerformed` (`treatment`) siguen siendo las entidades operativas.
+- **Catálogos administrables nuevos**: `skull_type` (mesocéfalo/braquicéfalo/
+  dolicocéfalo), `facial_biotype` (mesofacial/braquifacial/dolicofacial),
+  `periodontal_anamnesis_question` (30 preguntas). Sembrados para sucursales
+  existentes en la migración de backfill `b052393edaf4` (mismo criterio que
+  `7f28821611b0`); valores por defecto razonables, no validados con la
+  clínica (ver `docs/PENDIENTES_CLINICOS.md`).
+- **Endpoints nuevos** bajo
+  `/api/v1/patients/{id}/odontological-history/...` (mismo estilo que
+  `records/router.py` y `general-history`: GET lista, POST crea,
+  `POST .../{item_id}/annul` con motivo obligatorio): `exam`,
+  `periodontal-anamnesis`, `radiographic-analysis`,
+  `odontogram-diagnosis-detail`, `parallelometer-analysis`,
+  `removable-partial-denture-design`, `tooth-diagnosis`,
+  `tooth-treatment-plan`. Permisos `records.read`/`records.write`
+  (reutilizados, no se creó un permiso nuevo). `GET
+  .../pdf` genera el PDF completo (paciente + odontograma de diagnóstico
+  actual, reutilizado tal cual de la Fase B + las 8 secciones nuevas).
+- **`app/modules/odontological_history/pdf.py`:**
+  `build_odontological_history_pdf` (xhtml2pdf, mismo motor y mismo
+  encabezado compartido — `documents/pdf_header.py` — que `records/pdf.py`),
+  función pura sobre un `OdontologicalHistoryPdfData` ya resuelto por
+  `service.py`.
+- **Migraciones:** `a7382cfd3971` (crea las 8 tablas) →
+  `b052393edaf4` (backfill de los 3 catálogos nuevos para sucursales
+  existentes), encadenadas tras `9b1f4c7a0e2d` (Fase B). Cadena completa
+  verificada reversible (`alembic downgrade` de vuelta a `9b1f4c7a0e2d` y
+  `alembic upgrade head` sin errores).
+
+### 5.24 Rediseño del expediente — Fase E (Historia Clínica Pediátrica)
+Cuarto slice del rediseño (backend puro, igual que la Fase C — el frontend se
+construye en un slice aparte). Cubre las secciones del PDF "historia clinica
+pediatrica" que no estaban ya cubiertas por la Fase A (datos generales,
+responsable legal, alergias) ni por el odontograma/plan de tratamiento ya
+existentes.
+
+- **Corrección sobre el plan original:** la distinción ausente
+  congénito/adquirida (triángulo amarillo/verde en la vista pediátrica) NO se
+  agregó como códigos nuevos al catálogo GLOBAL `odontogram_finding` (Fase B)
+  — eso habría alterado la leyenda de 4 colores ya cerrada que usan Historia
+  General, Odontológica y Tratamiento. En su lugar es una anotación propia y
+  exclusiva de esta historia: dos valores más (`ausente_congenito`/
+  `ausente_adquirida`) del catálogo nuevo `pediatric_tooth_anomaly`, modelados
+  junto con las demás anomalías pediátricas (fu/Gem/Sn/Hip/tr/CEx/MV/PMA) en
+  `PediatricToothAnnotation`. `odontogram/models.py` no se tocó.
+- **Paquete nuevo `app/modules/pediatric_history/`** (mismo patrón de paquete
+  completo que `odontological_history/`: `models.py`/`schemas.py`/`rules.py`/
+  `service.py`/`router.py`/`pdf.py`), reutilizando catálogos y utilidades de
+  fases previas (`app.modules.catalogs`,
+  `app.modules.odontogram.rules.TOOTH_FDI_ALL` para validar piezas FDI,
+  permanentes y temporales) en vez de duplicarlas.
+- **6 tablas nuevas**, una fila por `encounter_id` excepto la última (varias
+  filas, una por pieza anotada):
+  - `PediatricPerinatalHistory`: problemas del embarazo/periodo perinatal,
+    medicamentos durante el embarazo y el primer año de vida (con detalle),
+    vacunas completas, fecha de la última visita al dentista (texto libre).
+  - `PediatricOralHabits`: 9 preguntas Sí/No (cepillado, sangrado de encías,
+    conocimiento del flúor, fluoruro sistémico aplicado, extracción previa,
+    accidentes/fracturas, dolor dental reciente, bruxismo nocturno,
+    respiración bucal frecuente).
+  - `PediatricBehaviorMaturity`: experiencia con el dentista, relación con el
+    médico, control de esfínteres, uso de biberón (`edad_dejo_biberon` es
+    texto libre a propósito — el PDF original lo pregunta como texto a pesar
+    de un error de imprenta que muestra casillas Sí/No ahí), succión de
+    labio/dedo, relación con otros niños, `caracter` (catálogo administrable
+    `pediatric_character`) y observaciones.
+  - `PediatricOcclusion`: planos terminales izq/der (catálogo administrable
+    `terminal_plane`), relación molar de Angle izq/der (texto libre — el PDF
+    no da opciones cerradas), overjet/overbite en mm (`overbite_mm` acepta
+    negativos, mordida abierta), mordida cruzada, diastema, mordida abierta
+    anterior/posterior en mm, línea media y clasificación de Angle (I/II/III,
+    `Literal` fijos).
+  - `PediatricEruptionDentition`: 6 preguntas Sí/No (secuencia normal,
+    pérdida prematura, retención prolongada, erupción retardada, falta de
+    contacto proximal, malposición dentaria) + otras anormalidades, edad
+    dental y estado general de higiene (texto libre). La tabla estática de
+    cronología de erupción/caída del PDF (incisivo central 8-12 meses
+    erupción / 6-7 años se cae, etc.) NO se captura como datos — es
+    contenido de referencia fijo en
+    `pediatric_history/rules.py::PRIMARY_TOOTH_ERUPTION_CHRONOLOGY`/
+    `PERMANENT_TOOTH_ERUPTION_CHRONOLOGY` para que el frontend lo muestre como
+    tabla de consulta junto al formulario.
+  - `PediatricToothAnnotation`: `tooth_fdi` validado contra
+    `app.modules.odontogram.rules.TOOTH_FDI_ALL` (permanentes Y temporales,
+    a diferencia de `ToothDiagnosisEntry` de Fase C) + `anomaly_code`
+    (catálogo administrable `pediatric_tooth_anomaly`, 10 valores) +
+    `hipoplasia_detail` (texto libre — notación ambigua en el PDF original,
+    "1/3 2/3 3/3" o "i/c/ce", ver `docs/PENDIENTES_CLINICOS.md`). **Decisión
+    de re-anotación:** anotar de nuevo la misma pieza en el mismo encuentro
+    anula automáticamente la anotación activa anterior de esa pieza (solo una
+    vigente a la vez, mismo criterio que la regla 5 de CLAUDE.md aplicada
+    aquí a esta anotación exclusiva).
+- **Plan de tratamiento pediátrico (permanente/temporal): NO hay tabla
+  nueva.** Reutiliza `odontological_history.ToothTreatmentPlanEntry` (Fase C)
+  tal cual, mismo endpoint `/odontological-history/tooth-treatment-plan` —
+  cambio exacto: `odontological_history/rules.py` agrega
+  `TOOTH_FDI_ALL_CODES`/`is_valid_tooth_code` (importando
+  `TOOTH_FDI_ALL` de `odontogram.rules`, sin duplicarlo) y
+  `odontological_history/service.py::_check_tooth_codes` gana un parámetro
+  `include_temporary: bool = False` — solo el call site de
+  `create_tooth_treatment_plan_entry` lo pasa en `True`; `tooth-diagnosis` y
+  `fixed_prosthesis_analysis` (de `OdontogramDiagnosisDetail`) siguen
+  validando solo piezas permanentes, sin cambio de comportamiento.
+- **Catálogos administrables nuevos**: `pediatric_character` (apático/
+  introvertido moderado/inquieto/irritable/hiperactivo/agresivo),
+  `terminal_plane` (recto/mesial/distal), `pediatric_tooth_anomaly` (10
+  valores, incluye `ausente_congenito`/`ausente_adquirida`). Sembrados para
+  sucursales existentes en la migración de backfill `c1a9f3b7d2e4` (mismo
+  criterio que `b052393edaf4`); valores por defecto razonables, no validados
+  con la clínica (ver `docs/PENDIENTES_CLINICOS.md`).
+- **Endpoints nuevos** bajo `/api/v1/patients/{id}/pediatric-history/...`
+  (mismo estilo que `odontological-history`: GET lista, POST crea,
+  `POST .../{item_id}/annul` con motivo obligatorio): `perinatal-history`,
+  `oral-habits`, `behavior-maturity`, `occlusion`, `eruption-dentition`,
+  `tooth-annotation`. Permisos `records.read`/`records.write` (reutilizados,
+  no se creó un permiso nuevo). `GET .../pdf` genera el PDF de las 6
+  secciones (sin el dibujo del odontograma pediátrico ni el plan de
+  tratamiento por pieza — se consultan en sus propias vistas, decisión
+  documentada en `pediatric_history/service.py`).
+- **`app/modules/pediatric_history/pdf.py`:** `build_pediatric_history_pdf`
+  (xhtml2pdf, mismo motor y mismo encabezado compartido —
+  `documents/pdf_header.py` — que `odontological_history/pdf.py`), función
+  pura sobre un `PediatricHistoryPdfData` ya resuelto por `service.py`.
+- **Migraciones:** `914ebc0df26e` (crea las 6 tablas) →
+  `c1a9f3b7d2e4` (backfill de los 3 catálogos nuevos para sucursales
+  existentes), encadenadas tras `b052393edaf4` (Fase C). Cadena completa
+  verificada reversible (`alembic downgrade` de vuelta a `b052393edaf4` y
+  `alembic upgrade head` sin errores).
+
+### 5.25 Rediseño del expediente — Fase F (Historia Clínica de Endodoncia)
+Quinto slice del rediseño (backend puro, igual que las Fases C/E — el
+frontend se construye en un slice aparte). Cubre las secciones del PDF
+"historia clinica endodoncia" que no estaban ya cubiertas por la Fase A
+(datos generales, alergias, motivo de consulta).
+
+- **Paquete nuevo `app/modules/endodontic_history/`** (mismo patrón de
+  paquete completo que `odontological_history/`/`pediatric_history/`:
+  `models.py`/`schemas.py`/`rules.py`/`service.py`/`router.py`/`pdf.py`).
+- **Ningún catálogo administrable nuevo.** A diferencia de las Fases C/E,
+  todos los checklists de esta fase (antecedentes, dolor, estímulo, examen
+  intra/extrabucal, percusión horizontal/vertical, cámara/conducto/
+  periodonto, tratamiento, cirugía) son checklists cerrados y pequeños —
+  mismo criterio que `odontological_history.rules.RADIOGRAPHIC_FINDING_TYPES`
+  — y se validan como tuplas fijas directamente en
+  `endodontic_history/service.py::_check_fixed_keys` (nunca contra
+  `app.modules.catalogs`).
+- **7 tablas nuevas**, una fila por `encounter_id` excepto
+  `EndodonticPulpSensitivityTest` (varias pruebas por encuentro, el PDF
+  muestra 2 bloques idénticos pero no hay límite clínico de exactamente 2) y
+  `EndodonticToothDiagnosisCode` (varias filas, una por pieza+`kind`
+  anotada):
+  - `EndodonticInterrogation`: antecedentes/dolor/estímulo/examen
+    intrabucal/examen extrabucal, cada uno `dict[str, bool]` de claves fijas
+    + detalle de texto libre para la opción "otro".
+  - `EndodonticPulpSensitivityTest`: 8 columnas booleanas (frío, calor,
+    fugaz, persistente, localizado, irradiado, decrece, incrementa) +
+    diente testigo O.D., prueba de cavidad y prueba eléctrica O.D. (texto
+    libre).
+  - `EndodonticPeriodontalTest`: percusión horizontal y vertical son 2
+    columnas del mismo formulario (mismas 4 claves cada una, NO entradas
+    repetibles), movilidad horizontal/vertical (`positiva`/`negativa`) con
+    grado (`I`/`II`/`III`, el servicio rechaza un grado si la movilidad
+    correspondiente no es `positiva`) y palpación.
+  - `EndodonticRadiographicInterpretation`: cámara/conducto/periodonto,
+    cada uno `dict[str, bool]` de claves fijas + detalle libre para "otro".
+  - `EndodonticDiagnosisTreatment`: `diagnostico_pulpar`/
+    `diagnostico_periapical` son selección ÚNICA (`Literal` fijo, 6 valores
+    cada uno — clínicamente es un diagnóstico, no multi-select); tratamiento
+    y cirugía son checklists multi-select.
+  - `EndodonticToothDiagnosisCode`: odontograma de endodoncia — **18 códigos
+    numéricos (0-17) propios de esta historia, catálogo independiente del
+    catálogo general del odontograma (Fase B) — `odontogram/models.py` NO se
+    tocó.** El PDF repite el mismo dibujo dos veces (diagnóstico inicial /
+    evolución del tratamiento): se modeló como UNA tabla con el
+    discriminador `kind` (`diagnostico`/`evolucion`) en vez de duplicarla,
+    mismo criterio de simplicidad que el resto del proyecto. Solo piezas FDI
+    permanentes (`odontogram.rules.TOOTH_FDI_PERMANENT`, reutilizada sin
+    duplicar). **Decisión de re-anotación** (mismo patrón que
+    `PediatricToothAnnotation` de la Fase E): anotar de nuevo la misma pieza
+    con el mismo `kind` en el mismo encuentro anula automáticamente la
+    anotación activa anterior de esa pieza+`kind` (solo una vigente por
+    pieza+`kind`); una pieza puede tener `diagnostico` Y `evolucion` activas
+    simultáneamente (son independientes), pero no dos `diagnostico` activas
+    a la vez.
+  - `EndodonticWorkingLength`: longitud de trabajo de una pieza por visita.
+    `canal_measurements` es un JSONB `{clave_conducto: {aparente_rx,
+    real_localizador, relacion}}` validado contra 10 claves fijas (mesial,
+    mesiolingual, mesiovestibular, mesiopalatino, distal, distolingual,
+    distopalatino, distovestibular, palatino, único) + técnica de
+    instrumentación/obturación, indicaciones y fechas de inicio/término
+    (texto libre, mismo criterio que `fecha_ultima_visita_dentista` de la
+    Fase E).
+- **Endpoints nuevos** bajo `/api/v1/patients/{id}/endodontic-history/...`
+  (mismo estilo que `odontological-history`/`pediatric-history`: GET lista,
+  POST crea, `POST .../{item_id}/annul` con motivo obligatorio):
+  `interrogation`, `pulp-sensitivity-test`, `periodontal-test`,
+  `radiographic-interpretation`, `diagnosis-treatment`,
+  `tooth-diagnosis-code` (con filtro opcional `?kind=diagnostico|evolucion`,
+  mismo patrón de query param que `imaging`), `working-length`. Permisos
+  `records.read`/`records.write` (reutilizados). `GET .../pdf` genera el PDF
+  de las 7 secciones (el odontograma de 18 códigos se lista como texto
+  "Pieza NN (kind): código - nombre", igual criterio que el odontograma
+  pediátrico de la Fase E — el dibujo visual se consulta en su propia
+  vista).
+- **`app/modules/endodontic_history/pdf.py`:** `build_endodontic_history_pdf`
+  (xhtml2pdf, mismo motor y mismo encabezado compartido —
+  `documents/pdf_header.py` — que `odontological_history/pdf.py` y
+  `pediatric_history/pdf.py`), función pura sobre un
+  `EndodonticHistoryPdfData` ya resuelto por `service.py`.
+- **Migración:** `32fce2f53516` (crea las 7 tablas), encadenada tras
+  `c1a9f3b7d2e4` (Fase E). Sin backfill de catálogos (no se creó ninguno
+  nuevo). Cadena completa verificada reversible (`alembic downgrade -1` de
+  vuelta a `c1a9f3b7d2e4` y `alembic upgrade head` sin errores).
 
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.

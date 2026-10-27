@@ -14,6 +14,7 @@ import {
   UPPER_TEMPORARY_ROW,
 } from './toothRules'
 import type { Surface, ToothFindingOut, ViewMode } from './types'
+import { useOdontogramViewModeStore } from './viewModeStore'
 
 const VIEW_LABELS: Record<ViewMode, string> = {
   permanente: 'Permanente',
@@ -21,9 +22,27 @@ const VIEW_LABELS: Record<ViewMode, string> = {
   mixta: 'Mixta',
 }
 
+// Leyenda oficial de 4 colores, tal como aparece literal en los formatos de la clinica
+// (docs/clinica/"historia clinca odontologica.pdf" pag. 7 y "historia clinica
+// general.pdf" pag. 5, ambos "ODONTOGRAMA DE DIAGNOSTICO"). Agrupa varios codigos del
+// catalogo bajo una sola categoria visual -- por eso vive aparte del detalle por
+// hallazgo de abajo, que sigue listando cada codigo con su propio color/etiqueta.
+const OFFICIAL_LEGEND: Array<{ color: string; label: string }> = [
+  { color: 'var(--color-finding-caries)', label: 'Rojo: caries' },
+  { color: 'var(--color-finding-protesis_fija)', label: 'Azul: protesis y restauraciones' },
+  { color: 'var(--color-finding-ausente)', label: 'Negro: dientes ausentes o restos radiculares' },
+  { color: 'var(--color-finding-biopelicula_tartaro)', label: 'Verde: biopelicula y tartaro dental' },
+]
+
 export function Odontograma({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
   const queryClient = useQueryClient()
-  const [viewMode, setViewMode] = useState<ViewMode>('permanente')
+  // Correccion UX (ronda 2.3): viewMode compartido por paciente (Zustand) en
+  // vez de estado local -- la instancia del tab "Odontograma" y la embebida en
+  // las historias clinicas deben verse igual sin importar desde cual se hizo
+  // el ultimo cambio.
+  const viewMode = useOdontogramViewModeStore((s) => s.getViewMode(patientId))
+  const setViewModeForPatient = useOdontogramViewModeStore((s) => s.setViewMode)
+  const setViewMode = (mode: ViewMode) => setViewModeForPatient(patientId, mode)
   const [atDate, setAtDate] = useState('')
   const [selected, setSelected] = useState<{ tooth: number; surface: Surface | null } | null>(null)
 
@@ -146,6 +165,15 @@ export function Odontograma({ patientId, canWrite }: { patientId: string; canWri
             onSurfaceClick={handleSurfaceClick}
           />
         )}
+      </div>
+
+      <div className={styles.officialLegend} aria-label="Acotaciones oficiales del odontograma">
+        {OFFICIAL_LEGEND.map((item) => (
+          <span key={item.label} className={styles.legendItem}>
+            <span className={styles.legendSwatch} style={{ backgroundColor: item.color }} />
+            {item.label}
+          </span>
+        ))}
       </div>
 
       <div className={styles.legend}>

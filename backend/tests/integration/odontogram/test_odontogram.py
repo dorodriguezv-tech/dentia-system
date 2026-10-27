@@ -179,6 +179,29 @@ async def test_create_finding_requires_surface_when_the_catalog_item_says_so(
     assert response.json()["code"] == "SURFACE_REQUIRED"
 
 
+async def test_create_finding_accepts_the_new_biopelicula_tartaro_code(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Fase B: hallazgo nuevo de la leyenda oficial (verde), sembrado por el fixture
+    `clinic` desde app/seed.py::CATALOG_SEEDS igual que cualquier otro codigo del
+    catalogo -- no es un caso especial a nivel de API/reglas."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        "/api/v1/tooth-findings",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "tooth_fdi": 36,
+            "surface": "V",
+            "finding_code": "biopelicula_tartaro",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["finding_code"] == "biopelicula_tartaro"
+
+
 async def test_odontogram_shows_only_current_findings(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

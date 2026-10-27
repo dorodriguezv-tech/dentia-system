@@ -25,6 +25,19 @@ CATALOG_TYPES: tuple[str, ...] = (
     "history_category",
     "condition_alert_keyword",
     "medication_alert_keyword",
+    # Fase A (rediseno del expediente, docs/clinica): Historia Clinica General.
+    "family_relationship",
+    "family_condition",
+    "pathological_condition",
+    "systems_review_finding",
+    # Fase C (rediseno del expediente, docs/clinica): Historia Clinica Odontologica.
+    "skull_type",
+    "facial_biotype",
+    "periodontal_anamnesis_question",
+    # Fase E (rediseno del expediente, docs/clinica): Historia Clinica Pediatrica.
+    "pediatric_character",
+    "terminal_plane",
+    "pediatric_tooth_anomaly",
 )
 
 CATALOG_TYPE_LABELS: dict[str, str] = {
@@ -34,6 +47,16 @@ CATALOG_TYPE_LABELS: dict[str, str] = {
     "history_category": "Categorias de antecedentes",
     "condition_alert_keyword": "Palabras clave de alerta (antecedentes)",
     "medication_alert_keyword": "Palabras clave de alerta (medicamentos)",
+    "family_relationship": "Parentescos (heredofamiliares)",
+    "family_condition": "Condiciones heredofamiliares",
+    "pathological_condition": "Enfermedades (antecedentes patologicos personales)",
+    "systems_review_finding": "Padecimientos por aparato y sistema",
+    "skull_type": "Tipos de craneo",
+    "facial_biotype": "Biotipos faciales",
+    "periodontal_anamnesis_question": "Preguntas de la anamnesis periodontal",
+    "pediatric_character": "Caracter del paciente pediatrico",
+    "terminal_plane": "Planos terminales (oclusion pediatrica)",
+    "pediatric_tooth_anomaly": "Anomalias del odontograma pediatrico",
 }
 
 # Campos esperados en `extra` (JSONB) por tipo de catalogo -- documentado aqui, no
@@ -46,6 +69,20 @@ EXTRA_FIELDS_BY_TYPE: dict[str, tuple[str, ...]] = {
     "history_category": (),
     "condition_alert_keyword": ("alert_label",),
     "medication_alert_keyword": ("alert_label",),
+    "family_relationship": (),
+    "family_condition": ("alert_label",),
+    "pathological_condition": ("alert_label",),
+    # "system": a que aparato/sistema pertenece (hematologico, cardiovascular,
+    # neurologico, endocrino, respiratorio, genitourinario, reproductor_masculino,
+    # reproductor_femenino) -- un solo catalog_type para los 8, filtrado por este
+    # campo de "extra" (mismo patron flexible que odontogram_finding).
+    "systems_review_finding": ("system",),
+    "skull_type": (),
+    "facial_biotype": (),
+    "periodontal_anamnesis_question": (),
+    "pediatric_character": (),
+    "terminal_plane": (),
+    "pediatric_tooth_anomaly": (),
 }
 
 

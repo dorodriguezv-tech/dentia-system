@@ -6,9 +6,10 @@
   gap: 0.15rem;
   cursor: pointer;
   /* Objetivo tactil >= 44px (CLAUDE.md Fase 5): el recuadro completo de la pieza es
-     el area de toque principal; las 5 zonas internas son para precision con mouse. */
+     el area de toque principal; las 5 zonas internas son para precision con mouse.
+     La altura crece respecto al ancho (silueta corona+raiz, Fase B: viewBox 44x66). */
   min-width: 44px;
-  min-height: 44px;
+  min-height: 66px;
   justify-content: center;
   padding: 2px;
   border-radius: 6px;
@@ -16,7 +17,7 @@
 
 .toothSmall {
   min-width: 34px;
-  min-height: 34px;
+  min-height: 51px;
   opacity: 0.9;
 }
 
@@ -42,6 +43,20 @@
   font-weight: 700;
   fill: var(--color-surface);
   pointer-events: none;
+}
+
+/* Silueta decorativa (contorno de la corona con cuspides + raiz que se afina): nunca
+   clicable, solo da forma de diente real alrededor de los 5 <rect> de superficies. */
+.crownOutline,
+.rootShape {
+  fill: var(--color-surface);
+  stroke: var(--color-border);
+  stroke-width: 1px;
+  pointer-events: none;
+}
+
+.rootShape {
+  fill: var(--color-bg);
 }
 
 .label {

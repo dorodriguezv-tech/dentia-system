@@ -31,6 +31,11 @@ export const FINDING_CATALOG: Record<FindingCode, { label: string; color: string
   sellador: { label: 'Sellador', color: 'var(--color-finding-sellador)', symbol: 'S' },
   fractura: { label: 'Fractura', color: 'var(--color-finding-fractura)', symbol: 'FX' },
   movilidad: { label: 'Movilidad', color: 'var(--color-finding-movilidad)', symbol: 'MO' },
+  biopelicula_tartaro: {
+    label: 'Biopelicula y tartaro dental',
+    color: 'var(--color-finding-biopelicula_tartaro)',
+    symbol: 'BT',
+  },
 }
 
 export const FINDING_CODES = Object.keys(FINDING_CATALOG) as FindingCode[]

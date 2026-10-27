@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,6 +41,30 @@ class Patient(AuditedMixin, Base):
 
     status: Mapped[str] = mapped_column(String(20), default=DEFAULT_STATUS)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Anotacion del expediente (pendiente #73 de docs/PENDIENTES_CLINICOS.md):
+    # "pediatrico"/"adulto". Nullable y editable a mano -- patients/service.py
+    # la calcula a partir de date_of_birth solo cuando no viene explicita en el
+    # payload de alta/edicion; si el usuario la especifica, no se recalcula
+    # despues aunque la fecha de nacimiento ya este registrada de otra forma.
+    patient_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # Fase A (rediseno del expediente segun formatos oficiales, docs/clinica):
+    # campos compartidos que hoy pide la Historia Clinica General y que antes no
+    # existian en el paciente. Todos opcionales (nullable) para no romper pacientes
+    # ya dados de alta. education_level/marital_status/religion/ethnic_group/race
+    # son texto libre por ahora (sin catalogo administrable todavia): se documentan
+    # como pendientes de validar con la clinica en docs/PENDIENTES_CLINICOS.md,
+    # igual que otros catalogos provisionales del proyecto.
+    birth_place: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    blood_type: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    education_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    can_read_write: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    religion: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ethnic_group: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    race: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    occupation: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    marital_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # B3 (Parte B, Fase 12.2): gabinete y profesional tratante por defecto -- la
     # agenda los preselecciona al agendar una cita para este paciente (opcionales,

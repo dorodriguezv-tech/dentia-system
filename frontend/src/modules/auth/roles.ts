@@ -36,6 +36,13 @@ export function canManageBranding(roleCode: string | null): boolean {
   return hasRole(roleCode, ROLES_THAT_MANAGE_BRANDING)
 }
 
+/** Roles con el permiso `document_settings.manage` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_MANAGE_DOCUMENT_SETTINGS = new Set(['superadmin', 'admin_clinica'])
+
+export function canManageDocumentSettings(roleCode: string | null): boolean {
+  return hasRole(roleCode, ROLES_THAT_MANAGE_DOCUMENT_SETTINGS)
+}
+
 /** Roles con el permiso `patients.write` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion', 'odontologo'])
 

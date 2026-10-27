@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Odontograma } from './Odontograma'
 import type { ToothFindingOut } from './types'
+import { useOdontogramViewModeStore } from './viewModeStore'
 
 vi.mock('./api')
 vi.mock('../encounters/api')
@@ -49,6 +50,10 @@ describe('Odontograma', () => {
     vi.mocked(api.createToothFinding).mockReset()
     vi.mocked(api.getToothHistory).mockReset().mockResolvedValue([])
     vi.mocked(encountersApi.listPatientEncounters).mockReset().mockResolvedValue([encounter])
+    // Correccion UX (ronda 2.3): el viewMode es un store global por paciente
+    // (Zustand) -- se reinicia entre pruebas para que no se filtre estado de
+    // una prueba a otra.
+    useOdontogramViewModeStore.setState({ viewModeByPatient: {} })
   })
 
   it('muestra la pieza 36 con la caries vigente sembrada', async () => {
@@ -86,6 +91,41 @@ describe('Odontograma', () => {
         expect.anything(),
       ),
     )
+  })
+
+  it('muestra la leyenda oficial de 4 colores de docs/clinica', async () => {
+    renderOdontograma()
+    await screen.findByLabelText('Pieza 36')
+    expect(screen.getByText('Rojo: caries')).toBeInTheDocument()
+    expect(screen.getByText('Azul: protesis y restauraciones')).toBeInTheDocument()
+    expect(screen.getByText('Negro: dientes ausentes o restos radiculares')).toBeInTheDocument()
+    expect(screen.getByText('Verde: biopelicula y tartaro dental')).toBeInTheDocument()
+  })
+
+  it('ronda 2.3: dos instancias del mismo paciente comparten el viewMode (Zustand)', async () => {
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <div>
+          <Odontograma patientId="pat-1" canWrite={true} />
+          <Odontograma patientId="pat-1" canWrite={true} />
+        </div>
+      </QueryClientProvider>,
+    )
+
+    const mixtaButtons = await screen.findAllByRole('button', { name: 'Mixta' })
+    expect(mixtaButtons).toHaveLength(2)
+
+    // Cambia la vista SOLO en la primera instancia (p.ej. la del tab
+    // "Odontograma") -- la segunda (p.ej. embebida en Historia Clinica
+    // Odontologica) debe reflejar el mismo cambio sin que el usuario haya
+    // tocado nada ahi.
+    await userEvent.click(mixtaButtons[0])
+
+    await waitFor(() => {
+      expect(mixtaButtons[0].className).toContain('viewButtonActive')
+      expect(mixtaButtons[1].className).toContain('viewButtonActive')
+    })
   })
 
   it('al ver una fecha pasada no se puede editar', async () => {

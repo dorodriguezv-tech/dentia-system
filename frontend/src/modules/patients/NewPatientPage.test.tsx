@@ -164,4 +164,128 @@ describe('NewPatientPage', () => {
       ),
     )
   })
+
+  it('captura los datos adicionales de la Historia Clínica General (Fase A)', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000002',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '1990-05-20',
+      sex: null,
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.type(screen.getByLabelText('Lugar de nacimiento'), 'Ciudad de Mexico')
+    await userEvent.type(screen.getByLabelText('Tipo sanguíneo'), 'O+')
+    await userEvent.selectOptions(screen.getByLabelText('Sabe leer y escribir'), 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() =>
+      expect(api.createPatient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          birth_place: 'Ciudad de Mexico',
+          blood_type: 'O+',
+          can_read_write: true,
+        }),
+      ),
+    )
+  })
+
+  it('muestra la vista previa de tipo de paciente segun la fecha de nacimiento y ayuda de telefono/correo opcionales para pediatricos', async () => {
+    renderWizard()
+    await userEvent.type(screen.getByLabelText('Nombre(s)'), 'Jose')
+    await userEvent.type(screen.getByLabelText('Apellido paterno'), 'Perez')
+    const dob = screen.getByLabelText('Fecha de nacimiento')
+
+    await userEvent.type(dob, '1990-05-20')
+    expect(screen.getByText('Calcular automáticamente (Adulto)')).toBeInTheDocument()
+    expect(screen.queryByText(/Opcional para pacientes pediátricos/)).not.toBeInTheDocument()
+
+    await userEvent.clear(dob)
+    const recentDob = new Date()
+    recentDob.setFullYear(recentDob.getFullYear() - 5)
+    await userEvent.type(dob, recentDob.toISOString().slice(0, 10))
+
+    expect(screen.getByText('Calcular automáticamente (Pediátrico)')).toBeInTheDocument()
+    expect(screen.getAllByText(/Opcional para pacientes pediátricos/).length).toBeGreaterThan(0)
+  })
+
+  it('envia patient_type null cuando se deja "Calcular automaticamente"', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000002',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '1990-05-20',
+      sex: null,
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() =>
+      expect(api.createPatient).toHaveBeenCalledWith(
+        expect.objectContaining({ patient_type: null }),
+      ),
+    )
+  })
+
+  it('respeta el tipo de paciente elegido a mano, sin importar la fecha de nacimiento', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000002',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '1990-05-20',
+      sex: null,
+      patient_type: 'pediatrico',
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderWizard()
+    await fillRequiredFields()
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de paciente'), 'pediatrico')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() =>
+      expect(api.createPatient).toHaveBeenCalledWith(
+        expect.objectContaining({ patient_type: 'pediatrico' }),
+      ),
+    )
+  })
 })

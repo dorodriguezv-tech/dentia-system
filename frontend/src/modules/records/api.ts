@@ -1,39 +1,20 @@
-import { apiRequest } from '../../api/client'
+import { apiRequest, apiRequestBlobUrl } from '../../api/client'
 import type {
   AllergyCreateInput,
   AllergyOut,
-  MedicalHistoryCreateInput,
-  MedicalHistoryOut,
+  FamilyHistoryEntryCreateInput,
+  FamilyHistoryEntryOut,
   MedicationCreateInput,
   MedicationOut,
+  PersonalNonPathologicalHistoryCreateInput,
+  PersonalNonPathologicalHistoryOut,
+  PersonalPathologicalHistoryCreateInput,
+  PersonalPathologicalHistoryOut,
+  SystemsReviewEntryCreateInput,
+  SystemsReviewEntryOut,
   VitalSignsCreateInput,
   VitalSignsOut,
 } from './types'
-
-export function listHistory(patientId: string): Promise<MedicalHistoryOut[]> {
-  return apiRequest<MedicalHistoryOut[]>(`/patients/${patientId}/history`)
-}
-
-export function createHistory(
-  patientId: string,
-  input: MedicalHistoryCreateInput,
-): Promise<MedicalHistoryOut> {
-  return apiRequest<MedicalHistoryOut>(`/patients/${patientId}/history`, {
-    method: 'POST',
-    body: input,
-  })
-}
-
-export function annulHistory(
-  patientId: string,
-  itemId: string,
-  reason: string,
-): Promise<MedicalHistoryOut> {
-  return apiRequest<MedicalHistoryOut>(`/patients/${patientId}/history/${itemId}/annul`, {
-    method: 'POST',
-    body: { reason },
-  })
-}
 
 export function listAllergies(patientId: string): Promise<AllergyOut[]> {
   return apiRequest<AllergyOut[]>(`/patients/${patientId}/allergies`)
@@ -98,4 +79,122 @@ export function createVitalSigns(
 
 export function getPatientAlerts(patientId: string): Promise<string[]> {
   return apiRequest<string[]>(`/patients/${patientId}/alerts`)
+}
+
+// --------------------------------------------------------------------------------
+// Fase A (rediseno del expediente, docs/clinica): Historia Clinica General.
+// --------------------------------------------------------------------------------
+
+export function listFamilyHistory(patientId: string): Promise<FamilyHistoryEntryOut[]> {
+  return apiRequest<FamilyHistoryEntryOut[]>(`/patients/${patientId}/general-history/family`)
+}
+
+export function createFamilyHistory(
+  patientId: string,
+  input: FamilyHistoryEntryCreateInput,
+): Promise<FamilyHistoryEntryOut> {
+  return apiRequest<FamilyHistoryEntryOut>(`/patients/${patientId}/general-history/family`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function annulFamilyHistory(
+  patientId: string,
+  itemId: string,
+  reason: string,
+): Promise<FamilyHistoryEntryOut> {
+  return apiRequest<FamilyHistoryEntryOut>(
+    `/patients/${patientId}/general-history/family/${itemId}/annul`,
+    { method: 'POST', body: { reason } },
+  )
+}
+
+export function listPathologicalHistory(
+  patientId: string,
+): Promise<PersonalPathologicalHistoryOut[]> {
+  return apiRequest<PersonalPathologicalHistoryOut[]>(
+    `/patients/${patientId}/general-history/pathological`,
+  )
+}
+
+export function createPathologicalHistory(
+  patientId: string,
+  input: PersonalPathologicalHistoryCreateInput,
+): Promise<PersonalPathologicalHistoryOut> {
+  return apiRequest<PersonalPathologicalHistoryOut>(
+    `/patients/${patientId}/general-history/pathological`,
+    { method: 'POST', body: input },
+  )
+}
+
+export function annulPathologicalHistory(
+  patientId: string,
+  itemId: string,
+  reason: string,
+): Promise<PersonalPathologicalHistoryOut> {
+  return apiRequest<PersonalPathologicalHistoryOut>(
+    `/patients/${patientId}/general-history/pathological/${itemId}/annul`,
+    { method: 'POST', body: { reason } },
+  )
+}
+
+export function listNonPathologicalHistory(
+  patientId: string,
+): Promise<PersonalNonPathologicalHistoryOut[]> {
+  return apiRequest<PersonalNonPathologicalHistoryOut[]>(
+    `/patients/${patientId}/general-history/non-pathological`,
+  )
+}
+
+export function createNonPathologicalHistory(
+  patientId: string,
+  input: PersonalNonPathologicalHistoryCreateInput,
+): Promise<PersonalNonPathologicalHistoryOut> {
+  return apiRequest<PersonalNonPathologicalHistoryOut>(
+    `/patients/${patientId}/general-history/non-pathological`,
+    { method: 'POST', body: input },
+  )
+}
+
+export function annulNonPathologicalHistory(
+  patientId: string,
+  itemId: string,
+  reason: string,
+): Promise<PersonalNonPathologicalHistoryOut> {
+  return apiRequest<PersonalNonPathologicalHistoryOut>(
+    `/patients/${patientId}/general-history/non-pathological/${itemId}/annul`,
+    { method: 'POST', body: { reason } },
+  )
+}
+
+export function listSystemsReview(patientId: string): Promise<SystemsReviewEntryOut[]> {
+  return apiRequest<SystemsReviewEntryOut[]>(
+    `/patients/${patientId}/general-history/systems-review`,
+  )
+}
+
+export function createSystemsReview(
+  patientId: string,
+  input: SystemsReviewEntryCreateInput,
+): Promise<SystemsReviewEntryOut> {
+  return apiRequest<SystemsReviewEntryOut>(
+    `/patients/${patientId}/general-history/systems-review`,
+    { method: 'POST', body: input },
+  )
+}
+
+export function annulSystemsReview(
+  patientId: string,
+  itemId: string,
+  reason: string,
+): Promise<SystemsReviewEntryOut> {
+  return apiRequest<SystemsReviewEntryOut>(
+    `/patients/${patientId}/general-history/systems-review/${itemId}/annul`,
+    { method: 'POST', body: { reason } },
+  )
+}
+
+export function getGeneralHistoryPdfBlobUrl(patientId: string): Promise<string> {
+  return apiRequestBlobUrl(`/patients/${patientId}/general-history/pdf`)
 }

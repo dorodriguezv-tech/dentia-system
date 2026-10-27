@@ -255,10 +255,58 @@ describe('ResumenTab: profesional y gabinete por defecto (B3)', () => {
         last_name_paternal: 'Perez',
         last_name_maternal: null,
         sex: 'F',
+        patient_type: null,
         phone: '555-0000',
         email: null,
         address: null,
+        birth_place: null,
+        blood_type: null,
+        education_level: null,
+        can_read_write: null,
+        religion: null,
+        ethnic_group: null,
+        race: null,
+        occupation: null,
+        marital_status: null,
       }),
+    )
+  })
+
+  it('permite corregir a mano el tipo de paciente y muestra ayuda de contacto opcional para pediatricos', async () => {
+    vi.mocked(api.updatePatient).mockResolvedValue({
+      id: 'pat-1',
+      expediente_number: '000001',
+      first_name: 'Juan',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Juan Perez',
+      date_of_birth: '1990-01-01',
+      sex: null,
+      patient_type: 'pediatrico',
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderResumen()
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar datos' }))
+
+    expect(screen.queryByText(/Opcional para pacientes pediátricos/)).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de paciente'), 'pediatrico')
+    expect(screen.getAllByText(/Opcional para pacientes pediátricos/).length).toBeGreaterThan(0)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar datos' }))
+
+    await waitFor(() =>
+      expect(api.updatePatient).toHaveBeenCalledWith(
+        'pat-1',
+        expect.objectContaining({ patient_type: 'pediatrico' }),
+      ),
     )
   })
 })

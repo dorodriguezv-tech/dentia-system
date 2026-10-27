@@ -1,3 +1,4 @@
+import datetime
 import io
 
 from httpx import AsyncClient
@@ -146,6 +147,132 @@ async def test_update_status_with_reason_is_applied_and_audited(
     assert len(events) == 1
     assert events[0].details["status"]["to"] == "bloqueado"
     assert events[0].details["status"]["reason"] == "Adeudo pendiente"
+
+
+async def test_create_pediatric_patient_without_phone_or_email(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    """Reproduce el reporte del usuario: un paciente pediatrico (menor de edad) sin
+    telefono ni correo -- CONFIRMADO que no falla (ambos son opcionales en el
+    esquema y en el flujo completo: duplicados -> alta -> contacto de tutor sin
+    datos -> lectura -> resumen), igual que para un adulto. Queda como regresion."""
+    token = await _create_recepcion_token(client, make_user, clinic)
+    recent_dob = (datetime.date.today() - datetime.timedelta(days=365 * 5)).isoformat()
+
+    dup_response = await client.post(
+        "/api/v1/patients/duplicates-check",
+        headers=_headers(token, clinic.id),
+        json={
+            "first_name": "Nino",
+            "last_name_paternal": "Prueba",
+            "last_name_maternal": None,
+            "date_of_birth": recent_dob,
+            "phone": None,
+        },
+    )
+    assert dup_response.status_code == 200
+    assert dup_response.json() == []
+
+    response = await client.post(
+        "/api/v1/patients",
+        headers=_headers(token, clinic.id),
+        json={
+            "first_name": "Nino",
+            "last_name_paternal": "Prueba",
+            "last_name_maternal": None,
+            "date_of_birth": recent_dob,
+            "phone": None,
+            "email": None,
+            "address": None,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["phone"] is None
+    assert body["email"] is None
+    assert body["patient_type"] == "pediatrico"
+    patient_id = body["id"]
+
+    contact_response = await client.post(
+        f"/api/v1/patients/{patient_id}/contacts",
+        headers=_headers(token, clinic.id),
+        json={"role": "guardian", "full_name": "Mama de Nino", "phone": None},
+    )
+    assert contact_response.status_code == 201, contact_response.text
+
+    get_response = await client.get(
+        f"/api/v1/patients/{patient_id}", headers=_headers(token, clinic.id)
+    )
+    assert get_response.status_code == 200
+
+    summary_response = await client.get(
+        f"/api/v1/patients/{patient_id}/summary", headers=_headers(token, clinic.id)
+    )
+    assert summary_response.status_code == 200
+
+
+async def test_create_patient_computes_patient_type_from_date_of_birth(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    token = await _create_recepcion_token(client, make_user, clinic)
+
+    adult_response = await client.post(
+        "/api/v1/patients", headers=_headers(token, clinic.id), json=BASIC_PATIENT
+    )
+    assert adult_response.json()["patient_type"] == "adulto"
+
+    pediatric_dob = (datetime.date.today() - datetime.timedelta(days=365 * 5)).isoformat()
+    pediatric_response = await client.post(
+        "/api/v1/patients",
+        headers=_headers(token, clinic.id),
+        json={**BASIC_PATIENT, "date_of_birth": pediatric_dob, "phone": None, "email": None},
+    )
+    assert pediatric_response.json()["patient_type"] == "pediatrico"
+
+
+async def test_create_patient_respects_explicit_patient_type(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    token = await _create_recepcion_token(client, make_user, clinic)
+
+    # Adulto de edad pero marcado explicitamente como "pediatrico" -- se respeta la
+    # anotacion manual, no se recalcula a partir de la fecha de nacimiento.
+    response = await client.post(
+        "/api/v1/patients",
+        headers=_headers(token, clinic.id),
+        json={**BASIC_PATIENT, "patient_type": "pediatrico"},
+    )
+    assert response.status_code == 201
+    assert response.json()["patient_type"] == "pediatrico"
+
+
+async def test_update_patient_type_overrides_without_recalculating(
+    client: AsyncClient, make_user, clinic
+) -> None:
+    token = await _create_recepcion_token(client, make_user, clinic)
+    created = await client.post(
+        "/api/v1/patients", headers=_headers(token, clinic.id), json=BASIC_PATIENT
+    )
+    patient_id = created.json()["id"]
+    assert created.json()["patient_type"] == "adulto"
+
+    corrected = await client.patch(
+        f"/api/v1/patients/{patient_id}",
+        headers=_headers(token, clinic.id),
+        json={"patient_type": "pediatrico"},
+    )
+    assert corrected.status_code == 200
+    assert corrected.json()["patient_type"] == "pediatrico"
+
+    # Una edicion posterior que no menciona patient_type no debe tocarlo (es una
+    # anotacion editable, no se recalcula sola).
+    unrelated_update = await client.patch(
+        f"/api/v1/patients/{patient_id}",
+        headers=_headers(token, clinic.id),
+        json={"address": "Calle Falsa 123"},
+    )
+    assert unrelated_update.status_code == 200
+    assert unrelated_update.json()["patient_type"] == "pediatrico"
 
 
 async def test_search_is_accent_and_case_insensitive(

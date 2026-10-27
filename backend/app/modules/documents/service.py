@@ -12,6 +12,7 @@ from app.core.storage import StorageBackend
 from app.modules.branding import service as branding_service
 from app.modules.documents.models import Consent, DocumentTemplate
 from app.modules.documents.pdf import PdfRenderError, build_consent_pdf
+from app.modules.documents.pdf_header import get_pdf_header_info
 from app.modules.documents.rules import SIGNER_RELATIONSHIPS
 from app.modules.documents.schemas import (
     AnnulRequest,
@@ -186,7 +187,7 @@ async def create_consent(
 
     signed_at = datetime.now(UTC)
     branding = await branding_service.get_branding(db)
-    logo = await branding_service.read_logo(db, storage)
+    header = await get_pdf_header_info(db, storage, clinic_id=clinic_id)
 
     age_years = (signed_at.date() - patient.date_of_birth).days // 365
     variables = {
@@ -204,12 +205,12 @@ async def create_consent(
             html_content=template.html_content,
             variables=variables,
             signature_png=signature_bytes,
-            clinic_name=branding.display_name,
+            header=header,
             patient_name=patient.full_name,
             signer_name=data.signer_name,
             signer_relationship_label=_SIGNER_RELATIONSHIP_LABELS[data.signer_relationship],
             signed_at_label=signed_at.strftime("%d/%m/%Y %H:%M"),
-            logo=logo,
+            date_label=signed_at.strftime("%d/%m/%Y"),
         )
     except PdfRenderError as exc:
         raise AppError("PDF_RENDER_ERROR", str(exc), status_code=500) from exc

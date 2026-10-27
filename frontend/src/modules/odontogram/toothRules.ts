@@ -70,6 +70,24 @@ export function toothLayout(toothFdi: number): ToothLayout {
   }
 }
 
+export type ToothVisualType = 'anterior' | 'premolar' | 'molar'
+
+/**
+ * Clasificacion visual de la pieza para la silueta anatomica del odontograma (Fase B,
+ * corona + raiz) -- no afecta superficies validas ni el modelo de datos, solo que forma
+ * dibuja `Tooth.tsx`.
+ * - anterior: incisivos y canino (posiciones 1-3), misma agrupacion que isAnteriorTooth.
+ * - premolar: posiciones 4-5 en piezas PERMANENTES unicamente.
+ * - molar: posiciones 6-8 permanentes, y tambien 4-5 en piezas TEMPORALES -- la denticion
+ *   temporal no tiene premolares: esas posiciones son el primer/segundo molar temporal.
+ */
+export function toothVisualType(toothFdi: number): ToothVisualType {
+  const position = toothFdi % 10
+  if (position <= 3) return 'anterior'
+  if (isTemporaryTooth(toothFdi)) return 'molar'
+  return position <= 5 ? 'premolar' : 'molar'
+}
+
 export const SURFACE_LABELS: Record<Surface, string> = {
   O: 'Oclusal',
   M: 'Mesial',

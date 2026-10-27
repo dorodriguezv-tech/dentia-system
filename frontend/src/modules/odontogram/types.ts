@@ -15,6 +15,7 @@ export type FindingCode =
   | 'sellador'
   | 'fractura'
   | 'movilidad'
+  | 'biopelicula_tartaro'
 
 export interface ToothFindingOut {
   id: string

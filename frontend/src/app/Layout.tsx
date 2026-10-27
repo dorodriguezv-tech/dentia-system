@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { apiRequestBlobUrl } from '../api/client'
 import { ClinicLogo, PoweredByDentia } from '../components/brand/Brand'
+import { EnSalaAlert } from '../modules/agenda/EnSalaAlert'
 import {
   canConfigureAi,
   canConfigureBilling,
   canManageBranding,
   canManageCatalogs,
+  canManageDocumentSettings,
   canManageUsers,
   canReadAgenda,
   canReadReports,
@@ -135,6 +137,13 @@ export function Layout() {
               </NavLink>
             </li>
           )}
+          {canManageDocumentSettings(activeRole) && (
+            <li>
+              <NavLink to="/configuracion/formatos-documentos" className={styles.navLink}>
+                Formatos de documentos
+              </NavLink>
+            </li>
+          )}
           {canConfigureAi(activeRole) && user?.ai_enabled && (
             <li>
               <NavLink to="/configuracion/asistente-ia" className={styles.navLink}>
@@ -192,6 +201,7 @@ export function Layout() {
         <Outlet />
       </main>
       <GlobalSearch />
+      <EnSalaAlert />
       {canUseVoice(activeRole) && user?.ai_enabled && <DentiaOrb />}
     </div>
   )

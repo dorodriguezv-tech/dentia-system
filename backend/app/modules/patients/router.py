@@ -41,6 +41,7 @@ def _patient_out(patient: Patient) -> PatientOut:
         full_name=patient.full_name,
         date_of_birth=patient.date_of_birth,
         sex=patient.sex,
+        patient_type=patient.patient_type,
         phone=patient.phone,
         email=patient.email,
         address=patient.address,
@@ -48,6 +49,15 @@ def _patient_out(patient: Patient) -> PatientOut:
         has_photo=patient.photo_path is not None,
         default_resource_id=patient.default_resource_id,
         primary_provider_id=patient.primary_provider_id,
+        birth_place=patient.birth_place,
+        blood_type=patient.blood_type,
+        education_level=patient.education_level,
+        can_read_write=patient.can_read_write,
+        religion=patient.religion,
+        ethnic_group=patient.ethnic_group,
+        race=patient.race,
+        occupation=patient.occupation,
+        marital_status=patient.marital_status,
     )
 
 

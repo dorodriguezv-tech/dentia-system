@@ -94,6 +94,19 @@
   margin: 0.5rem 0;
 }
 
+.officialLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.8rem;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

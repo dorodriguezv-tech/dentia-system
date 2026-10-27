@@ -31,6 +31,10 @@ PERMISSIONS: dict[str, str] = {
     "iam.view_users": "Ver usuarios de la clinica",
     "audit.read": "Consultar la bitacora de auditoria",
     "branding.manage": "Editar nombre, logo y colores de la clinica",
+    "document_settings.manage": (
+        "Editar los logos, titulo institucional y lugar del encabezado de los"
+        " documentos impresos"
+    ),
     "patients.read": "Ver pacientes",
     "patients.write": "Crear y editar pacientes",
     "records.read": "Ver el expediente clinico",
@@ -70,6 +74,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "iam.view_users",
         "audit.read",
         "branding.manage",
+        "document_settings.manage",
         "reports.read",
     ),
     "admin_clinica": (
@@ -77,6 +82,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "iam.view_users",
         "audit.read",
         "branding.manage",
+        "document_settings.manage",
         "patients.read",
         "patients.write",
         "agenda.read",

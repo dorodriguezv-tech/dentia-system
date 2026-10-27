@@ -37,6 +37,11 @@
   color: var(--color-text-muted);
 }
 
+.helpText {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 .field input,
 .field select {
   font: inherit;

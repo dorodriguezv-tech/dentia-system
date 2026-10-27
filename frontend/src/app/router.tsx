@@ -6,6 +6,7 @@ import { ClinicSelectPage } from '../modules/auth/ClinicSelectPage'
 import { BillingSettingsPage } from '../modules/billing/BillingSettingsPage'
 import { CashSessionPage } from '../modules/billing/CashSessionPage'
 import { CatalogsPage } from '../modules/catalogs/CatalogsPage'
+import { DocumentSettingsPage } from '../modules/document_settings/DocumentSettingsPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
@@ -56,6 +57,10 @@ export const router = createBrowserRouter([
                 children: [
                   { path: 'usuarios', element: <UsersPage /> },
                   { path: 'configuracion/apariencia', element: <AppearancePage /> },
+                  {
+                    path: 'configuracion/formatos-documentos',
+                    element: <DocumentSettingsPage />,
+                  },
                 ],
               },
               {

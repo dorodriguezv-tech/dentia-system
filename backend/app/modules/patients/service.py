@@ -109,6 +109,10 @@ async def create_patient(
         primary_provider_id=data.primary_provider_id,
     )
 
+    # Pendiente #73 de docs/PENDIENTES_CLINICOS.md: si no se especifica explicitamente,
+    # se calcula a partir de date_of_birth (corte de 12 anios, rules.PEDIATRIC_AGE_CUTOFF_YEARS).
+    patient_type = data.patient_type or rules.calculate_patient_type(data.date_of_birth)
+
     patient = Patient(
         clinic_id=clinic_id,
         expediente_number=expediente_number,
@@ -118,11 +122,21 @@ async def create_patient(
         full_name=full_name,
         date_of_birth=data.date_of_birth,
         sex=data.sex,
+        patient_type=patient_type,
         phone=data.phone,
         email=data.email,
         address=data.address,
         default_resource_id=data.default_resource_id,
         primary_provider_id=data.primary_provider_id,
+        birth_place=data.birth_place,
+        blood_type=data.blood_type,
+        education_level=data.education_level,
+        can_read_write=data.can_read_write,
+        religion=data.religion,
+        ethnic_group=data.ethnic_group,
+        race=data.race,
+        occupation=data.occupation,
+        marital_status=data.marital_status,
         created_by=actor_id,
     )
     db.add(patient)
@@ -281,7 +295,23 @@ async def update_patient(
     before = {"status": patient.status}
     changes: dict[str, object] = {}
 
-    for field in ("first_name", "last_name_paternal", "last_name_maternal", "sex", "address"):
+    for field in (
+        "first_name",
+        "last_name_paternal",
+        "last_name_maternal",
+        "sex",
+        "patient_type",
+        "address",
+        "birth_place",
+        "blood_type",
+        "education_level",
+        "can_read_write",
+        "religion",
+        "ethnic_group",
+        "race",
+        "occupation",
+        "marital_status",
+    ):
         value = getattr(data, field)
         if value is not None:
             setattr(patient, field, value)

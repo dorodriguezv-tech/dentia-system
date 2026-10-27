@@ -43,9 +43,11 @@ from app.modules.encounters.schemas import (
 from app.modules.iam.models import Clinic, Organization, Role, User, UserClinic
 from app.modules.odontogram import service as odontogram_service
 from app.modules.odontogram.schemas import ToothFindingCreateRequest
+from app.modules.odontological_history import rules as odontological_history_rules
 from app.modules.patients import service as patients_service
 from app.modules.patients.models import Patient
 from app.modules.patients.schemas import PatientCreateRequest
+from app.modules.pediatric_history import rules as pediatric_history_rules
 from app.modules.records import service as records_service
 from app.modules.records.schemas import (
     AllergyCreateRequest,
@@ -65,6 +67,14 @@ from app.modules.treatment.schemas import (
 from app.modules.treatment.schemas import StatusChangeRequest as TreatmentStatusChangeRequest
 
 fake = Faker("es_MX")
+
+# Fase A (rediseno del expediente, docs/clinica): valores de ejemplo para los
+# campos compartidos nuevos de Patient -- Faker no trae un "provider" de tipo de
+# sangre/escolaridad, asi que se elige al azar de estas listas fijas (mismo
+# criterio que `sex=random.choice(["F", "M", None])`, ya existente).
+_BLOOD_TYPES = ("O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-")
+_EDUCATION_LEVELS = ("primaria", "secundaria", "bachillerato", "licenciatura", "posgrado")
+_MARITAL_STATUSES = ("soltero", "casado", "concubinato")
 
 ADMIN_EMAIL = "admin@dentalcare-demo.mx"
 ODONTOLOGO_EMAIL = "odontologo@dentalcare-demo.mx"
@@ -88,6 +98,13 @@ async def _seed_patients(
             phone=fake.phone_number(),
             email=fake.unique.email(),
             address=fake.address().replace("\n", ", "),
+            birth_place=fake.city(),
+            blood_type=random.choice(_BLOOD_TYPES),
+            education_level=random.choice(_EDUCATION_LEVELS),
+            can_read_write=random.choice([True, True, True, False]),
+            religion=fake.random_element(elements=("catolica", "cristiana", "ninguna", "otra")),
+            occupation=fake.job(),
+            marital_status=random.choice(_MARITAL_STATUSES),
         )
         patient = await patients_service.create_patient(
             db, clinic_id=clinic_id, data=data, actor_id=actor_id
@@ -1097,7 +1114,9 @@ CATALOG_SEEDS: list[tuple[str, str, str, int, dict[str, object]]] = [
         "ausente",
         "Ausente",
         5,
-        {"color": "#8C8C8C", "symbol": "X", "requires_surface": False},
+        # Negro (antes gris #8C8C8C): leyenda oficial de docs/clinica, "Negro: dientes
+        # ausentes o restos radiculares" (Fase B).
+        {"color": "#1A1A1A", "symbol": "X", "requires_surface": False},
     ),
     (
         "odontogram_finding",
@@ -1125,7 +1144,9 @@ CATALOG_SEEDS: list[tuple[str, str, str, int, dict[str, object]]] = [
         "sellador",
         "Sellador",
         9,
-        {"color": "#6AB04C", "symbol": "S", "requires_surface": True},
+        # Reasignado de verde (ahora de "biopelicula_tartaro") a magenta: leyenda
+        # oficial de docs/clinica reserva el verde para biopelicula/tartaro (Fase B).
+        {"color": "#A8407D", "symbol": "S", "requires_surface": True},
     ),
     (
         "odontogram_finding",
@@ -1140,6 +1161,15 @@ CATALOG_SEEDS: list[tuple[str, str, str, int, dict[str, object]]] = [
         "Movilidad",
         11,
         {"color": "#C77D1E", "symbol": "MO", "requires_surface": False},
+    ),
+    (
+        "odontogram_finding",
+        "biopelicula_tartaro",
+        "Biopelicula y tartaro dental",
+        12,
+        # Hallazgo nuevo (Fase B, leyenda oficial de docs/clinica: "Verde: biopelicula y
+        # tartaro dental"): reusa el verde que antes tenia "sellador".
+        {"color": "#6AB04C", "symbol": "BT", "requires_surface": True},
     ),
     ("diagnosis", "caries", "Caries dental", 0, {}),
     ("diagnosis", "caries_recurrente", "Caries recurrente", 1, {}),
@@ -1300,6 +1330,218 @@ CATALOG_SEEDS: list[tuple[str, str, str, int, dict[str, object]]] = [
         10,
         {"alert_label": "Paciente usa inmunosupresores"},
     ),
+    # Fase A (rediseno del expediente segun formatos oficiales, docs/clinica):
+    # Historia Clinica General. Valores por defecto razonables, pendientes de
+    # validar con la clinica real (ver docs/PENDIENTES_CLINICOS.md).
+    ("family_relationship", "padre", "Padre", 0, {}),
+    ("family_relationship", "madre", "Madre", 1, {}),
+    ("family_relationship", "hermano_a", "Hermano(a)", 2, {}),
+    ("family_relationship", "abuelo_paterno", "Abuelo paterno", 3, {}),
+    ("family_relationship", "abuela_paterna", "Abuela paterna", 4, {}),
+    ("family_relationship", "abuelo_materno", "Abuelo materno", 5, {}),
+    ("family_relationship", "abuela_materna", "Abuela materna", 6, {}),
+    (
+        "family_condition",
+        "diabetes_mellitus",
+        "Diabetes mellitus",
+        0,
+        {"alert_label": "Antecedente heredofamiliar de diabetes"},
+    ),
+    (
+        "family_condition",
+        "hipertension",
+        "Hipertension",
+        1,
+        {"alert_label": "Antecedente heredofamiliar de hipertension"},
+    ),
+    ("family_condition", "enfermedades_renales", "Enfermedades renales", 2, {}),
+    ("family_condition", "ets", "Enfermedades de transmision sexual", 3, {}),
+    ("family_condition", "hepatitis_abc", "Hepatitis A, B o C", 4, {}),
+    ("family_condition", "cancer", "Cancer", 5, {}),
+    ("family_condition", "epilepsia", "Epilepsia", 6, {}),
+    ("family_condition", "tuberculosis", "Tuberculosis", 7, {}),
+    ("family_condition", "cardiopatias", "Cardiopatias", 8, {}),
+    ("family_condition", "artritis", "Artritis", 9, {}),
+    ("family_condition", "malformaciones", "Malformaciones congenitas", 10, {}),
+    ("family_condition", "discapacidad_fisica", "Discapacidad fisica", 11, {}),
+    (
+        "family_condition",
+        "padecimientos_psicologicos",
+        "Padecimientos psicologicos",
+        12,
+        {},
+    ),
+    ("family_condition", "alcoholismo", "Alcoholismo", 13, {}),
+    ("family_condition", "tabaquismo", "Tabaquismo", 14, {}),
+    ("family_condition", "aparentemente_sano", "Aparentemente sano", 15, {}),
+    (
+        "pathological_condition",
+        "diabetes",
+        "Diabetes",
+        0,
+        {"alert_label": "Paciente con diabetes"},
+    ),
+    (
+        "pathological_condition",
+        "hipertension",
+        "Hipertension",
+        1,
+        {"alert_label": "Paciente hipertenso"},
+    ),
+    ("pathological_condition", "enfermedades_renales", "Enfermedades renales", 2, {}),
+    ("pathological_condition", "ets", "Enfermedades de transmision sexual", 3, {}),
+    (
+        "pathological_condition",
+        "hepatitis",
+        "Hepatitis",
+        4,
+        {"alert_label": "Paciente con hepatitis"},
+    ),
+    ("pathological_condition", "cancer", "Cancer", 5, {}),
+    (
+        "pathological_condition",
+        "epilepsia",
+        "Epilepsia",
+        6,
+        {"alert_label": "Paciente con epilepsia"},
+    ),
+    ("pathological_condition", "tuberculosis", "Tuberculosis", 7, {}),
+    (
+        "pathological_condition",
+        "cardiopatias",
+        "Cardiopatias",
+        8,
+        {"alert_label": "Paciente con cardiopatia"},
+    ),
+    ("pathological_condition", "artritis", "Artritis", 9, {}),
+    ("pathological_condition", "malformaciones", "Malformaciones congenitas", 10, {}),
+    ("pathological_condition", "discapacidad_fisica", "Discapacidad fisica", 11, {}),
+    (
+        "pathological_condition",
+        "padecimientos_psicologicos",
+        "Padecimientos psicologicos",
+        12,
+        {},
+    ),
+    ("pathological_condition", "depresion", "Depresion", 13, {}),
+    ("pathological_condition", "varicela", "Varicela", 14, {}),
+    ("pathological_condition", "viruela", "Viruela", 15, {}),
+    ("pathological_condition", "otro", "Otro", 16, {}),
+    ("systems_review_finding", "anemia", "Anemia", 0, {"system": "hematologico"}),
+    (
+        "systems_review_finding",
+        "hemorragias_frecuentes",
+        "Hemorragias frecuentes",
+        1,
+        {"system": "hematologico"},
+    ),
+    ("systems_review_finding", "transfusiones", "Transfusiones", 2, {"system": "hematologico"}),
+    (
+        "systems_review_finding",
+        "hipertension_cv",
+        "Hipertension",
+        3,
+        {"system": "cardiovascular"},
+    ),
+    (
+        "systems_review_finding",
+        "soplo_cardiaco",
+        "Soplo cardiaco",
+        4,
+        {"system": "cardiovascular"},
+    ),
+    (
+        "systems_review_finding",
+        "fiebre_reumatica",
+        "Fiebre reumatica",
+        5,
+        {"system": "cardiovascular"},
+    ),
+    ("systems_review_finding", "arritmias", "Arritmias", 6, {"system": "cardiovascular"}),
+    ("systems_review_finding", "convulsiones", "Convulsiones", 7, {"system": "neurologico"}),
+    ("systems_review_finding", "desmayos", "Desmayos", 8, {"system": "neurologico"}),
+    ("systems_review_finding", "migrana", "Migrana", 9, {"system": "neurologico"}),
+    ("systems_review_finding", "paralisis", "Paralisis", 10, {"system": "neurologico"}),
+    ("systems_review_finding", "diabetes_endocrino", "Diabetes", 11, {"system": "endocrino"}),
+    (
+        "systems_review_finding",
+        "trastornos_tiroideos",
+        "Trastornos tiroideos",
+        12,
+        {"system": "endocrino"},
+    ),
+    (
+        "systems_review_finding",
+        "trastornos_crecimiento",
+        "Trastornos del crecimiento",
+        13,
+        {"system": "endocrino"},
+    ),
+    ("systems_review_finding", "asma", "Asma", 14, {"system": "respiratorio"}),
+    ("systems_review_finding", "bronquitis", "Bronquitis", 15, {"system": "respiratorio"}),
+    (
+        "systems_review_finding",
+        "tuberculosis_resp",
+        "Tuberculosis",
+        16,
+        {"system": "respiratorio"},
+    ),
+    ("systems_review_finding", "sinusitis", "Sinusitis", 17, {"system": "respiratorio"}),
+    (
+        "systems_review_finding",
+        "infecciones_urinarias",
+        "Infecciones urinarias",
+        18,
+        {"system": "genitourinario"},
+    ),
+    (
+        "systems_review_finding",
+        "insuficiencia_renal",
+        "Insuficiencia renal",
+        19,
+        {"system": "genitourinario"},
+    ),
+    (
+        "systems_review_finding",
+        "calculos_renales",
+        "Calculos renales",
+        20,
+        {"system": "genitourinario"},
+    ),
+    # Fase C (rediseno del expediente, docs/clinica): Historia Clinica
+    # Odontologica -- craneo, biotipo facial y las preguntas de la anamnesis
+    # periodontal (cuestionario de entrevista, no sondeo clinico).
+    ("skull_type", "mesocefalo", "Mesocefalo", 0, {}),
+    ("skull_type", "braquicefalo", "Braquicefalo", 1, {}),
+    ("skull_type", "dolicocefalo", "Dolicocefalo", 2, {}),
+    ("facial_biotype", "mesofacial", "Mesofacial", 0, {}),
+    ("facial_biotype", "braquifacial", "Braquifacial", 1, {}),
+    ("facial_biotype", "dolicofacial", "Dolicofacial", 2, {}),
+    *[
+        ("periodontal_anamnesis_question", code, text, sort_order, {})
+        for sort_order, (code, text) in enumerate(
+            odontological_history_rules.PERIODONTAL_ANAMNESIS_QUESTIONS
+        )
+    ],
+    # Fase E (rediseno del expediente, docs/clinica): Historia Clinica
+    # Pediatrica -- caracter del paciente, planos terminales y anomalias del
+    # odontograma pediatrico (incluye ausente congenito/adquirida, ver nota de
+    # correccion en pediatric_history/rules.py -- NO toca `odontogram_finding`).
+    ("pediatric_character", "apatico", "Apatico", 0, {}),
+    ("pediatric_character", "introvertido_moderado", "Introvertido moderado", 1, {}),
+    ("pediatric_character", "inquieto", "Inquieto", 2, {}),
+    ("pediatric_character", "irritable", "Irritable", 3, {}),
+    ("pediatric_character", "hiperactivo", "Hiperactivo", 4, {}),
+    ("pediatric_character", "agresivo", "Agresivo", 5, {}),
+    ("terminal_plane", "recto", "Recto", 0, {}),
+    ("terminal_plane", "mesial", "Mesial", 1, {}),
+    ("terminal_plane", "distal", "Distal", 2, {}),
+    *[
+        ("pediatric_tooth_anomaly", code, name, sort_order, {})
+        for sort_order, (code, name) in enumerate(
+            pediatric_history_rules.PEDIATRIC_TOOTH_ANOMALY_OPTIONS
+        )
+    ],
 ]
 
 

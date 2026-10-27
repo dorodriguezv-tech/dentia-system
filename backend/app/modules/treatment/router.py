@@ -8,6 +8,7 @@ from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
 from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.branding import service as branding_service
+from app.modules.documents.pdf_header import get_pdf_header_info
 from app.modules.iam.models import User
 from app.modules.patients.models import Patient
 from app.modules.treatment import service
@@ -355,7 +356,7 @@ async def get_plan_pdf(
     plan, phases = await service.get_plan_detail(db, clinic_id=clinic_id, plan_id=plan_id)
     patient = await db.get(Patient, plan.patient_id)
     branding = await branding_service.get_branding(db)
-    logo = await branding_service.read_logo(db, storage)
+    header = await get_pdf_header_info(db, storage, clinic_id=clinic_id)
 
     phase_rows = []
     grand_total = Decimal("0")
@@ -389,9 +390,8 @@ async def get_plan_pdf(
         acceptance_label = f"Rechazado: {plan.rejected_reason}"
 
     pdf_bytes = build_budget_pdf(
-        clinic_name=branding.display_name,
+        header=header,
         primary_color_hex=branding.colors.primary,
-        logo=logo,
         patient_name=patient.full_name if patient else "",
         plan_title=plan.title,
         plan_status_label=PLAN_STATUS_LABELS[plan.status],

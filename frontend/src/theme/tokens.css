@@ -39,13 +39,27 @@
   --color-finding-restauracion: #4a90c2;
   --color-finding-corona: #e0a100;
   --color-finding-endodoncia: #7b5ea7;
-  --color-finding-ausente: #8c8c8c;
+  /* "ausente" paso de gris a negro (leyenda oficial de docs/clinica, Fase B): un negro
+     real -- no #000 puro, para no leerse como un color "sin definir"/por accidente -- que
+     funciona igual de bien si la clinica configura un tema oscuro (este archivo no tiene
+     variante de tema oscuro para --color-finding-*: son semanticos y fijos, igual que
+     --color-danger, independientes de --color-surface/--color-bg de la marca; el simbolo
+     "X" se dibuja con --color-surface, blanco por defecto, con contraste alto sobre este
+     negro). */
+  --color-finding-ausente: #1a1a1a;
   --color-finding-extraccion_indicada: #d64545;
   --color-finding-implante: #2bb3a3;
   --color-finding-protesis_fija: #3a7fc1;
-  --color-finding-sellador: #6ab04c;
+  /* "sellador" se movio de verde (ahora reservado para "biopelicula_tartaro", leyenda
+     oficial) a este magenta, para no confundirse visualmente con la leyenda oficial de 4
+     colores (rojo/azul/negro/verde) de docs/clinica. */
+  --color-finding-sellador: #a8407d;
   --color-finding-fractura: #b8460e;
   --color-finding-movilidad: #c77d1e;
+  /* Hallazgo nuevo (Fase B): mismo verde que antes tenia "sellador" -- ya funcionaba bien
+     de contraste y es, literalmente, el "Verde: biopelicula y tartaro dental" de la
+     leyenda oficial de docs/clinica. */
+  --color-finding-biopelicula_tartaro: #6ab04c;
 
   /* Colores por estado de cita (Fase 6): semanticos y fijos, independientes de la
      marca de la clinica, igual que los de --color-finding-*. Oscurecidos en la

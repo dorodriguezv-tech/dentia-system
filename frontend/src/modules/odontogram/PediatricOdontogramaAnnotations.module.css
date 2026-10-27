@@ -1,0 +1,130 @@
+/** Fase E (rediseno del expediente, docs/clinica): capa de anotaciones por
+ * pieza del odontograma pediatrico. Decision de diseno (ver comentario en
+ * PediatricOdontogramaAnnotations.tsx): esta franja se renderiza DEBAJO del
+ * <Odontograma> ya existente, no superpuesta en pixeles sobre su SVG --
+ * reutiliza el mismo orden de filas/columnas FDI de toothRules.ts para que
+ * cada celda corresponda visualmente a la misma posicion relativa que la
+ * pieza real de arriba, sin depender de medir el DOM del odontograma (que usa
+ * flexbox con scroll horizontal y cambia de ancho segun el viewMode
+ * permanente/temporal/mixta elegido dentro de ese componente, no expuesto
+ * hacia afuera). */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.row {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+
+.rowLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.midline {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 0.25rem 0;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 34px;
+}
+
+.cellNumber {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}
+
+.badge,
+.badgeEmpty,
+.triangle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 16px;
+}
+
+.badge {
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background-color: var(--color-primary);
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.badgeEmpty {
+  color: var(--color-border);
+  font-size: 0.6rem;
+}
+
+.triangle {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 14px solid var(--triangle-color, var(--color-warning));
+}
+
+.triangleCongenital {
+  --triangle-color: var(--color-warning);
+}
+
+.triangleAcquired {
+  --triangle-color: var(--color-success);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legendTriangle {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 10px solid var(--triangle-color, var(--color-warning));
+}

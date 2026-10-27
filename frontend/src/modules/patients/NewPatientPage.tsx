@@ -6,11 +6,14 @@ import * as agendaApi from '../agenda/api'
 import * as api from './api'
 import styles from './NewPatientPage.module.css'
 import {
+  calculatePatientTypeFromDob,
   CONTACT_ROLE_LABELS,
+  PATIENT_TYPE_LABELS,
   type ContactCreateInput,
   type ContactRole,
   type DuplicateCandidateOut,
   type PatientCreateInput,
+  type PatientTypeCode,
   type SexCode,
 } from './types'
 
@@ -22,11 +25,25 @@ const EMPTY_PATIENT: PatientCreateInput = {
   last_name_maternal: '',
   date_of_birth: '',
   sex: null,
+  // null = "Calcular automaticamente" (el backend lo calcula desde date_of_birth).
+  patient_type: null,
   phone: '',
   email: '',
   address: '',
   default_resource_id: null,
   primary_provider_id: null,
+  // Fase A (rediseno del expediente, docs/clinica): campos compartidos que
+  // autollenan la Historia Clinica General -- texto libre, el backend no los
+  // restringe a un catalogo fijo (ver backend/app/modules/patients/schemas.py).
+  birth_place: '',
+  blood_type: '',
+  education_level: '',
+  can_read_write: null,
+  religion: '',
+  ethnic_group: '',
+  race: '',
+  occupation: '',
+  marital_status: '',
 }
 
 export function NewPatientPage() {
@@ -59,6 +76,15 @@ export function NewPatientPage() {
   function updateField<K extends keyof PatientCreateInput>(key: K, value: PatientCreateInput[K]) {
     setPatient((prev) => ({ ...prev, [key]: value }))
   }
+
+  // Vista previa reactiva (visual, no bloqueante): si el usuario deja "Calcular
+  // automaticamente" (patient_type === null), se muestra lo que el backend
+  // calculara a partir de la fecha de nacimiento con el mismo corte de 12 anios
+  // (calculatePatientTypeFromDob). Si el usuario elige un tipo explicito, se
+  // respeta ese valor y no se recalcula.
+  const patientTypePreview: PatientTypeCode | null =
+    patient.patient_type ?? calculatePatientTypeFromDob(patient.date_of_birth)
+  const isPediatricPreview = patientTypePreview === 'pediatrico'
 
   async function handleDatosSubmit(event: FormEvent) {
     event.preventDefault()
@@ -95,6 +121,14 @@ export function NewPatientPage() {
         phone: patient.phone || null,
         email: patient.email || null,
         address: patient.address || null,
+        birth_place: patient.birth_place || null,
+        blood_type: patient.blood_type || null,
+        education_level: patient.education_level || null,
+        religion: patient.religion || null,
+        ethnic_group: patient.ethnic_group || null,
+        race: patient.race || null,
+        occupation: patient.occupation || null,
+        marital_status: patient.marital_status || null,
       })
       for (const contact of contacts) {
         await api.createContact(created.id, contact)
@@ -118,7 +152,10 @@ export function NewPatientPage() {
             2. Posibles duplicados
           </span>
           <span>›</span>
-          <span className={step === 'contactos' ? styles.stepActive : undefined}>3. Contactos</span>
+          <span className={step === 'contactos' ? styles.stepActive : undefined}>
+            3. Contactos
+            {isPediatricPreview && ' (recomendado: tutor/responsable)'}
+          </span>
         </div>
 
         {error && <div className={styles.errorBox}>{error}</div>}
@@ -176,12 +213,38 @@ export function NewPatientPage() {
                 </select>
               </div>
               <div className={styles.field}>
+                <label htmlFor="patient_type">Tipo de paciente</label>
+                <select
+                  id="patient_type"
+                  value={patient.patient_type ?? ''}
+                  onChange={(e) =>
+                    updateField(
+                      'patient_type',
+                      (e.target.value || null) as PatientTypeCode | null,
+                    )
+                  }
+                >
+                  <option value="">
+                    Calcular automáticamente
+                    {patientTypePreview ? ` (${PATIENT_TYPE_LABELS[patientTypePreview]})` : ''}
+                  </option>
+                  <option value="pediatrico">Pediátrico</option>
+                  <option value="adulto">Adulto</option>
+                </select>
+              </div>
+              <div className={styles.field}>
                 <label htmlFor="phone">Telefono</label>
                 <input
                   id="phone"
                   value={patient.phone ?? ''}
                   onChange={(e) => updateField('phone', e.target.value)}
                 />
+                {isPediatricPreview && (
+                  <small className={styles.helpText}>
+                    Opcional para pacientes pediátricos — se recomienda capturar el teléfono del
+                    tutor en la sección de Contactos.
+                  </small>
+                )}
               </div>
               <div className={styles.field}>
                 <label htmlFor="email">Correo</label>
@@ -191,6 +254,12 @@ export function NewPatientPage() {
                   value={patient.email ?? ''}
                   onChange={(e) => updateField('email', e.target.value)}
                 />
+                {isPediatricPreview && (
+                  <small className={styles.helpText}>
+                    Opcional para pacientes pediátricos — se recomienda capturar el correo del
+                    tutor en la sección de Contactos.
+                  </small>
+                )}
               </div>
               <div className={styles.field}>
                 <label htmlFor="address">Direccion</label>
@@ -229,6 +298,92 @@ export function NewPatientPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            <h2>Datos adicionales (Historia Clínica General)</h2>
+            <div className={styles.grid}>
+              <div className={styles.field}>
+                <label htmlFor="birth_place">Lugar de nacimiento</label>
+                <input
+                  id="birth_place"
+                  value={patient.birth_place ?? ''}
+                  onChange={(e) => updateField('birth_place', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="blood_type">Tipo sanguíneo</label>
+                <input
+                  id="blood_type"
+                  placeholder="p.ej. O+"
+                  value={patient.blood_type ?? ''}
+                  onChange={(e) => updateField('blood_type', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="education_level">Escolaridad</label>
+                <input
+                  id="education_level"
+                  value={patient.education_level ?? ''}
+                  onChange={(e) => updateField('education_level', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="can_read_write">Sabe leer y escribir</label>
+                <select
+                  id="can_read_write"
+                  value={patient.can_read_write === null ? '' : String(patient.can_read_write)}
+                  onChange={(e) =>
+                    updateField(
+                      'can_read_write',
+                      e.target.value === '' ? null : e.target.value === 'true',
+                    )
+                  }
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="religion">Religión</label>
+                <input
+                  id="religion"
+                  value={patient.religion ?? ''}
+                  onChange={(e) => updateField('religion', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="ethnic_group">Grupo étnico</label>
+                <input
+                  id="ethnic_group"
+                  value={patient.ethnic_group ?? ''}
+                  onChange={(e) => updateField('ethnic_group', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="race">Raza</label>
+                <input
+                  id="race"
+                  value={patient.race ?? ''}
+                  onChange={(e) => updateField('race', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="occupation">Ocupación</label>
+                <input
+                  id="occupation"
+                  value={patient.occupation ?? ''}
+                  onChange={(e) => updateField('occupation', e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="marital_status">Estado civil</label>
+                <input
+                  id="marital_status"
+                  value={patient.marital_status ?? ''}
+                  onChange={(e) => updateField('marital_status', e.target.value)}
+                />
               </div>
             </div>
             <div className={styles.actions}>
@@ -289,6 +444,7 @@ export function NewPatientPage() {
             onBack={() => setStep('datos')}
             onSubmit={handleCreate}
             creating={creating}
+            highlightGuardian={isPediatricPreview}
           />
         )}
       </div>
@@ -302,12 +458,14 @@ function ContactsStep({
   onBack,
   onSubmit,
   creating,
+  highlightGuardian,
 }: {
   contacts: ContactCreateInput[]
   onChange: (contacts: ContactCreateInput[]) => void
   onBack: () => void
   onSubmit: () => void
   creating: boolean
+  highlightGuardian?: boolean
 }) {
   const [role, setRole] = useState<ContactRole>('guardian')
   const [fullName, setFullName] = useState('')
@@ -333,6 +491,12 @@ function ContactsStep({
   return (
     <div>
       <p>Tutor/responsable y contacto de emergencia (opcional, puedes agregarlos despues).</p>
+      {highlightGuardian && (
+        <div className={styles.warningBox}>
+          Paciente pediátrico: se recomienda capturar aquí al tutor o responsable, con su
+          teléfono y/o correo, ya que el paciente no tiene por qué tener los suyos propios.
+        </div>
+      )}
 
       <div className={styles.contactList}>
         {contacts.map((c, i) => (
