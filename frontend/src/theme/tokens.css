@@ -21,6 +21,13 @@
 
   --color-success: #3ba55c;
   --color-warning: #e0a100;
+  /* Variante oscura de --color-warning para TEXTO sobre fondos claros (p.ej. el
+     badge "Faltan datos"): #e0a100 solo da 2.26:1 de contraste sobre blanco
+     (axe-core, WCAG 1.4.3 AA exige 4.5:1). No se cambia --color-warning en si
+     porque tambien es el color del "Triangulo amarillo" (ausente congenito) del
+     odontograma pediatrico (docs/clinica) -- oscurecerlo ahi dejaria de leerse
+     como amarillo. #92400e da ~7.1:1 sobre blanco. */
+  --color-warning-text: #92400e;
   --color-danger: #d64545;
   --color-danger-soft: #fbe9e9;
 

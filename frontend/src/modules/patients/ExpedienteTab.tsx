@@ -2025,7 +2025,7 @@ function DiagnosisSection({
   })
 
   return (
-    <details className={styles.card}>
+    <details className={styles.card} open>
       <summary>Diagnosticos</summary>
       {diagnosesQuery.data
         ?.filter((item: DiagnosisOut) => item.is_active)
