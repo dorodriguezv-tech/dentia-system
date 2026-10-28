@@ -1169,9 +1169,11 @@ function DiagnosisTreatmentSection({
 
 // --------------------------------------------------------------------------------
 // 6. Odontograma de diagnostico/evolucion -- seccion "ancla": es la UNICA
-// seccion de esta pestana que renderiza el EncounterPickerField. Ronda de
-// correcciones 2.1: empieza cerrada por defecto, sin excepcion -- igual que
-// todas las demas.  18 codigos por pieza (0-17), solo piezas permanentes.
+// seccion de esta pestana que renderiza el EncounterPickerField, por eso
+// empieza ABIERTA por defecto (correccion posterior a la ronda 2.1: cerrarla
+// como a las demas ocultaba el unico control para seleccionar/iniciar una
+// atencion, deshabilitando en silencio el resto de la pestana). 18 codigos
+// por pieza (0-17), solo piezas permanentes.
 // --------------------------------------------------------------------------------
 
 function ToothCodeGrid({
@@ -1281,7 +1283,12 @@ function ToothDiagnosisCodeSection({
   }
 
   return (
-    <details className={`${styles.card} ${styles.fullWidth}`}>
+    // Correccion: esta es la UNICA seccion de la pestana que renderiza el
+    // EncounterPickerField -- cerrarla por defecto (ronda 2.1) dejaba sin
+    // forma de seleccionar/iniciar una atencion a quien no la abriera
+    // primero, deshabilitando en silencio TODO lo demas en Historia de
+    // Endodoncia.
+    <details className={`${styles.card} ${styles.fullWidth}`} open>
       <summary>Odontograma de diagnóstico y evolución (18 códigos)</summary>
 
       {canWrite && <EncounterPickerField encounterPicker={encounterPicker} />}

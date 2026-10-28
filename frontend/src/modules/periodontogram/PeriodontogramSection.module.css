@@ -38,6 +38,24 @@
   white-space: nowrap;
 }
 
+/* Corrección: la columna completa de una pieza+sitio (no solo el botón de
+   encabezado Mesio/Centro/Disto) es clicable para abrir el panel de
+   edición -- mayor área de toque y más fácil de descubrir. */
+.dataCellClickable {
+  cursor: pointer;
+}
+
+.dataCellClickable:hover {
+  background-color: var(--color-bg);
+}
+
+/* Resalta visualmente toda la columna de la pieza+sitio que se está
+   editando en el panel de abajo, para que quede claro a qué celdas
+   corresponden los valores que se estan capturando/guardando. */
+.dataCellSelected {
+  background-color: var(--color-primary-soft);
+}
+
 .boolYes {
   color: var(--color-danger);
   font-weight: 600;
@@ -73,6 +91,22 @@
 .editPanelHeader h4 {
   margin: 0;
   font-size: 0.9rem;
+}
+
+.editPanelActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Confirmacion visible tras guardar un sitio de sondeo -- el panel ya NO se
+   cierra solo al guardar (correccion: antes se cerraba de inmediato y daba
+   la sensacion de "no paso nada"), se queda abierto mostrando esto para que
+   quede claro que si se guardo. */
+.savedConfirmation {
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .legendList {

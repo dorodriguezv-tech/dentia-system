@@ -1165,7 +1165,13 @@ function OdontogramDiagnosisSection({
   }
 
   return (
-    <details className={`${styles.card} ${styles.fullWidth}`}>
+    // Correccion: esta es la UNICA seccion de la pestana que renderiza el
+    // EncounterPickerField -- cerrarla por defecto (ronda 2.1) dejaba sin
+    // forma de seleccionar/iniciar una atencion a quien no la abriera
+    // primero, deshabilitando en silencio TODO lo demas en Historia
+    // Odontologica (incluido el Periodontograma). Se queda abierta, mismo
+    // criterio ya aplicado a "Diagnosticos" en Historia General.
+    <details className={`${styles.card} ${styles.fullWidth}`} open>
       <summary>Odontograma de diagnóstico</summary>
 
       {canReadOdo ? (

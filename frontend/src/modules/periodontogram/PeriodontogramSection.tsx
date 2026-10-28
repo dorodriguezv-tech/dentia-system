@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LOWER_PERMANENT_ROW, UPPER_PERMANENT_ROW } from '../odontogram/toothRules'
 import { AUTO_CORRECTION_REASON, latestActive, saveWithAutoCorrection } from '../patients/historyHelpers'
@@ -88,7 +89,9 @@ function ProbingSiteEditPanel({
   site,
   current,
   pending,
+  justSaved,
   encounterMissing,
+  panelRef,
   onClose,
   onSubmit,
 }: {
@@ -96,7 +99,9 @@ function ProbingSiteEditPanel({
   site: ProbingSite
   current: PeriodontalProbingSiteOut | undefined
   pending: boolean
+  justSaved: boolean
   encounterMissing: boolean
+  panelRef: RefObject<HTMLDivElement>
   onClose: () => void
   onSubmit: (data: {
     probing_depth_mm: number
@@ -139,7 +144,7 @@ function ProbingSiteEditPanel({
   const siteLabel = PROBING_SITE_LABELS[site]
 
   return (
-    <div className={localStyles.editPanel}>
+    <div className={localStyles.editPanel} ref={panelRef}>
       <div className={localStyles.editPanelHeader}>
         <h4>
           Pieza {tooth} — {siteLabel}
@@ -148,6 +153,14 @@ function ProbingSiteEditPanel({
           Cerrar
         </button>
       </div>
+      {current && (
+        <p className={styles.helpText}>
+          Ya guardado: profundidad {current.probing_depth_mm} mm, recesión {current.recession_mm} mm,
+          NIC {current.clinical_attachment_level_mm ?? '—'} mm
+          {current.bleeding_on_probing ? ', con sangrado al sondaje' : ''}
+          {current.suppuration ? ', con supuración' : ''}. Edita y guarda para corregirlo.
+        </p>
+      )}
       <label className={styles.fieldRow}>
         <span>Profundidad de sondaje (mm)</span>
         <input
@@ -189,23 +202,26 @@ function ProbingSiteEditPanel({
         />
         Supuración
       </label>
-      <button
-        className={styles.primaryButton}
-        type="button"
-        disabled={!valid || pending || encounterMissing}
-        title={encounterMissing ? 'Selecciona o inicia una atencion' : undefined}
-        onClick={() =>
-          valid &&
-          onSubmit({
-            probing_depth_mm: depthNum as number,
-            recession_mm: recessionNum as number,
-            bleeding_on_probing: bleeding,
-            suppuration,
-          })
-        }
-      >
-        {pending ? 'Guardando...' : 'Guardar sondeo'}
-      </button>
+      <div className={localStyles.editPanelActions}>
+        <button
+          className={styles.primaryButton}
+          type="button"
+          disabled={!valid || pending || encounterMissing}
+          title={encounterMissing ? 'Selecciona o inicia una atencion' : undefined}
+          onClick={() =>
+            valid &&
+            onSubmit({
+              probing_depth_mm: depthNum as number,
+              recession_mm: recessionNum as number,
+              bleeding_on_probing: bleeding,
+              suppuration,
+            })
+          }
+        >
+          {pending ? 'Guardando...' : 'Guardar sondeo'}
+        </button>
+        {justSaved && <span className={localStyles.savedConfirmation}>Guardado ✓</span>}
+      </div>
     </div>
   )
 }
@@ -227,15 +243,32 @@ function ProbingSitesSection({
     queryFn: () => periodontogramApi.listProbingSites(patientId),
   })
   const [selection, setSelection] = useState<{ tooth: string; site: ProbingSite } | null>(null)
+  // Correccion: clave "pieza|sitio" del ultimo guardado exitoso, para mostrar
+  // "Guardado ✓" sin cerrar el panel (antes se cerraba solo, dando la
+  // sensacion de que no habia pasado nada). Se limpia al elegir otra
+  // pieza/sitio.
+  const [justSavedKey, setJustSavedKey] = useState<string | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
 
   const activeByKey = latestActiveByKey(listQuery.data, (item) => `${item.tooth_fdi}|${item.site}`)
+
+  function selectSite(tooth: string, site: ProbingSite) {
+    setJustSavedKey(null)
+    setSelection({ tooth, site })
+    // Corrección: el panel vive debajo de las 2 tablas -- en monitores
+    // chicos o tableta puede quedar fuera de la vista al abrirse, dando la
+    // sensación de que el clic no hizo nada.
+    // jsdom (pruebas) no implementa scrollIntoView -- se protege la llamada
+    // en vez de asumir que siempre existe en el entorno real del navegador.
+    requestAnimationFrame(() => panelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }))
+  }
 
   const createMutation = useMutation({
     mutationFn: (input: PeriodontalProbingSiteCreateInput) =>
       periodontogramApi.createProbingSite(patientId, input),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['periodontogram-probing-sites', patientId] })
-      setSelection(null)
+      setJustSavedKey(`${variables.tooth_fdi}|${variables.site}`)
     },
   })
 
@@ -266,7 +299,7 @@ function ProbingSitesSection({
                             type="button"
                             className={isSelected ? localStyles.siteButtonActive : localStyles.siteButton}
                             title={`Pieza ${tooth}: ${PROBING_SITE_LABELS[site]}`}
-                            onClick={() => setSelection({ tooth, site })}
+                            onClick={() => selectSite(tooth, site)}
                           >
                             {SUB_SITE_LABELS[idx]}
                           </button>
@@ -282,79 +315,73 @@ function ProbingSitesSection({
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <th>Profundidad (mm)</th>
-                {ALL_TEETH.flatMap((tooth) =>
-                  sites.map((site) => {
-                    const entry = activeByKey.get(`${tooth}|${site}`)
-                    return (
-                      <td key={`${tooth}-${site}-depth`} className={localStyles.dataCell}>
-                        {entry ? entry.probing_depth_mm : '—'}
-                      </td>
-                    )
-                  }),
-                )}
-              </tr>
-              <tr>
-                <th>Recesión (mm)</th>
-                {ALL_TEETH.flatMap((tooth) =>
-                  sites.map((site) => {
-                    const entry = activeByKey.get(`${tooth}|${site}`)
-                    return (
-                      <td key={`${tooth}-${site}-rec`} className={localStyles.dataCell}>
-                        {entry ? entry.recession_mm : '—'}
-                      </td>
-                    )
-                  }),
-                )}
-              </tr>
-              <tr>
-                <th>NIC (calculado)</th>
-                {ALL_TEETH.flatMap((tooth) =>
-                  sites.map((site) => {
-                    const entry = activeByKey.get(`${tooth}|${site}`)
-                    return (
-                      <td key={`${tooth}-${site}-nic`} className={localStyles.dataCell}>
-                        {entry?.clinical_attachment_level_mm ?? '—'}
-                      </td>
-                    )
-                  }),
-                )}
-              </tr>
-              <tr>
-                <th>Sangrado</th>
-                {ALL_TEETH.flatMap((tooth) =>
-                  sites.map((site) => {
-                    const entry = activeByKey.get(`${tooth}|${site}`)
-                    return (
-                      <td key={`${tooth}-${site}-bleed`} className={localStyles.dataCell}>
-                        {entry?.bleeding_on_probing ? (
-                          <span className={localStyles.boolYes}>Sí</span>
-                        ) : (
-                          <span className={localStyles.boolDash}>—</span>
-                        )}
-                      </td>
-                    )
-                  }),
-                )}
-              </tr>
-              <tr>
-                <th>Supuración</th>
-                {ALL_TEETH.flatMap((tooth) =>
-                  sites.map((site) => {
-                    const entry = activeByKey.get(`${tooth}|${site}`)
-                    return (
-                      <td key={`${tooth}-${site}-supp`} className={localStyles.dataCell}>
-                        {entry?.suppuration ? (
-                          <span className={localStyles.boolYes}>Sí</span>
-                        ) : (
-                          <span className={localStyles.boolDash}>—</span>
-                        )}
-                      </td>
-                    )
-                  }),
-                )}
-              </tr>
+              {(
+                [
+                  {
+                    label: 'Profundidad (mm)',
+                    render: (entry: PeriodontalProbingSiteOut | undefined) =>
+                      entry ? entry.probing_depth_mm : '—',
+                  },
+                  {
+                    label: 'Recesión (mm)',
+                    render: (entry: PeriodontalProbingSiteOut | undefined) =>
+                      entry ? entry.recession_mm : '—',
+                  },
+                  {
+                    label: 'NIC (calculado)',
+                    render: (entry: PeriodontalProbingSiteOut | undefined) =>
+                      entry?.clinical_attachment_level_mm ?? '—',
+                  },
+                  {
+                    label: 'Sangrado',
+                    render: (entry: PeriodontalProbingSiteOut | undefined) =>
+                      entry?.bleeding_on_probing ? (
+                        <span className={localStyles.boolYes}>Sí</span>
+                      ) : (
+                        <span className={localStyles.boolDash}>—</span>
+                      ),
+                  },
+                  {
+                    label: 'Supuración',
+                    render: (entry: PeriodontalProbingSiteOut | undefined) =>
+                      entry?.suppuration ? (
+                        <span className={localStyles.boolYes}>Sí</span>
+                      ) : (
+                        <span className={localStyles.boolDash}>—</span>
+                      ),
+                  },
+                ] as const
+              ).map((row) => (
+                <tr key={row.label}>
+                  <th>{row.label}</th>
+                  {ALL_TEETH.flatMap((tooth) =>
+                    sites.map((site) => {
+                      const entry = activeByKey.get(`${tooth}|${site}`)
+                      const isSelected = selection?.tooth === tooth && selection.site === site
+                      const cellClass = [
+                        localStyles.dataCell,
+                        canWrite ? localStyles.dataCellClickable : '',
+                        isSelected ? localStyles.dataCellSelected : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                      return (
+                        // El renglon entero de la columna (no solo el boton
+                        // Mesio/Centro/Disto del encabezado) abre el panel
+                        // de edicion -- correccion: antes solo el botoncito
+                        // del encabezado era clicable, poco descubrible.
+                        <td
+                          key={`${tooth}-${site}-${row.label}`}
+                          className={cellClass}
+                          onClick={canWrite ? () => selectSite(tooth, site) : undefined}
+                        >
+                          {row.render(entry)}
+                        </td>
+                      )
+                    }),
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -380,7 +407,9 @@ function ProbingSitesSection({
           site={selection.site}
           current={selectedEntry}
           pending={createMutation.isPending}
+          justSaved={justSavedKey === `${selection.tooth}|${selection.site}`}
           encounterMissing={!encounterId}
+          panelRef={panelRef}
           onClose={() => setSelection(null)}
           onSubmit={(data) =>
             createMutation.mutate({

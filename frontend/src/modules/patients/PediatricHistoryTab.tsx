@@ -1234,7 +1234,13 @@ function PediatricOdontogramSection({
   const teethWithEntries = [...entriesByTooth.keys()].sort()
 
   return (
-    <details className={`${styles.card} ${styles.fullWidth}`}>
+    // Correccion: esta es la UNICA seccion de la pestana que renderiza el
+    // EncounterPickerField -- quedo cerrada por defecto en la ronda 2.1 de
+    // correcciones (el comentario de arriba decia "abierta por defecto" pero
+    // el codigo no lo reflejaba), dejando sin forma de seleccionar/iniciar
+    // una atencion a quien no la abriera primero, y por lo tanto
+    // deshabilitando en silencio TODO lo demas en Historia Pediatrica.
+    <details className={`${styles.card} ${styles.fullWidth}`} open>
       <summary>Odontograma pediátrico (dentición mixta) y anotaciones por pieza</summary>
 
       {canReadOdo ? (
