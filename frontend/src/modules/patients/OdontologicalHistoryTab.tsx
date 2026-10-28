@@ -31,6 +31,7 @@ import {
 } from '../odontologicalHistory/types'
 import { Odontograma } from '../odontogram/Odontograma'
 import { LOWER_PERMANENT_ROW, UPPER_PERMANENT_ROW } from '../odontogram/toothRules'
+import { PeriodontogramSection } from '../periodontogram/PeriodontogramSection'
 import * as recordsApi from '../records/api'
 import { ADICCIONES_LABELS } from '../records/types'
 import { latestActive, saveWithAutoCorrection } from './historyHelpers'
@@ -2001,6 +2002,7 @@ export function OdontologicalHistoryTab({
         canWrite={canWrite}
         encounterPicker={encounterPicker}
       />
+      <PeriodontogramSection patientId={patientId} canWrite={canWrite} encounterId={encounterId} />
       <ParallelometerAnalysisSection
         patientId={patientId}
         canWrite={canWrite}

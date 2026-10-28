@@ -7,11 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.models import AiSuggestion
 from app.audit import service as audit_service
 from app.core.errors import AppError
+from app.core.storage import StorageBackend
 from app.modules.agenda import rules as agenda_rules
 from app.modules.agenda.models import Appointment
 from app.modules.agenda.schemas import StatusChangeRequest
+from app.modules.documents.pdf_header import get_pdf_header_info
 from app.modules.encounters import rules
 from app.modules.encounters.models import ClinicalNote, Encounter
+from app.modules.encounters.pdf import build_clinical_note_pdf
 from app.modules.encounters.schemas import (
     CancelNoteRequest,
     ClinicalNoteCreateRequest,
@@ -24,7 +27,9 @@ from app.modules.encounters.schemas import (
 )
 from app.modules.iam.models import User
 from app.modules.patients.models import Patient
-from app.modules.records.service import get_patient_alerts
+from app.modules.patients.rules import calculate_age
+from app.modules.records.rules import body_mass_index
+from app.modules.records.service import get_patient_alerts, list_vital_signs
 
 
 async def _get_patient_in_clinic(
@@ -248,6 +253,15 @@ async def create_note(
         soap_a=data.soap_a,
         soap_p=data.soap_p,
         free_text=data.free_text,
+        interrogatorio=data.interrogatorio,
+        medicamentos=data.medicamentos,
+        estudios_radiograficos=data.estudios_radiograficos,
+        descripcion_procedimiento=data.descripcion_procedimiento,
+        pronostico_evolucion=data.pronostico_evolucion,
+        indicaciones=data.indicaciones,
+        plan_proxima_cita=data.plan_proxima_cita,
+        fecha_proxima_cita=data.fecha_proxima_cita,
+        evaluacion_actualizacion=data.evaluacion_actualizacion,
         version=1,
         created_by=author_id,
     )
@@ -288,7 +302,22 @@ async def update_note(
             status_code=403,
         )
 
-    for field in ("soap_s", "soap_o", "soap_a", "soap_p", "free_text"):
+    for field in (
+        "soap_s",
+        "soap_o",
+        "soap_a",
+        "soap_p",
+        "free_text",
+        "interrogatorio",
+        "medicamentos",
+        "estudios_radiograficos",
+        "descripcion_procedimiento",
+        "pronostico_evolucion",
+        "indicaciones",
+        "plan_proxima_cita",
+        "fecha_proxima_cita",
+        "evaluacion_actualizacion",
+    ):
         value = getattr(data, field)
         if value is not None:
             setattr(note, field, value)
@@ -323,7 +352,20 @@ async def finalize_note(
         )
 
     note.content_hash = rules.compute_content_hash(
-        note.soap_s, note.soap_o, note.soap_a, note.soap_p, note.free_text
+        note.soap_s,
+        note.soap_o,
+        note.soap_a,
+        note.soap_p,
+        note.free_text,
+        interrogatorio=note.interrogatorio,
+        medicamentos=note.medicamentos,
+        estudios_radiograficos=note.estudios_radiograficos,
+        descripcion_procedimiento=note.descripcion_procedimiento,
+        pronostico_evolucion=note.pronostico_evolucion,
+        indicaciones=note.indicaciones,
+        plan_proxima_cita=note.plan_proxima_cita,
+        fecha_proxima_cita=note.fecha_proxima_cita,
+        evaluacion_actualizacion=note.evaluacion_actualizacion,
     )
     note.status = "FINAL"
     note.finalized_at = datetime.now(UTC)
@@ -371,6 +413,15 @@ async def correct_note(
         soap_a=old_note.soap_a,
         soap_p=old_note.soap_p,
         free_text=old_note.free_text,
+        interrogatorio=old_note.interrogatorio,
+        medicamentos=old_note.medicamentos,
+        estudios_radiograficos=old_note.estudios_radiograficos,
+        descripcion_procedimiento=old_note.descripcion_procedimiento,
+        pronostico_evolucion=old_note.pronostico_evolucion,
+        indicaciones=old_note.indicaciones,
+        plan_proxima_cita=old_note.plan_proxima_cita,
+        fecha_proxima_cita=old_note.fecha_proxima_cita,
+        evaluacion_actualizacion=old_note.evaluacion_actualizacion,
         version=old_note.version + 1,
         previous_version_id=old_note.id,
         correction_reason=data.reason,
@@ -449,3 +500,94 @@ async def get_patient_timeline(
             )
         )
     return entries
+
+
+_SEX_LABELS: dict[str | None, str] = {
+    "F": "Femenino",
+    "M": "Masculino",
+    "X": "Otro",
+    None: "No especificado",
+}
+
+_NOTE_STATUS_LABELS: dict[str, str] = {
+    "DRAFT": "Borrador",
+    "FINAL": "Finalizada",
+    "CORRECTED": "Corregida",
+    "CANCELLED": "Cancelada",
+}
+
+
+async def generate_note_pdf(
+    db: AsyncSession,
+    storage: StorageBackend,
+    *,
+    clinic_id: uuid.UUID,
+    note_id: uuid.UUID,
+    actor_id: uuid.UUID,
+) -> bytes:
+    """Fase D (docs/clinica/nota_evolucion.pdf): PDF de una nota de evolucion
+    puntual. Los signos vitales se autollenan con el `VitalSigns` capturado en
+    ESTA atencion si existe; si no, con el mas reciente del paciente (mismo
+    criterio de "menos redundancia" que el resto de la Fase D: no se
+    duplican columnas en `ClinicalNote`)."""
+    note = await _get_note_in_clinic(db, clinic_id=clinic_id, note_id=note_id)
+    patient = await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=note.patient_id)
+    professional = await db.get(User, note.author_id)
+    header = await get_pdf_header_info(db, storage, clinic_id=clinic_id)
+
+    vitals_list = await list_vital_signs(db, clinic_id=clinic_id, patient_id=note.patient_id)
+    vitals = next((v for v in vitals_list if v.encounter_id == note.encounter_id), None)
+    if vitals is None and vitals_list:
+        vitals = vitals_list[0]
+
+    bmi = body_mass_index(vitals.height_m, vitals.weight_kg) if vitals else None
+    tension = (
+        f"{vitals.bp_systolic}/{vitals.bp_diastolic}"
+        if vitals and vitals.bp_systolic is not None and vitals.bp_diastolic is not None
+        else "-"
+    )
+
+    pdf_bytes = build_clinical_note_pdf(
+        header=header,
+        date_label=note.created_at.strftime("%d/%m/%Y"),
+        patient_name=patient.full_name,
+        patient_birth_date_label=patient.date_of_birth.strftime("%d/%m/%Y"),
+        patient_age=calculate_age(patient.date_of_birth, as_of=note.created_at.date()),
+        patient_sex_label=_SEX_LABELS.get(patient.sex, "No especificado"),
+        expediente_number=patient.expediente_number,
+        professional_name=professional.full_name if professional else "",
+        status_label=_NOTE_STATUS_LABELS.get(note.status, note.status),
+        version=note.version,
+        talla=f"{vitals.height_m:.2f}" if vitals and vitals.height_m is not None else "-",
+        peso=f"{vitals.weight_kg:.1f}" if vitals and vitals.weight_kg is not None else "-",
+        imc=f"{bmi:.1f}" if bmi is not None else "-",
+        temperatura=(
+            f"{vitals.temperature:.1f}" if vitals and vitals.temperature is not None else "-"
+        ),
+        tension=tension,
+        soap_s=note.soap_s,
+        soap_o=note.soap_o,
+        soap_a=note.soap_a,
+        soap_p=note.soap_p,
+        free_text=note.free_text,
+        interrogatorio=note.interrogatorio,
+        medicamentos=note.medicamentos,
+        estudios_radiograficos=note.estudios_radiograficos,
+        descripcion_procedimiento=note.descripcion_procedimiento,
+        pronostico_evolucion=note.pronostico_evolucion,
+        indicaciones=note.indicaciones,
+        plan_proxima_cita=note.plan_proxima_cita,
+        fecha_proxima_cita=note.fecha_proxima_cita,
+        evaluacion_actualizacion=note.evaluacion_actualizacion,
+    )
+
+    await audit_service.log(
+        db,
+        action="encounters.note_pdf_read",
+        actor_user_id=actor_id,
+        clinic_id=clinic_id,
+        entity_type="clinical_note",
+        entity_id=str(note_id),
+    )
+    await db.commit()
+    return pdf_bytes

@@ -63,8 +63,30 @@ function noteFieldsOf(note: ClinicalNoteOut): ClinicalNoteFields {
     soap_a: note.soap_a ?? '',
     soap_p: note.soap_p ?? '',
     free_text: note.free_text ?? '',
+    // Fase D (docs/clinica/nota_evolucion.pdf): campos complementarios al SOAP.
+    interrogatorio: note.interrogatorio ?? '',
+    medicamentos: note.medicamentos ?? '',
+    estudios_radiograficos: note.estudios_radiograficos ?? '',
+    descripcion_procedimiento: note.descripcion_procedimiento ?? '',
+    pronostico_evolucion: note.pronostico_evolucion ?? '',
+    indicaciones: note.indicaciones ?? '',
+    plan_proxima_cita: note.plan_proxima_cita ?? '',
+    fecha_proxima_cita: note.fecha_proxima_cita ?? '',
+    evaluacion_actualizacion: note.evaluacion_actualizacion ?? '',
   }
 }
+
+const EVOLUTION_NOTE_FIELDS = [
+  ['interrogatorio', 'Interrogatorio'],
+  ['medicamentos', 'Medicamentos'],
+  ['estudios_radiograficos', 'Estudios radiograficos'],
+  ['descripcion_procedimiento', 'Descripcion del procedimiento'],
+  ['pronostico_evolucion', 'Pronostico / evolucion'],
+  ['indicaciones', 'Indicaciones'],
+  ['plan_proxima_cita', 'Plan para proxima cita'],
+  ['fecha_proxima_cita', 'Fecha de proxima cita'],
+  ['evaluacion_actualizacion', 'Evaluacion / actualizacion'],
+] as const
 
 function NoteEditor({
   note,
@@ -186,6 +208,46 @@ function NoteEditor({
             onChange={(e) => updateField('free_text', e.target.value)}
           />
         </label>
+      </div>
+
+      <details>
+        <summary>Nota de evolucion -- campos adicionales</summary>
+        <div className={styles.soapGrid}>
+          {EVOLUTION_NOTE_FIELDS.map(([field, label]) => (
+            <label key={field} className={styles.soapField}>
+              <span>{label}</span>
+              {field === 'fecha_proxima_cita' ? (
+                <input
+                  type="text"
+                  placeholder="p. ej. 05/11/2026 o en 2 semanas"
+                  value={fields[field] ?? ''}
+                  disabled={!isEditable}
+                  onChange={(e) => updateField(field, e.target.value)}
+                />
+              ) : (
+                <textarea
+                  value={fields[field] ?? ''}
+                  disabled={!isEditable}
+                  onChange={(e) => updateField(field, e.target.value)}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+      </details>
+
+      <div className={styles.actions}>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          onClick={async () => {
+            const tab = window.open('', '_blank')
+            const url = await api.getNotePdfBlobUrl(note.id)
+            if (tab) tab.location.href = url
+          }}
+        >
+          Imprimir / Generar PDF
+        </button>
       </div>
 
       {isEditable && (

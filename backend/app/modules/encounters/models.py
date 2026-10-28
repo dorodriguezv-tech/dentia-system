@@ -68,3 +68,19 @@ class ClinicalNote(AuditedMixin, Base):
     cancelled_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    # Fase D (docs/clinica/nota_evolucion.pdf): campos complementarios al SOAP
+    # de arriba, nullable (no reemplazan soap_s/o/a/p/free_text ni el flujo de
+    # estados DRAFT/FINAL/CORRECTED/CANCELLED). Si la nota ya es FINAL, se
+    # editan por el mismo flujo de correccion (regla 1 de CLAUDE.md) --
+    # ver encounters/service.py::update_note/correct_note.
+    interrogatorio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    medicamentos: Mapped[str | None] = mapped_column(Text, nullable=True)
+    estudios_radiograficos: Mapped[str | None] = mapped_column(Text, nullable=True)
+    descripcion_procedimiento: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pronostico_evolucion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indicaciones: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plan_proxima_cita: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Texto libre (el formato original no exige una fecha estricta en este campo).
+    fecha_proxima_cita: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    evaluacion_actualizacion: Mapped[str | None] = mapped_column(Text, nullable=True)

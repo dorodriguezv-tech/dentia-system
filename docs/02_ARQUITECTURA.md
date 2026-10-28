@@ -19,6 +19,8 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `records` | MedicalHistory, Allergy, Medication, RiskFactor, ClinicalAlert, VitalSigns, FamilyHistoryEntry, PersonalPathologicalHistory, PersonalNonPathologicalHistory, SystemsReviewEntry (Fase A) |
 | `odontological_history` | OdontologicalExam, PeriodontalAnamnesis, RadiographicAnalysis, OdontogramDiagnosisDetail, ParallelometerAnalysis, RemovablePartialDentureDesign, ToothDiagnosisEntry, ToothTreatmentPlanEntry (Fase C) |
 | `pediatric_history` | PediatricPerinatalHistory, PediatricOralHabits, PediatricBehaviorMaturity, PediatricOcclusion, PediatricEruptionDentition, PediatricToothAnnotation (Fase E) |
+| `endodontic_history` | EndodonticInterrogation, EndodonticPulpSensitivityTest, EndodonticPeriodontalTest, EndodonticRadiographicInterpretation, EndodonticDiagnosisTreatment, EndodonticToothDiagnosisCode, EndodonticWorkingLength (Fase F) |
+| `periodontogram` | PeriodontalProbingSite, PeriodontalToothMeasurement, PeriodontalIndexEntry, OcclusalContactEntry, PeriodontogramObservation (Fase G) |
 | `encounters` | Encounter, ClinicalNote (+ ClinicalNoteVersion) |
 | `odontogram` | ToothCatalog, SurfaceCatalog, FindingCatalog, ToothFinding (evento), OdontogramSnapshot |
 | `agenda` | Provider, Resource (gabinete), Appointment, AppointmentStatusHistory |
@@ -29,6 +31,7 @@ Todo corre en el servidor o equipo de la clínica. Ningún dato clínico sale a 
 | `billing` | Charge, Payment, PaymentAllocation, CashSession, ClinicBillingSettings |
 | `reports` | Vistas/consultas de solo lectura |
 | `audit` | AuditEvent |
+| `version_info` | Sin tablas propias — `GET /version-info` expone `Settings.app_version`/`environment` (solo lectura, panel de administrador) |
 
 `app/ai/` (Fase 8) no vive en `app/modules/`: es su propio paquete de nivel superior
 (`stt.py`, `dental_parser.py`, `ollama_client.py`, `actions.py`, `interpreter.py`,
@@ -419,7 +422,8 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   No es una réplica anatómica literal de las 3 franjas del PDF (corona/oclusal/raíz apiladas): se
   combinó, a propósito, el mapa de superficies de siempre (vista "desde arriba") con un contorno y
   una raíz de estilo frontal — ese nivel de detalle real (franjas separadas, sondeo por sitio)
-  queda para el periodontograma, Fase G, fuera de este encargo.
+  quedó para el periodontograma, Fase G (backend completo, ver sección 5.26; el dibujo
+  interactivo de 32 piezas × 6 sitios es un slice de frontend aparte), fuera de este encargo.
   `Arch.tsx`/`Odontograma.tsx` arman las arcadas superior/inferior y las vistas permanente/
   temporal/mixta (en mixta, la fila de temporales se dibuja sobre la de permanentes, pendiente #10).
   Elegir una pieza/superficie abre `FindingQuickMenu` (selector de atención + catálogo de hallazgos
@@ -1774,8 +1778,8 @@ paleta reconciliada — ya estaba implementada; Fase C es solo backend, el
 frontend se construye en un slice aparte). Cubre las secciones del PDF
 "historia clinica odontologica" que **no** son el dibujo del odontograma
 (eso ya existe desde la Fase B) ni el periodontograma completo con sondeo
-por sitio (eso queda para la Fase G, el último slice — ver
-`docs/PENDIENTES_CLINICOS.md`).
+por sitio (eso quedó para la Fase G, el último slice del rediseño — ver
+sección 5.26 y `docs/PENDIENTES_CLINICOS.md`).
 
 - **Paquete nuevo `app/modules/odontological_history/`** (no una extensión
   de `records/`): para cuando se programó esta fase, `records/service.py`
@@ -1797,7 +1801,8 @@ por sitio (eso queda para la Fase G, el último slice — ver
     libre/marginal) + observaciones.
   - `PeriodontalAnamnesis`: **cuestionario de entrevista, NO sondeo
     clínico** (el sondeo de 6 sitios/diente e índices de placa/gingival
-    calculados por cara son la Fase G). `answers` JSONB
+    calculados por cara son la Fase G — sección 5.26, `app.modules.
+    periodontogram`). `answers` JSONB
     `{código_pregunta: "si"|"no"|"no_recuerda"}` validado contra el catálogo
     `periodontal_anamnesis_question` (30 códigos — ver nota de discrepancia
     en `odontological_history/rules.py` y pendiente en
@@ -2043,6 +2048,124 @@ frontend se construye en un slice aparte). Cubre las secciones del PDF
   nuevo). Cadena completa verificada reversible (`alembic downgrade -1` de
   vuelta a `c1a9f3b7d2e4` y `alembic upgrade head` sin errores).
 
+### 5.26 Rediseño del expediente — Fase G (Periodontograma completo)
+**Último slice del proyecto de rediseño del expediente** (backend puro,
+igual que las Fases C/E/F — el frontend, el más complejo del proyecto por
+ser un periodontograma interactivo de 32 piezas × 6 sitios, se construye en
+un slice aparte). Cierra formalmente el pendiente dejado abierto desde la
+Fase C (`docs/PENDIENTES_CLINICOS.md` #59): `odontological_history.
+PeriodontalAnamnesis` (Fase C) es solo un **cuestionario de entrevista**,
+nunca sondeo clínico — este paquete es el sondeo clínico que faltaba.
+
+- **Fuente de verdad ambigua, resuelta con el estándar clínico universal.**
+  La página "PERIODONTOGRAMA" y las de "ÍNDICE DE PLACA DENTOBACTERIANA"/
+  "ÍNDICE GINGIVAL" del PDF oficial son una cuadrícula dibujada a mano (no
+  texto estructurado): las etiquetas de fila exactas (E.Q/E.I/N.I/P.B.,
+  repetidas de forma algo ambigua en el escaneo) no se pudieron transcribir
+  pixel-perfecto. Ante esa ambigüedad, el modelo de datos sigue el
+  **estándar clínico periodontal universal** (6 sitios de sondeo por pieza,
+  movilidad de Miller 0-3, grado de furca 0-3, índice de placa de O'Leary e
+  índice gingival de Löe-Silness) en vez de intentar adivinar la cuadrícula
+  original — documentado para validar con la clínica real en
+  `docs/PENDIENTES_CLINICOS.md`.
+- **Paquete nuevo `app/modules/periodontogram/`** (mismo patrón de paquete
+  completo que `odontological_history/`/`pediatric_history/`/
+  `endodontic_history/`: `models.py`/`schemas.py`/`rules.py`/`service.py`/
+  `router.py`/`pdf.py`). **Ningún catálogo administrable nuevo**: todos los
+  valores son escalas clínicas estándar fijas y pequeñas (enteros/enums),
+  no listas que una clínica concreta vaya a querer personalizar — se
+  definieron como constantes en `rules.py` (mismo criterio que
+  `endodontic_history.rules` para sus checklists cerrados).
+- **5 tablas nuevas**, todas con varias filas por `encounter_id` excepto la
+  última:
+  - `PeriodontalProbingSite`: el periodontograma propiamente dicho — una
+    fila por pieza × uno de los 6 sitios estándar (mesiovestibular/
+    vestibular/distovestibular/mesiolingual/lingual/distolingual; "lingual"
+    aplica igual para la arcada superior, donde clínicamente es "palatino"
+    — es solo una etiqueta de interfaz, `rules.PROBING_SITE_LABELS`, el
+    código no distingue arcada). `probing_depth_mm` (0-15) y `recession_mm`
+    (-5 a 15, puede ser negativa: agrandamiento/cobertura gingival sobre la
+    unión cemento-esmalte) + `bleeding_on_probing`/`suppuration`. Solo
+    piezas FDI **permanentes** (`odontogram.rules.TOOTH_FDI_PERMANENT`, el
+    dibujo del PDF no muestra temporales). El **nivel de inserción clínica
+    (CAL) no se persiste**: se calcula al vuelo como
+    `probing_depth_mm + recession_mm` (mismo criterio que el IMC de la Fase
+    A, dato derivado nunca desincronizado), expuesto en
+    `PeriodontalProbingSiteOut.clinical_attachment_level_mm` (calculado en
+    `router.py`, igual patrón que `records/router.py` con el IMC). **Decisión
+    de re-anotación** (mismo patrón que `PediatricToothAnnotation`/
+    `EndodonticToothDiagnosisCode`): volver a capturar la MISMA pieza+sitio
+    en el MISMO encuentro anula automáticamente la anotación activa
+    anterior de esa pieza+sitio.
+  - `PeriodontalToothMeasurement`: movilidad dentaria (clasificación de
+    Miller, 0-3) y grado de afectación de furca (0-3, relevante en molares
+    pero el código no restringe la pieza) — una fila por pieza, mismo
+    criterio de re-anotación que la tabla anterior.
+  - `PeriodontalIndexEntry`: índices de placa dentobacteriana y gingival —
+    **una sola tabla con discriminador `index_type`** (`"placa"`|
+    `"gingival"`, igual patrón que `kind` en `EndodonticToothDiagnosisCode`
+    de la Fase F, en vez de duplicar la tabla). Solo 2 superficies por pieza
+    (`"vestibular"`/`"lingual"` — NO 6 sitios: el PDF muestra una cuadrícula
+    mucho más simple para los índices que para el sondeo). `grade` 0-3, cuyo
+    significado depende de `index_type` (textos documentados en
+    `rules.PLAQUE_GRADE_LABELS`/`GINGIVAL_GRADE_LABELS` para que el
+    frontend/PDF los muestre). Mismo criterio de re-anotación por
+    pieza+`index_type`+`surface`. Los totales (índice de O'Leary, índice de
+    Löe-Silness) **no se persisten**: se calculan al vuelo en
+    `rules.compute_plaque_index`/`compute_gingival_index`.
+  - `OcclusalContactEntry`: tablas de oclusión — contactos marcados en 4
+    movimientos (`centrica`/`lateralidad_izquierda`/`protrusion`/
+    `lateralidad_derecha`). Solo se crea una fila cuando el contacto está
+    marcado (la ausencia de fila para una pieza+movimiento significa "sin
+    contacto"); sin `grade` ni campo adicional, la existencia de la fila
+    activa ES la marca. **Decisión**: volver a marcar la MISMA
+    pieza+movimiento en el mismo encuentro es **idempotente** (devuelve la
+    fila activa existente en vez de duplicarla, al no haber un "grado" que
+    reemplazar); "desmarcar" usa el endpoint de anulación.
+  - `PeriodontogramObservation`: observaciones de texto libre, una fila por
+    encuentro (sin restricción única, mismo criterio que el resto del
+    expediente).
+- **Endpoints nuevos** bajo
+  `/api/v1/patients/{id}/periodontogram/...` (mismo estilo GET lista/POST
+  crea/`POST .../{item_id}/annul` que el resto del expediente):
+  `probing-sites`, `tooth-measurements`, `index-entries` (con filtro
+  opcional `?index_type=placa|gingival`, mismo patrón de query param que
+  `endodontic-history/tooth-diagnosis-code?kind=`), `occlusal-contacts`,
+  `observations`. Permisos `records.read`/`records.write` (reutilizados, no
+  se creó ningún permiso nuevo).
+  - **`GET .../indices-summary`** (query param opcional `encounter_id`):
+    devuelve los índices calculados al vuelo — si no se especifica
+    `encounter_id`, usa el **encuentro más reciente con al menos una
+    entrada activa de `PeriodontalIndexEntry`** (decisión de diseño:
+    documentada en `service.py::get_indices_summary` y
+    `docs/PENDIENTES_CLINICOS.md` — es más útil que forzar siempre al
+    llamador a indicar un encuentro). Responde
+    `{encounter_id, placa: {numero_caras_totales, numero_caras_pigmentadas,
+    indice_placa_dentobacteriana}, gingival: {numero_sitios_totales,
+    indice_gingival_total}}`; ambos índices son `null` (no `0.0`) cuando no
+    hay datos registrados, para no sugerir falsamente "sin placa"/"encía
+    sana".
+  - **`GET .../pdf`** genera el PDF completo.
+- **`app/modules/periodontogram/pdf.py`:** `build_periodontogram_pdf`
+  (xhtml2pdf, mismo motor y mismo encabezado compartido —
+  `documents/pdf_header.py` — que el resto del expediente), función pura
+  sobre un `PeriodontogramPdfData` ya resuelto por `service.py`. **Decisión
+  documentada:** la cuadrícula de sondeo por pieza/sitio se representa como
+  una **tabla de datos clara**, sin replicar el dibujo gráfico del
+  odontograma de 32 piezas dentro de este PDF basado en texto/xhtml2pdf —
+  mismo criterio que el odontograma de endodoncia de la Fase F (listado
+  como texto); el dibujo interactivo vive en el frontend.
+- **Migración:** `1138d7738a75` (crea las 5 tablas), encadenada tras
+  `1ce0f3ad4a1a` (último head antes de esta fase — varias migraciones sin
+  relación con el rediseño del expediente se agregaron entre la Fase F y
+  esta). Sin backfill de catálogos (no se creó ninguno nuevo). Autogenerate
+  también detectó "eliminar" el índice `ix_patients_full_name_trgm` —falso
+  positivo ya documentado en migraciones anteriores (la expresión GIN con
+  `immutable_unaccent` no se refleja en los metadatos de SQLAlchemy) — se
+  quitó a mano del archivo de migración, no se aplicó. Cadena completa
+  verificada reversible (`alembic downgrade` de vuelta a `1ce0f3ad4a1a` y
+  `alembic upgrade head` sin errores).
+
 ## 6. Frontend
 - **Layout:** barra lateral (logo de la clínica), búsqueda global de pacientes y **encabezado de paciente persistente** con barra de alertas.
 - **Pestañas del paciente:** Resumen | Expediente | Odontograma | Tratamientos | Consentimientos | Imágenes | Cuenta.
@@ -2057,6 +2180,11 @@ frontend se construye en un slice aparte). Cubre las secciones del PDF
 - **Página de inicio (Fase 11):** tablero por rol (ver sección 5.11) en vez del
   mensaje fijo de versiones anteriores; pantalla "Reportes" propia (`/reportes`)
   en el menú lateral, visible solo con permiso `reports.read`.
+- **Control de versiones (Fase 17):** pantalla `/configuracion/version`
+  (`version_info/VersionInfoPage.tsx`), visible solo con permiso
+  `version_info.read` (superadmin/admin_clinica), que muestra la versión de
+  DentalCare corriendo en el servidor y enlaza al historial de releases en
+  GitHub.
 
 ## 7. Respaldo
 - `scripts/backup.ps1`/`.sh`: `pg_dump --format=custom` del rol de aplicación
@@ -2096,6 +2224,7 @@ frontend se construye en un slice aparte). Cubre las secciones del PDF
 | 14 | App móvil DENT-IA (`mobile/`, Expo SDK 57 + React Native 0.86 + TS estricto, cliente puro de `/api/v1`): dependencias alineadas (`npm install` + `expo install --fix`, `react`/`react-dom`/`react-native` pineados entre sí vía `overrides`), `npm run typecheck`/`npm test`/`npx expo-doctor` en verde. Contrato contra el backend verificado generando `src/api/schema.d.ts` con `openapi-typescript` y comparando cada tipo/endpoint a mano: varios mismatches reales corregidos en la app (query `starts_from`/`starts_to` de `/appointments`, `patient_full_name`/`provider_full_name`, `/ai/interpret` esperaba `transcript` no `text`, `/patients/.../odontogram` es un arreglo sin envolver, `expediente_number`/`date_of_birth`, alertas como `string[]` sin `severity` estructurada, forma real de `/branding` y `/ai/status`, `edits` no `payload` en aceptar sugerencia). Cambios B1–B5 del backend (docs/05_APP_MOVIL.md §7) verificados con pytest: B1/B2/B3/B5 ya los cumplía el backend tal cual (tokens siempre en el cuerpo, sin content-type gate en `/ai/transcribe`, nombres de campo de MFA ya correctos); **B4** sí requirió cambio real — `GET /me/clinics` ahora incluye `clinic_name` y `permissions` (aditivo, sin tocar `clinic`/`role` anidados que ya usa el frontend web) | Hecho |
 | 15 | Marca DENT-IA en el sistema web (`docs/CAMBIOS_WEB_MARCA.md` W1–W7, misma paleta que `DENTIA_BRAND` de `mobile/src/theme/theme.tsx`): preset `dentia` nuevo y por defecto para sucursales nuevas (W1), `GET /branding/logo`\|`/favicon` ya no 404 — sirven el logo/favicon de DENT-IA por defecto, `has_custom_logo` distingue cuál se muestra (W2), pie de página de marca en los tres PDF (presupuesto, recibo, consentimiento — fuera del contenido firmado, W3), "DentalCare"/"DENTIA" → "DENT-IA" en textos visibles del backend y frontend (W4), `index.html`/favicon/manifest PWA (W5), tokens de marca fijos (`--brand-dentia-*`) y tipografía Montserrat en encabezados, más `dark_primary` opcional por preset derivado en `theme/store.ts` si falta (W6), componentes `src/components/brand/Brand.tsx` (`DentiaLogo`, `ClinicLogo`, `DentiaIsotipo`, `PoweredByDentia`, `BrandStripe`) usados en login y barra lateral (W7). Verificado en vivo: `pytest` completo, `ruff`/`black`/`mypy`, `npm run build`/`lint`/`test` del frontend, y la suite completa de Playwright (incluida `accessibility.spec.ts`, sin violaciones nuevas) contra el sistema corriendo de verdad; capturas de `docs/manual/` regeneradas con `CAPTURE_SCREENSHOTS=1` | Hecho |
 | 16 | A petición del operador, dos tandas de cambios sobre el sistema ya existente, sin módulos nuevos. **Primera tanda:** horario laboral por defecto abierto los 7 días sin restricción de hora (antes lunes–viernes con hora de comida); nombre comercial de la clínica (`ClinicBranding.display_name`) ahora siempre visible junto al logo (barra lateral y login), no solo con logo propio; menú **Ayuda** nuevo en la barra lateral (`frontend/src/modules/help/HelpPage.tsx`), visible para cualquier rol, con el contenido de `docs/MANUAL_USUARIO.md` adaptado, resumen de qué hace cada rol y las capturas de `docs/manual/`; paciente de ejemplo completo en el seed (`_seed_example_patient`, `app/seed.py`) con expediente, odontograma, plan de tratamiento y citas. **Segunda tanda (bugs reales encontrados al probar lo anterior):** `SignaturePad` (`frontend/src/modules/documents/SignaturePad.tsx`) tenía un bug de raíz — su resolución interna (`canvas.width`/`height`, fija en 400×150) no coincidía con su tamaño real en pantalla (estirado por `flex`/`max-width:100%`), así que solo la esquina superior izquierda del área visible respondía al trazo; corregido igualando ambas en un `ResizeObserver`. De paso: las plantillas de consentimiento ya no se crean desde la ficha de un paciente (solo se previsualizan — decisión registrada en `docs/PENDIENTES_CLINICOS.md`), el PDF firmado se abre de inmediato para revisar/imprimir (antes había que buscarlo en la lista), y un fallo al firmar ahora se muestra en pantalla (antes fallaba en silencio). `TreatmentPlan`/`PlanOut`/`PlanDetailOut` exponen `professional_name` (quién atiende, ya existía como `professional_id` pero nunca se resolvía a nombre). `GET /appointments` acepta `patient_id` (antes solo `provider_id`/`resource_id`), usado por una tarjeta "Citas" nueva en el Resumen del paciente para mostrar su historial de citas con estado (asistió/no asistió/etc.) | Hecho |
+| 17 | A petición del operador: "Control de versiones", pantalla nueva visible solo para administradores (`version_info.read`, superadmin/admin_clinica) que muestra qué versión de DentalCare está corriendo. Backend: `Settings.app_version` (`backend/app/core/config.py`, lee la variable de entorno `VERSION` vía `validation_alias`, default `"dev"`) y paquete nuevo sin tablas `app/modules/version_info/` (`GET /version-info` → `{version, environment}`, permiso nuevo incremental igual patrón que `document_settings.manage`). `deploy/vps/compose/docker-compose.yml` ahora reenvía `VERSION: ${VERSION}` al contenedor `api` — antes esa variable solo se usaba para resolver el tag de imagen a descargar, el proceso de la API no tenía forma de saber en qué versión corría. Frontend: `frontend/src/modules/version_info/VersionInfoPage.tsx` (`/configuracion/version`, nav lateral junto a "Formatos de documentos"), con enlace externo al historial de releases de GitHub en vez de llamar a la API de GitHub desde el backend (evita una dependencia externa innecesaria) | Hecho |
 
 **Verificación en vivo de Parte A (2026-10-09):** los 7 puntos de la sección 5.13 se
 reprodujeron de nuevo contra el sistema corriendo de verdad (backend/frontend/Postgres/Ollama

@@ -5,8 +5,27 @@ import {
   canManageUsers,
   canReadAgenda,
   canReadBilling,
+  canViewVersionInfo,
   canWriteRecords,
 } from './roles'
+
+describe('canViewVersionInfo', () => {
+  it('permite a admin_clinica', () => {
+    expect(canViewVersionInfo('admin_clinica')).toBe(true)
+  })
+
+  it('permite a superadmin', () => {
+    expect(canViewVersionInfo('superadmin')).toBe(true)
+  })
+
+  it('no permite a odontologo', () => {
+    expect(canViewVersionInfo('odontologo')).toBe(false)
+  })
+
+  it('no permite cuando no hay rol activo', () => {
+    expect(canViewVersionInfo(null)).toBe(false)
+  })
+})
 
 describe('canManageUsers', () => {
   it('permite a admin_clinica', () => {
@@ -39,6 +58,7 @@ describe('rol "demo" (cuenta de demostracion)', () => {
     expect(canManageBranding('demo')).toBe(true)
     expect(canManageCatalogs('demo')).toBe(true)
     expect(canReadBilling('demo')).toBe(true)
+    expect(canViewVersionInfo('demo')).toBe(true)
   })
 
   it('pasa funciones clinicas (odontologo/especialista)', () => {

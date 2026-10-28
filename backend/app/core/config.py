@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Self
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,18 @@ class Settings(BaseSettings):
     app_name: str = "DENT-IA API"
     environment: str = "development"
     api_prefix: str = "/api/v1"
+
+    # Pantalla "Control de versiones" (menu de administrador): version de
+    # DentalCare efectivamente corriendo, derivada de configuracion/entorno --
+    # nunca se persiste en BD (regla general: nada que no haya que versionar
+    # clinicamente vive en una tabla). `validation_alias="VERSION"` en vez de
+    # renombrar el campo: asi se reutiliza tal cual la variable VERSION que
+    # `deploy/vps/scripts/deploy.sh` ya escribe en compose/.env y
+    # docker-compose.yml ya reenvia al contenedor de la API (environment:
+    # VERSION: ${VERSION}) -- sin esto, el proceso de la API no tenia forma de
+    # saber en que version estaba corriendo. "dev" por defecto: valor sensato
+    # para desarrollo local, donde no existe un release etiquetado.
+    app_version: str = Field(default="dev", validation_alias="VERSION")
 
     database_url: str = "postgresql+asyncpg://dentia:dentia@localhost:5432/dentia"
     # Si se define, reemplaza la contrasena de database_url con el contenido de

@@ -86,6 +86,77 @@ def _header_table(header: PdfHeaderInfo, styles: dict[str, Any]) -> Table:
     return table
 
 
+@dataclass
+class PerformedProcedureRow:
+    performed_at_label: str
+    procedure_name: str
+    professional_name: str
+
+
+def build_performed_procedures_pdf(
+    *,
+    header: PdfHeaderInfo,
+    patient_name: str,
+    patient_birth_date_label: str,
+    patient_sex_label: str,
+    expediente_number: str,
+    date_label: str,
+    rows: list[PerformedProcedureRow],
+) -> bytes:
+    """Ficha de registro de tratamientos realizados
+    (docs/clinica/ficha_reg_tratam_realizados.pdf) -- Fase D. 100% derivado
+    de `ProcedurePerformed` (ya existente), sin tabla nueva: solo lista lo que
+    ya se registro, ordenado por fecha. Las columnas de firma van en blanco
+    (se firman a mano al imprimir, no hay firma digital aqui)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=14 * mm, bottomMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    story: list[Any] = []
+
+    story.append(_header_table(header, styles))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(place_and_date_label(header.place_label, date_label), styles["Normal"]))
+    story.append(Spacer(1, 3 * mm))
+
+    story.append(Paragraph("Ficha de registro de tratamientos realizados", styles["Heading2"]))
+    story.append(Paragraph(f"Paciente: {patient_name}", styles["Normal"]))
+    story.append(Paragraph(f"Expediente: {expediente_number}", styles["Normal"]))
+    story.append(Paragraph(f"Fecha de nacimiento: {patient_birth_date_label}", styles["Normal"]))
+    story.append(Paragraph(f"Sexo: {patient_sex_label}", styles["Normal"]))
+    story.append(Spacer(1, 6 * mm))
+
+    data = [
+        [
+            "Fecha",
+            "Tratamiento realizado",
+            "Dicente / profesional",
+            "Firma del Dicente",
+            "Firma del Doctor titular",
+        ]
+    ]
+    for row in rows:
+        data.append([row.performed_at_label, row.procedure_name, row.professional_name, "", ""])
+
+    table = Table(data, colWidths=[22 * mm, 55 * mm, 40 * mm, 28 * mm, 28 * mm], repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F6676")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 1), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 10),
+            ]
+        )
+    )
+    story.append(table)
+
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+    return buffer.getvalue()
+
+
 def build_budget_pdf(
     *,
     header: PdfHeaderInfo,

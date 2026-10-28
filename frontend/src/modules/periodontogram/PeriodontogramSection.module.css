@@ -1,0 +1,100 @@
+/* Fase G (rediseno del expediente, docs/clinica -- ULTIMO slice del
+   proyecto): Periodontograma completo. Complementa (no duplica) las clases
+   ya definidas en patients/PatientDetailPage.module.css (card, form, table,
+   tableWrap, fieldsetLabel, fieldRow, primaryButton, etc.), que este modulo
+   tambien importa y reutiliza tal cual. Aqui solo viven las clases propias
+   de la cuadricula de sondeo (sitios clicables + panel de edicion) y los
+   bloques de indices/oclusion. */
+
+.tableBlock {
+  margin-bottom: 1rem;
+}
+
+/* Boton de encabezado de columna (pieza+sitio) de la tabla de sondeo -- abre
+   el panel de edicion de abajo. Tamano de toque >=44px (tableta). */
+.siteButton,
+.siteButtonActive {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.siteButtonActive {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.dataCell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.boolYes {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.boolDash {
+  color: var(--color-text-muted);
+}
+
+/* Panel de edicion de un sitio de sondeo (pieza+sitio) -- se muestra debajo
+   de las 2 tablas de cara, mismo criterio de "panel inline" que
+   FindingQuickMenu del odontograma (no es un popover posicionado en pixeles,
+   es mas simple y estable en tableta). */
+.editPanel {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.editPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.editPanelHeader h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.legendList {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.legendList li {
+  margin-bottom: 0.15rem;
+}
+
+.summaryBox {
+  margin: 0.25rem 0 0.75rem;
+  max-width: 420px;
+}
+
+/* Checkbox de las tablas de oclusion -- area de toque mas grande que el
+   checkbox nativo por defecto. */
+.occlusalCheckbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}

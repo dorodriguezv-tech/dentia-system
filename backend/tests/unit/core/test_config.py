@@ -21,9 +21,7 @@ def test_database_password_file_overrides_the_password_in_the_url(tmp_path) -> N
         database_password_file=str(password_file),
     )
 
-    assert settings.database_url == (
-        "postgresql+asyncpg://dentia:p%40ss%20w%2Frd@db:5432/dentia"
-    )
+    assert settings.database_url == ("postgresql+asyncpg://dentia:p%40ss%20w%2Frd@db:5432/dentia")
 
 
 def test_production_rejects_default_jwt_secret() -> None:
@@ -45,3 +43,17 @@ def test_docs_urls_disabled_in_production() -> None:
 
 def test_docs_urls_enabled_outside_production() -> None:
     assert docs_urls("development") == ("/docs", "/redoc", "/openapi.json")
+
+
+def test_app_version_defaults_to_dev() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.app_version == "dev"
+
+
+def test_app_version_reads_from_version_env_var(monkeypatch) -> None:
+    # Mismo nombre que ya escribe deploy/vps/scripts/deploy.sh en compose/.env
+    # y que docker-compose.yml reenvia al contenedor de la API -- ver
+    # Settings.app_version (CLAUDE.md sec. 6, "version_info").
+    monkeypatch.setenv("VERSION", "1.4.0")
+    settings = Settings(_env_file=None)
+    assert settings.app_version == "1.4.0"

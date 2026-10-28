@@ -31,6 +31,16 @@ class ClinicalNoteCreateRequest(BaseModel):
     soap_a: str | None = None
     soap_p: str | None = None
     free_text: str | None = None
+    # Fase D (docs/clinica/nota_evolucion.pdf): campos complementarios al SOAP.
+    interrogatorio: str | None = None
+    medicamentos: str | None = None
+    estudios_radiograficos: str | None = None
+    descripcion_procedimiento: str | None = None
+    pronostico_evolucion: str | None = None
+    indicaciones: str | None = None
+    plan_proxima_cita: str | None = None
+    fecha_proxima_cita: str | None = Field(default=None, max_length=100)
+    evaluacion_actualizacion: str | None = None
 
 
 class ClinicalNoteUpdateRequest(BaseModel):
@@ -39,6 +49,15 @@ class ClinicalNoteUpdateRequest(BaseModel):
     soap_a: str | None = None
     soap_p: str | None = None
     free_text: str | None = None
+    interrogatorio: str | None = None
+    medicamentos: str | None = None
+    estudios_radiograficos: str | None = None
+    descripcion_procedimiento: str | None = None
+    pronostico_evolucion: str | None = None
+    indicaciones: str | None = None
+    plan_proxima_cita: str | None = None
+    fecha_proxima_cita: str | None = Field(default=None, max_length=100)
+    evaluacion_actualizacion: str | None = None
 
 
 class ClinicalNoteOut(BaseModel):
@@ -52,6 +71,15 @@ class ClinicalNoteOut(BaseModel):
     soap_a: str | None
     soap_p: str | None
     free_text: str | None
+    interrogatorio: str | None
+    medicamentos: str | None
+    estudios_radiograficos: str | None
+    descripcion_procedimiento: str | None
+    pronostico_evolucion: str | None
+    indicaciones: str | None
+    plan_proxima_cita: str | None
+    fecha_proxima_cita: str | None
+    evaluacion_actualizacion: str | None
     version: int
     previous_version_id: uuid.UUID | None
     correction_reason: str | None

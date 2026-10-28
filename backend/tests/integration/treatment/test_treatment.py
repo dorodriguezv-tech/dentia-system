@@ -362,6 +362,48 @@ async def test_register_performed_ad_hoc_without_plan_uses_catalog_price(
     assert performed.json()["charge_amount"] == "500.00"
 
 
+async def test_performed_procedures_pdf_endpoint_returns_a_pdf_document(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Fase D (docs/clinica/ficha_reg_tratam_realizados.pdf): ficha 100%
+    derivada de ProcedurePerformed, sin tabla nueva."""
+    headers, patient_id, encounter_id = await _setup(client, make_user, clinic, db_session)
+    performed = await client.post(
+        "/api/v1/procedures-performed",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "encounter_id": encounter_id,
+            "procedure_code": "resina_oclusal",
+            "tooth_fdi": 46,
+            "surface": "O",
+            "finding_code": "restauracion",
+        },
+    )
+    assert performed.status_code == 201, performed.text
+
+    response = await client.get(
+        f"/api/v1/patients/{patient_id}/procedures-performed/pdf", headers=headers
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+
+
+async def test_performed_procedures_pdf_endpoint_requires_treatment_read(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, patient_id, _encounter_id = await _setup(client, make_user, clinic, db_session)
+    await make_user(email="asistente@example.com", role_code="asistente")
+    asistente_token = await _login(client, "asistente@example.com")
+
+    response = await client.get(
+        f"/api/v1/patients/{patient_id}/procedures-performed/pdf",
+        headers=_headers(asistente_token, clinic.id),
+    )
+    assert response.status_code == 403
+
+
 async def test_plan_pdf_endpoint_returns_a_pdf_document(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

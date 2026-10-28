@@ -421,9 +421,7 @@ async def test_close_encounter_requires_acknowledging_alerts(
         json={"encounter_id": encounter_id, "substance": "Penicilina", "severity": "severa"},
     )
 
-    denied = await client.post(
-        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
-    )
+    denied = await client.post(f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={})
     assert denied.status_code == 400
     assert denied.json()["code"] == "ALERTS_NOT_ACKNOWLEDGED"
 
@@ -458,9 +456,7 @@ async def test_close_encounter_already_closed_is_a_conflict(
     first = await client.post(f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={})
     assert first.status_code == 200
 
-    second = await client.post(
-        f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={}
-    )
+    second = await client.post(f"/api/v1/encounters/{encounter_id}/close", headers=headers, json={})
     assert second.status_code == 409
     assert second.json()["code"] == "ENCOUNTER_ALREADY_CLOSED"
 
@@ -527,3 +523,86 @@ async def test_close_encounter_requires_records_write(
         json={},
     )
     assert response.status_code == 403
+
+
+# --------------------------------------------------------------------------- Fase D
+
+
+async def test_create_note_with_fase_d_fields_and_generate_pdf(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Fase D (docs/clinica/nota_evolucion.pdf): los campos nuevos se
+    capturan y guardan junto con el SOAP, y el PDF los imprime."""
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+
+    created = await client.post(
+        f"/api/v1/encounters/{encounter_id}/notes",
+        headers=headers,
+        json={
+            "soap_s": "Dolor al frio",
+            "interrogatorio": "Sin antecedentes relevantes",
+            "indicaciones": "Evitar alimentos duros",
+            "plan_proxima_cita": "Control en 1 mes",
+            "fecha_proxima_cita": "2026-11-05",
+        },
+    )
+    assert created.status_code == 201
+    note = created.json()
+    assert note["interrogatorio"] == "Sin antecedentes relevantes"
+    assert note["plan_proxima_cita"] == "Control en 1 mes"
+
+    pdf_resp = await client.get(f"/api/v1/notes/{note['id']}/pdf", headers=headers)
+    assert pdf_resp.status_code == 200
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert pdf_resp.content.startswith(b"%PDF")
+
+
+async def test_correct_final_note_preserves_fase_d_fields_and_hash_changes(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """Regla 1 de CLAUDE.md: una nota FINAL no se modifica -- si hace falta
+    completar/editar los campos nuevos despues de finalizada, es via el mismo
+    flujo de correccion que ya existia para el SOAP, no un atajo paralelo."""
+    token = await _odontologo_token(client, make_user, clinic)
+    headers = _headers(token, clinic.id)
+    encounter_id = await _create_encounter(client, headers, db_session, clinic, None)
+    note = (
+        await client.post(
+            f"/api/v1/encounters/{encounter_id}/notes",
+            headers=headers,
+            json={"soap_s": "Version original", "indicaciones": "Reposo"},
+        )
+    ).json()
+    finalized = await client.post(f"/api/v1/notes/{note['id']}/finalize", headers=headers, json={})
+    original_hash = finalized.json()["content_hash"]
+
+    # No se puede editar directamente estando FINAL (mismo criterio que soap_s).
+    denied = await client.patch(
+        f"/api/v1/notes/{note['id']}", headers=headers, json={"indicaciones": "Cambio directo"}
+    )
+    assert denied.status_code == 403
+
+    corrected = await client.post(
+        f"/api/v1/notes/{note['id']}/correct",
+        headers=headers,
+        json={"reason": "Faltaba completar las indicaciones"},
+    )
+    assert corrected.status_code == 200
+    new_note = corrected.json()
+    assert new_note["status"] == "DRAFT"
+    assert new_note["indicaciones"] == "Reposo"
+
+    updated = await client.patch(
+        f"/api/v1/notes/{new_note['id']}",
+        headers=headers,
+        json={"indicaciones": "Reposo y evitar alimentos duros"},
+    )
+    assert updated.status_code == 200
+
+    refinalized = await client.post(
+        f"/api/v1/notes/{new_note['id']}/finalize", headers=headers, json={}
+    )
+    assert refinalized.status_code == 200
+    assert refinalized.json()["content_hash"] != original_hash

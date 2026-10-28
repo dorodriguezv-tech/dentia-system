@@ -16,6 +16,7 @@ from app.modules.agenda.router import router as agenda_router
 from app.modules.billing.router import router as billing_router
 from app.modules.branding.router import router as branding_router
 from app.modules.catalogs.router import router as catalogs_router
+from app.modules.clinical_documents.router import router as clinical_documents_router
 from app.modules.diagnosis.router import router as diagnosis_router
 from app.modules.document_settings.router import router as document_settings_router
 from app.modules.documents.router import router as documents_router
@@ -27,9 +28,11 @@ from app.modules.odontogram.router import router as odontogram_router
 from app.modules.odontological_history.router import router as odontological_history_router
 from app.modules.patients.router import router as patients_router
 from app.modules.pediatric_history.router import router as pediatric_history_router
+from app.modules.periodontogram.router import router as periodontogram_router
 from app.modules.records.router import router as records_router
 from app.modules.reports.router import router as reports_router
 from app.modules.treatment.router import router as treatment_router
+from app.modules.version_info.router import router as version_info_router
 from app.voice import tts as voice_tts
 from app.voice.router import router as voice_router
 
@@ -75,6 +78,7 @@ app.include_router(odontogram_router, prefix=settings.api_prefix)
 app.include_router(odontological_history_router, prefix=settings.api_prefix)
 app.include_router(pediatric_history_router, prefix=settings.api_prefix)
 app.include_router(endodontic_history_router, prefix=settings.api_prefix)
+app.include_router(periodontogram_router, prefix=settings.api_prefix)
 app.include_router(agenda_router, prefix=settings.api_prefix)
 app.include_router(diagnosis_router, prefix=settings.api_prefix)
 app.include_router(treatment_router, prefix=settings.api_prefix)
@@ -82,10 +86,12 @@ app.include_router(billing_router, prefix=settings.api_prefix)
 app.include_router(ai_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(document_settings_router, prefix=settings.api_prefix)
+app.include_router(clinical_documents_router, prefix=settings.api_prefix)
 app.include_router(imaging_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
 app.include_router(catalogs_router, prefix=settings.api_prefix)
 app.include_router(voice_router, prefix=settings.api_prefix)
+app.include_router(version_info_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

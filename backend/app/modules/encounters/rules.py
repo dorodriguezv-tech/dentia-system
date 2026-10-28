@@ -29,7 +29,36 @@ def compute_content_hash(
     soap_a: str | None,
     soap_p: str | None,
     free_text: str | None,
+    *,
+    interrogatorio: str | None = None,
+    medicamentos: str | None = None,
+    estudios_radiograficos: str | None = None,
+    descripcion_procedimiento: str | None = None,
+    pronostico_evolucion: str | None = None,
+    indicaciones: str | None = None,
+    plan_proxima_cita: str | None = None,
+    fecha_proxima_cita: str | None = None,
+    evaluacion_actualizacion: str | None = None,
 ) -> str:
-    parts = [soap_s or "", soap_o or "", soap_a or "", soap_p or "", free_text or ""]
+    # Fase D: los campos nuevos de la nota de evolucion tambien entran al hash
+    # de integridad (regla 1 de CLAUDE.md) -- si se agregan/corrigen despues,
+    # es a traves del mismo flujo de correccion, nunca sobrescribiendo una
+    # version FINAL.
+    parts = [
+        soap_s or "",
+        soap_o or "",
+        soap_a or "",
+        soap_p or "",
+        free_text or "",
+        interrogatorio or "",
+        medicamentos or "",
+        estudios_radiograficos or "",
+        descripcion_procedimiento or "",
+        pronostico_evolucion or "",
+        indicaciones or "",
+        plan_proxima_cita or "",
+        fecha_proxima_cita or "",
+        evaluacion_actualizacion or "",
+    ]
     payload = "\x1f".join(parts).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()

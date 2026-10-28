@@ -1,4 +1,4 @@
-import { apiRequest } from '../../api/client'
+import { apiRequest, apiRequestBlobUrl } from '../../api/client'
 import type {
   ClinicalNoteFields,
   ClinicalNoteOut,
@@ -67,4 +67,9 @@ export function cancelNote(noteId: string, reason: string): Promise<ClinicalNote
     method: 'POST',
     body: { reason },
   })
+}
+
+// Fase D (docs/clinica/nota_evolucion.pdf): PDF de una nota de evolucion puntual.
+export function getNotePdfBlobUrl(noteId: string): Promise<string> {
+  return apiRequestBlobUrl(`/notes/${noteId}/pdf`)
 }

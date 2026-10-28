@@ -27,6 +27,13 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
+      # Pantalla "Control de versiones" (menu de administrador,
+      # app/modules/version_info/): reenvia la misma VERSION que deploy.sh
+      # escribe en .env de esta carpeta (linea ~66, sed -i "s/^VERSION=.../")
+      # -- sin esto el proceso de la API no tenia forma de saber en que
+      # version estaba corriendo, solo se usaba para resolver el tag de
+      # imagen a descargar.
+      VERSION: ${VERSION}
       DATABASE_URL: postgresql+asyncpg://dentia@db:5432/dentia
       DATABASE_PASSWORD_FILE: /run/secrets/db_password
       JWT_SECRET_FILE: /run/secrets/jwt_secret

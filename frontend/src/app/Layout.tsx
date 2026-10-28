@@ -13,6 +13,7 @@ import {
   canReadAgenda,
   canReadReports,
   canUseVoice,
+  canViewVersionInfo,
   canWriteBilling,
 } from '../modules/auth/roles'
 import { useAuthStore } from '../modules/auth/store'
@@ -141,6 +142,13 @@ export function Layout() {
             <li>
               <NavLink to="/configuracion/formatos-documentos" className={styles.navLink}>
                 Formatos de documentos
+              </NavLink>
+            </li>
+          )}
+          {canViewVersionInfo(activeRole) && (
+            <li>
+              <NavLink to="/configuracion/version" className={styles.navLink}>
+                Control de versiones
               </NavLink>
             </li>
           )}

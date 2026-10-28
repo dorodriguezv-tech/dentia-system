@@ -11,11 +11,13 @@ vi.mock('../catalogs/api')
 vi.mock('../records/api')
 vi.mock('../odontogram/api')
 vi.mock('../odontologicalHistory/api')
+vi.mock('../periodontogram/api')
 
 import * as catalogsApi from '../catalogs/api'
 import * as encountersApi from '../encounters/api'
 import * as odontoApi from '../odontologicalHistory/api'
 import * as odontogramApi from '../odontogram/api'
+import * as periodontogramApi from '../periodontogram/api'
 import * as recordsApi from '../records/api'
 
 /** Harness minimo: OdontologicalHistoryTab recibe el EncounterPicker ya
@@ -106,6 +108,28 @@ describe('OdontologicalHistoryTab', () => {
     vi.mocked(odontoApi.createToothTreatmentPlanEntry).mockReset()
     vi.mocked(odontoApi.annulToothTreatmentPlanEntry).mockReset()
     vi.mocked(odontoApi.getOdontologicalHistoryPdfBlobUrl).mockReset()
+
+    vi.mocked(periodontogramApi.listProbingSites).mockReset().mockResolvedValue([])
+    vi.mocked(periodontogramApi.createProbingSite).mockReset()
+    vi.mocked(periodontogramApi.annulProbingSite).mockReset()
+    vi.mocked(periodontogramApi.listToothMeasurements).mockReset().mockResolvedValue([])
+    vi.mocked(periodontogramApi.createToothMeasurement).mockReset()
+    vi.mocked(periodontogramApi.annulToothMeasurement).mockReset()
+    vi.mocked(periodontogramApi.listIndexEntries).mockReset().mockResolvedValue([])
+    vi.mocked(periodontogramApi.createIndexEntry).mockReset()
+    vi.mocked(periodontogramApi.annulIndexEntry).mockReset()
+    vi.mocked(periodontogramApi.getIndicesSummary).mockReset().mockResolvedValue({
+      encounter_id: null,
+      placa: { numero_caras_totales: 0, numero_caras_pigmentadas: 0, indice_placa_dentobacteriana: null },
+      gingival: { numero_sitios_totales: 0, indice_gingival_total: null },
+    })
+    vi.mocked(periodontogramApi.listOcclusalContacts).mockReset().mockResolvedValue([])
+    vi.mocked(periodontogramApi.createOcclusalContact).mockReset()
+    vi.mocked(periodontogramApi.annulOcclusalContact).mockReset()
+    vi.mocked(periodontogramApi.listObservations).mockReset().mockResolvedValue([])
+    vi.mocked(periodontogramApi.createObservation).mockReset()
+    vi.mocked(periodontogramApi.annulObservation).mockReset()
+    vi.mocked(periodontogramApi.getPeriodontogramPdfBlobUrl).mockReset()
   })
 
   it('muestra todas las secciones, con el Odontograma de diagnostico abierto y sin badge', async () => {
@@ -115,6 +139,7 @@ describe('OdontologicalHistoryTab', () => {
     expect(screen.getByText('Anamnesis periodontal')).toBeInTheDocument()
     expect(screen.getByText('Análisis radiográfico')).toBeInTheDocument()
     expect(screen.getByText('Odontograma de diagnóstico')).toBeInTheDocument()
+    expect(screen.getByText('Periodontograma completo')).toBeInTheDocument()
     expect(screen.getByText('Análisis con paralelómetro')).toBeInTheDocument()
     expect(screen.getByText('Diseño de prótesis parcial removible')).toBeInTheDocument()
     expect(screen.getByText('Diagnóstico por órgano dental')).toBeInTheDocument()
@@ -266,7 +291,10 @@ describe('OdontologicalHistoryTab', () => {
     const openSpy = vi.spyOn(window, 'open').mockReturnValue({ location: { href: '' } } as never)
 
     renderTab()
-    await userEvent.click(screen.getByRole('button', { name: 'Imprimir / Generar PDF' }))
+    // Hay 2 botones con este texto: el de toda la Historia Odontologica (el
+    // primero, fuera de cualquier seccion) y el del Periodontograma completo
+    // (al final de esa seccion nueva, Fase G) -- se prueba el primero aqui.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Imprimir / Generar PDF' })[0])
 
     await waitFor(() => expect(odontoApi.getOdontologicalHistoryPdfBlobUrl).toHaveBeenCalledWith('pat-1'))
     expect(openSpy).toHaveBeenCalled()

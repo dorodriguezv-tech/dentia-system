@@ -7,6 +7,7 @@ import { BillingSettingsPage } from '../modules/billing/BillingSettingsPage'
 import { CashSessionPage } from '../modules/billing/CashSessionPage'
 import { CatalogsPage } from '../modules/catalogs/CatalogsPage'
 import { DocumentSettingsPage } from '../modules/document_settings/DocumentSettingsPage'
+import { VersionInfoPage } from '../modules/version_info/VersionInfoPage'
 import { RequireAuth, RequireClinic, RequireRole } from '../modules/auth/guards'
 import { LoginPage } from '../modules/auth/LoginPage'
 import { MfaSetupPage } from '../modules/auth/MfaSetupPage'
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
                     path: 'configuracion/formatos-documentos',
                     element: <DocumentSettingsPage />,
                   },
+                  { path: 'configuracion/version', element: <VersionInfoPage /> },
                 ],
               },
               {

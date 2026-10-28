@@ -116,3 +116,58 @@
   border-radius: calc(var(--radius) * 0.5);
   padding: 1rem;
 }
+
+/* Fase D (docs/clinica, "Documentos imprimibles nuevos"): receta, hoja de
+   referencia/interconsulta, hoja de contrarreferencia y los botones de PDF de
+   nota de evolucion / ficha de tratamientos, todos dentro de esta pestana. */
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.readOnlyBox {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.medicationRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.medicationRow input,
+.medicationRow textarea {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.secondaryButton {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

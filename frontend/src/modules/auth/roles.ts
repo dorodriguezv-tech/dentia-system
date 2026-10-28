@@ -43,6 +43,13 @@ export function canManageDocumentSettings(roleCode: string | null): boolean {
   return hasRole(roleCode, ROLES_THAT_MANAGE_DOCUMENT_SETTINGS)
 }
 
+/** Roles con el permiso `version_info.read` (ver docs/MATRIZ_PERMISOS.md). */
+const ROLES_THAT_VIEW_VERSION_INFO = new Set(['superadmin', 'admin_clinica'])
+
+export function canViewVersionInfo(roleCode: string | null): boolean {
+  return hasRole(roleCode, ROLES_THAT_VIEW_VERSION_INFO)
+}
+
 /** Roles con el permiso `patients.write` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_PATIENTS = new Set(['admin_clinica', 'recepcion', 'odontologo'])
 

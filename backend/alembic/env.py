@@ -12,6 +12,7 @@ import app.modules.agenda.models  # noqa: F401
 import app.modules.billing.models  # noqa: F401
 import app.modules.branding.models  # noqa: F401
 import app.modules.catalogs.models  # noqa: F401
+import app.modules.clinical_documents.models  # noqa: F401
 import app.modules.diagnosis.models  # noqa: F401
 import app.modules.document_settings.models  # noqa: F401
 import app.modules.documents.models  # noqa: F401
@@ -23,6 +24,7 @@ import app.modules.odontogram.models  # noqa: F401
 import app.modules.odontological_history.models  # noqa: F401
 import app.modules.patients.models  # noqa: F401
 import app.modules.pediatric_history.models  # noqa: F401
+import app.modules.periodontogram.models  # noqa: F401
 import app.modules.treatment.models  # noqa: F401
 import app.modules.records.models  # noqa: F401
 import app.voice.models  # noqa: F401

@@ -1,0 +1,96 @@
+.description {
+  color: var(--color-text-muted);
+  max-width: 640px;
+  margin-bottom: 1rem;
+}
+
+.panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  max-width: 640px;
+  margin-bottom: 1.5rem;
+}
+
+.versionBlock,
+.environmentBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.versionLabel,
+.environmentLabel {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.versionValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.environmentBadge {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.releasesPanel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.releasesTitle {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.releasesLink {
+  align-self: flex-start;
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: calc(var(--radius) * 0.5);
+  background-color: var(--color-primary);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.releasesLink:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.errorBox {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  max-width: 640px;
+}
+
+@media (max-width: 480px) {
+  .panel {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}

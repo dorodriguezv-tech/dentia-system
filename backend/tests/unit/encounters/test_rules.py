@@ -52,3 +52,24 @@ def test_content_hash_changes_with_content() -> None:
 def test_content_hash_handles_none_fields() -> None:
     result = rules.compute_content_hash(None, None, None, None, "solo texto libre")
     assert isinstance(result, str) and len(result) == 64
+
+
+def test_content_hash_changes_with_new_fase_d_fields() -> None:
+    """Fase D: los campos nuevos de la nota de evolucion (interrogatorio,
+    indicaciones, etc.) tambien entran al hash de integridad -- si cambian,
+    el hash debe cambiar aunque el SOAP sea identico."""
+    base = rules.compute_content_hash("s", "o", "a", "p", "free")
+    with_extra = rules.compute_content_hash(
+        "s", "o", "a", "p", "free", interrogatorio="Antecedente nuevo"
+    )
+    assert base != with_extra
+
+
+def test_content_hash_is_deterministic_with_fase_d_fields() -> None:
+    a = rules.compute_content_hash(
+        "s", "o", "a", "p", "free", indicaciones="Reposo", plan_proxima_cita="1 mes"
+    )
+    b = rules.compute_content_hash(
+        "s", "o", "a", "p", "free", indicaciones="Reposo", plan_proxima_cita="1 mes"
+    )
+    assert a == b

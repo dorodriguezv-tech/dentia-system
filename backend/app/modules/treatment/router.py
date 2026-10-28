@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Response
@@ -6,13 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
+from app.core.errors import AppError
 from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.branding import service as branding_service
 from app.modules.documents.pdf_header import get_pdf_header_info
 from app.modules.iam.models import User
 from app.modules.patients.models import Patient
 from app.modules.treatment import service
-from app.modules.treatment.pdf import BudgetItemRow, BudgetPhaseRow, build_budget_pdf
+from app.modules.treatment.pdf import (
+    BudgetItemRow,
+    BudgetPhaseRow,
+    PerformedProcedureRow,
+    build_budget_pdf,
+    build_performed_procedures_pdf,
+)
 from app.modules.treatment.schemas import (
     AcceptPlanRequest,
     AnnulRequest,
@@ -343,6 +351,60 @@ async def list_performed(
             )
         )
     return outs
+
+
+_SEX_LABELS = {"F": "Femenino", "M": "Masculino", "X": "Otro", None: "No especificado"}
+
+
+@router.get("/patients/{patient_id}/procedures-performed/pdf")
+async def get_performed_procedures_pdf(
+    patient_id: uuid.UUID,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    _actor: User = Depends(require_permission("treatment.read")),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage_backend),
+) -> Response:
+    """Ficha de registro de tratamientos realizados (docs/clinica, Fase D):
+    100% derivado de `ProcedurePerformed`, sin tabla nueva (ver
+    treatment/pdf.py::build_performed_procedures_pdf)."""
+    rows = await service.list_performed(db, clinic_id=clinic_id, patient_id=patient_id)
+    patient = await db.get(Patient, patient_id)
+    if patient is None or patient.clinic_id != clinic_id:
+        raise AppError("NOT_FOUND", "Paciente no encontrado", status_code=404)
+    header = await get_pdf_header_info(db, storage, clinic_id=clinic_id)
+
+    professional_cache: dict[uuid.UUID, str] = {}
+    performed_rows = []
+    for performed, _amount in rows:
+        if performed.professional_id not in professional_cache:
+            professional = await db.get(User, performed.professional_id)
+            professional_cache[performed.professional_id] = (
+                professional.full_name if professional else ""
+            )
+        performed_rows.append(
+            PerformedProcedureRow(
+                performed_at_label=performed.performed_at.strftime("%d/%m/%Y"),
+                procedure_name=performed.procedure_name,
+                professional_name=professional_cache[performed.professional_id],
+            )
+        )
+
+    pdf_bytes = build_performed_procedures_pdf(
+        header=header,
+        patient_name=patient.full_name,
+        patient_birth_date_label=patient.date_of_birth.strftime("%d/%m/%Y"),
+        patient_sex_label=_SEX_LABELS.get(patient.sex, "No especificado"),
+        expediente_number=patient.expediente_number,
+        date_label=datetime.now(UTC).strftime("%d/%m/%Y"),
+        rows=performed_rows,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="tratamientos-realizados-{patient_id}.pdf"'
+        },
+    )
 
 
 @router.get("/treatment-plans/{plan_id}/pdf")

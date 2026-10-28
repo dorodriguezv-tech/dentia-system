@@ -7,6 +7,7 @@ import * as treatmentApi from '../treatment/api'
 import { useThemeStore } from '../../theme/store'
 import * as api from './api'
 import { SIGNER_RELATIONSHIP_LABELS, TEMPLATE_CODE_LABELS } from './catalog'
+import { ClinicalDocumentsSection } from './ClinicalDocumentsSection'
 import styles from './ConsentsTab.module.css'
 import { SignaturePad } from './SignaturePad'
 import type { ConsentOut, DocumentTemplateOut, SignerRelationship, TemplateCode } from './types'
@@ -341,6 +342,7 @@ export function ConsentsTab({
         {!consentsQuery.data?.length && <p>Sin consentimientos firmados.</p>}
         {canSign && <NewConsentForm patientId={patientId} />}
       </details>
+      <ClinicalDocumentsSection patientId={patientId} canWrite={canWrite} />
     </div>
   )
 }

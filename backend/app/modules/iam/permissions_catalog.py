@@ -35,6 +35,7 @@ PERMISSIONS: dict[str, str] = {
         "Editar los logos, titulo institucional y lugar del encabezado de los"
         " documentos impresos"
     ),
+    "version_info.read": "Ver la version de DentalCare desplegada",
     "patients.read": "Ver pacientes",
     "patients.write": "Crear y editar pacientes",
     "records.read": "Ver el expediente clinico",
@@ -75,6 +76,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "audit.read",
         "branding.manage",
         "document_settings.manage",
+        "version_info.read",
         "reports.read",
     ),
     "admin_clinica": (
@@ -83,6 +85,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "audit.read",
         "branding.manage",
         "document_settings.manage",
+        "version_info.read",
         "patients.read",
         "patients.write",
         "agenda.read",

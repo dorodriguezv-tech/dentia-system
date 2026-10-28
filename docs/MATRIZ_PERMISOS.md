@@ -15,6 +15,7 @@ por defecto deben validarse con la clinica antes de produccion
 | `audit.read` | Consultar la bitacora de auditoria | X | X |  |  |  |  |  |
 | `branding.manage` | Editar nombre, logo y colores de la clinica | X | X |  |  |  |  |  |
 | `document_settings.manage` | Editar los logos, titulo institucional y lugar del encabezado de los documentos impresos | X | X |  |  |  |  |  |
+| `version_info.read` | Ver la version de DentalCare desplegada | X | X |  |  |  |  |  |
 | `patients.read` | Ver pacientes |  | X | X | X | X | X | X |
 | `patients.write` | Crear y editar pacientes |  | X | X |  |  | X |  |
 | `records.read` | Ver el expediente clinico |  |  | X | X |  |  |  |

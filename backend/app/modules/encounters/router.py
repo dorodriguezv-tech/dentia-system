@@ -2,9 +2,11 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response
 
 from app.core.db import get_db
 from app.core.deps import get_clinic_id, require_permission
+from app.core.storage import StorageBackend, get_storage_backend
 from app.modules.encounters import service
 from app.modules.encounters.schemas import (
     CancelNoteRequest,
@@ -184,6 +186,24 @@ async def correct_note(
         db, clinic_id=clinic_id, note_id=note_id, data=payload, actor_id=actor.id
     )
     return ClinicalNoteOut.model_validate(note)
+
+
+@router.get("/notes/{note_id}/pdf")
+async def get_note_pdf(
+    note_id: uuid.UUID,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("records.read")),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage_backend),
+) -> Response:
+    pdf_bytes = await service.generate_note_pdf(
+        db, storage, clinic_id=clinic_id, note_id=note_id, actor_id=actor.id
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="nota-evolucion-{note_id}.pdf"'},
+    )
 
 
 @router.post("/notes/{note_id}/cancel", response_model=ClinicalNoteOut)
