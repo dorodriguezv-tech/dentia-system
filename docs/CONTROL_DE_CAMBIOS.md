@@ -14,7 +14,7 @@ qué cambió para quien no quiera leer cada mensaje de commit.
 
 ## v1.0.7 — 2026-10-28
 
-Commits: `6653f97`, `2adba0c`, `849fc2e`
+Commits: `6653f97`, `2adba0c`, `849fc2e`, `1248e33`, `470e927`
 
 - Corrige bug real al editar un usuario ("Datos de entrada inválidos"): el
   formulario permitía escribir una contraseña de 8 caracteres pero el
