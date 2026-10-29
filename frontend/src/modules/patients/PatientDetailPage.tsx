@@ -35,9 +35,15 @@ type Tab =
 function isTab(value: unknown): value is Tab {
   return (
     typeof value === 'string' &&
-    ['resumen', 'expediente', 'odontograma', 'tratamientos', 'consentimientos', 'imagenes', 'cuenta'].includes(
-      value,
-    )
+    [
+      'resumen',
+      'expediente',
+      'odontograma',
+      'tratamientos',
+      'consentimientos',
+      'imagenes',
+      'cuenta',
+    ].includes(value)
   )
 }
 
@@ -101,7 +107,7 @@ export function PatientDetailPage() {
             type="button"
             onClick={() => setTab('consentimientos')}
           >
-            Consentimientos
+            Formatos
           </button>
         )}
         {canReadImaging(activeRole) && (
@@ -137,8 +143,12 @@ export function PatientDetailPage() {
           canSign={canSignDocuments(activeRole)}
         />
       )}
-      {tab === 'imagenes' && <ImagesTab patientId={patientId} canWrite={canWriteImaging(activeRole)} />}
-      {tab === 'cuenta' && <AccountTab patientId={patientId} canWrite={canWriteBilling(activeRole)} />}
+      {tab === 'imagenes' && (
+        <ImagesTab patientId={patientId} canWrite={canWriteImaging(activeRole)} />
+      )}
+      {tab === 'cuenta' && (
+        <AccountTab patientId={patientId} canWrite={canWriteBilling(activeRole)} />
+      )}
     </section>
   )
 }

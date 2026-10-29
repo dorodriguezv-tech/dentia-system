@@ -171,3 +171,78 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* "Plantillas" (menu de Formatos): categorias colapsadas por default, con la
+   flecha nativa de <details>, y el documento elegido (header+logos+titulo+
+   cuerpo ya resuelto) debajo, sin estorbar la lista de formatos. */
+
+.subCard {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0.5rem 0.7rem;
+  margin: 0.5rem 0;
+}
+
+.subCard > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.subCard[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+.docPanel {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.docPreview {
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 1rem;
+  background-color: var(--color-surface);
+}
+
+.docHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.docHeaderLogo {
+  width: 90px;
+  display: flex;
+  align-items: center;
+}
+
+.docHeaderLogo img {
+  max-height: 28px;
+  max-width: 90px;
+}
+
+.docHeaderTitle {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.placeDate {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.docTitle {
+  text-align: center;
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.docPatientLine {
+  margin: 0 0 0.5rem;
+}
