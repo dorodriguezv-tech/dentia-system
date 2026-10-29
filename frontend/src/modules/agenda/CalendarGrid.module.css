@@ -79,9 +79,14 @@
   pointer-events: none;
 }
 
-/* Encabezado de una fecha que ya paso: mismo sombreado delicado. */
+/* Encabezado de una fecha que ya paso: mismo sombreado delicado -- pero
+   usando --color-text-muted en vez de opacity sobre --color-text (como
+   estaba antes): reducir la opacidad de un texto casi negro da un color
+   efectivo impredecible, y aqui bajaba el contraste a 3.56:1 sobre fondo
+   blanco (axe-core, WCAG 1.4.3 AA exige 4.5:1). --color-text-muted ya es
+   el tono "secundario" ya usado en el resto de la app y da ~6:1. */
 .dayHeaderPast {
-  opacity: 0.55;
+  color: var(--color-text-muted);
 }
 
 .slot:focus-visible,
