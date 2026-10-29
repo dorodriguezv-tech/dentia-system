@@ -14,7 +14,7 @@ qué cambió para quien no quiera leer cada mensaje de commit.
 
 ## v1.0.7 — 2026-10-28
 
-Commits: `6653f97`, `2adba0c`
+Commits: `6653f97`, `2adba0c`, `849fc2e`
 
 - Corrige bug real al editar un usuario ("Datos de entrada inválidos"): el
   formulario permitía escribir una contraseña de 8 caracteres pero el
@@ -33,6 +33,11 @@ Commits: `6653f97`, `2adba0c`
   selector de atención, bloqueando en silencio toda captura en esas
   pestañas; mejora de usabilidad del panel de sondeo periodontal (celda
   completa clicable, confirmación visible al guardar, no se cierra solo).
+- Corrige fixtures de pruebas de voz dependientes de la hora real (no era
+  un bug de la validación nueva de "no citas en el pasado", solo exponía
+  fragilidad preexistente de los tests); agrega `docs/CONTROL_DE_CAMBIOS.md`
+  (este documento) y `scripts/verify-changed.ps1` (verificación rápida
+  acotada a lo que cambió desde el último release).
 
 ## v1.0.6 — 2026-10-28
 
