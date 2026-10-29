@@ -5,10 +5,47 @@ generado a partir de los commits reales de cada versión (`git log vX.Y.(Z-1)..v
 Complementa a `docs/FLUJO_DE_TRABAJO.md` (cómo se publica) — este documento
 es el "qué se publicó y cuándo".
 
+## Instrucciones para Claude Code
+
 Al preparar una versión nueva, agrega su entrada aquí ANTES de crear el tag
-(o inmediatamente después), con el mismo formato: fecha, lista de commits
-incluidos (`git log <tag-anterior>..HEAD --oneline`) y una síntesis breve de
-qué cambió para quien no quiera leer cada mensaje de commit.
+(o inmediatamente después, si el tag ya se creó) — nunca dejarlo pendiente
+hasta que alguien pregunte qué llevó esa versión. Formato exacto, igual al
+de las entradas existentes:
+
+1. Encabezado `## vX.Y.Z — AAAA-MM-DD` con la fecha real de publicación (la
+   del commit/tag, no necesariamente "hoy" si la entrada se agrega después).
+2. Línea `Commits: ` con los hashes cortos de
+   `git log <tag-anterior>..HEAD --oneline`, **excluyendo** el propio commit
+   que agrega esta entrada (es autorreferencial, no cambia nada del
+   sistema).
+3. Lista con viñetas, en español de México, agrupando por tema (no un punto
+   por commit): describe el efecto para quien usa o despliega el sistema,
+   no el mensaje de commit literal.
+4. Insertar la entrada nueva arriba de la anterior (orden descendente,
+   la más reciente primero) — nunca reescribir ni reordenar entradas de
+   versiones ya publicadas; una corrección a una entrada vieja es un ajuste
+   puntual de esa entrada, no una reescritura de historia.
+5. Antes de dar por terminada la entrada, confirma que sus commits
+   coinciden con `git log <tag-anterior>..<tag-nuevo> --oneline` (menos el
+   de esta misma edición) — es la verificación que detecta una entrada
+   incompleta o un tag movido por error.
+
+## Instrucciones para el usuario
+
+Lee este documento cuando necesites saber **qué cambió y cuándo** en una
+versión ya publicada, o para decidir si vale la pena actualizar el
+servidor. No es la guía para publicar ni desplegar — eso es
+`docs/FLUJO_DE_TRABAJO.md` (secciones 4 y 5) y
+`deploy/vps/INSTALACION_VPS.md` (sección 7); aquí solo se registra el
+resultado.
+
+- Para pedir que se agregue la entrada de la versión más reciente, basta
+  decir "actualiza el control de cambios" — o Claude Code la agrega por su
+  cuenta al preparar un release (ver instrucciones de arriba).
+- Las versiones están en orden descendente: la más reciente arriba.
+- La "Nota sobre el módulo de voz/IA" al final no es una versión — es un
+  recordatorio permanente de que ese módulo existe en el código pero sigue
+  deshabilitado en producción.
 
 ---
 
