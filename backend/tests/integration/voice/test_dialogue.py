@@ -5,6 +5,7 @@ texto, sin audio -- mismo criterio que el interprete de la Fase 8 (FakeOllama):
 import json
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -13,10 +14,63 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import ollama_client
 from app.ai.models import AiSuggestion
 from app.modules.agenda import service as agenda_service
+from app.modules.iam.rules import DEFAULT_CLINIC_TIMEZONE
 from app.modules.patients.schemas import PatientCreateRequest
 from app.modules.patients.service import create_patient
 from app.voice import dialogue
 from app.voice.context import ScreenContext
+
+# El fixture `clinic` (tests/conftest.py) no fija `Clinic.timezone`, asi que
+# usa el default real (DEFAULT_CLINIC_TIMEZONE, "America/Mexico_City") -- el
+# mismo que `app/voice/dialogue.py::_clinic_zoneinfo` usa para resolver
+# "hoy"/"mañana" en produccion. Las pruebas de este archivo deben calcular
+# sus fechas/horas de prueba con ESTA zona horaria, nunca con `date.today()`
+# puro (dia calendario del PROCESO de pruebas): en CI (UTC) ambos difieren
+# durante parte del dia -- de 00:00 a 06:00 UTC, "hoy" en UTC ya es un dia
+# distinto al "hoy" de la clinica (Bug #42 documentado en dialogue.py) -- lo
+# que hacia que estas pruebas fallaran justo cuando el pipeline corria en esa
+# ventana (ver tambien `_assert_not_past` en agenda/service.py: una hora fija
+# como "hoy a las 10:00 UTC" tambien puede quedar en el pasado real segun a
+# que hora del dia corra la prueba, sin que la fecha calendario lo delate).
+_CLINIC_TZ = ZoneInfo(DEFAULT_CLINIC_TIMEZONE)
+
+
+def _clinic_today() -> date:
+    """ "Hoy" tal como lo resuelve el motor de dialogo: con la zona horaria de
+    la clinica, no con el dia calendario del proceso de pruebas."""
+    return datetime.now(_CLINIC_TZ).date()
+
+
+def _clinic_day_bounds_utc(day: date) -> tuple[datetime, datetime]:
+    """Ventana [00:00, 24:00) de `day` en la zona horaria de la clinica,
+    convertida a UTC -- mismo calculo que
+    `app/voice/dialogue.py::_local_day_bounds_utc`, para que las consultas de
+    verificacion de estas pruebas casen con el dia que el motor de dialogo
+    trata como "hoy"/"mañana", sin importar la hora UTC en que corra la
+    prueba."""
+    start_local = datetime.combine(day, time.min, tzinfo=_CLINIC_TZ)
+    return start_local.astimezone(UTC), (start_local + timedelta(days=1)).astimezone(UTC)
+
+
+def _soon_in_clinic_tz(minutes_ahead: int = 30) -> datetime:
+    """Un datetime UTC que cae `minutes_ahead` minutos despues de "ahora" --
+    siempre dentro de la ventana de "hoy" de la clinica y siempre en el futuro
+    real (pasa `_assert_not_past`), para pruebas que solo necesitan "una cita
+    de hoy valida" y no les importa la hora exacta (buscan por nombre de
+    paciente, no por hora dicha)."""
+    return (datetime.now(_CLINIC_TZ) + timedelta(minutes=minutes_ahead)).astimezone(UTC)
+
+
+def _soon_utc_at_whole_hour(hours_ahead: int = 2) -> datetime:
+    """Datetime UTC `hours_ahead` horas en el futuro, redondeado hacia abajo a
+    la hora en punto -- para pruebas que necesitan que la hora DICHA ("a las
+    H") y la hora GUARDADA coincidan literalmente (`extract_time_of_day` no
+    convierte zona horaria: compara la hora tal como se dice, ver
+    `app/voice/datetime_parse.py`). El colchon de horas evita que redondear
+    hacia abajo caiga en el pasado."""
+    return (datetime.now(UTC) + timedelta(hours=hours_ahead)).replace(
+        minute=0, second=0, microsecond=0
+    )
 
 
 def _fake_chat(actions: list[dict], unrecognized: list[dict] | None = None):
@@ -902,7 +956,12 @@ async def test_agendar_cita_confirms_and_creates_the_appointment(
     executed = await result.pending.execute()
     assert "Listo, cita agendada" in executed.say
 
-    tomorrow = date.today() + timedelta(days=1)
+    # `_handle_agendar_cita` guarda `starts_at` con un `datetime.combine(target_date,
+    # target_time, tzinfo=UTC)` LITERAL (la hora dicha tal cual, sin convertir zona
+    # horaria -- ver `_soon_utc_at_whole_hour` arriba) -- la ventana de verificacion
+    # debe ser el dia calendario UTC literal de `tomorrow`, no la ventana de "dia de
+    # la clinica" que usa `_find_todays_appointment` (esa si es timezone-aware).
+    tomorrow = _clinic_today() + timedelta(days=1)
     starts_from = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
     appointments = await agenda_service.list_appointments(
         db_session,
@@ -948,7 +1007,7 @@ async def test_agendar_cita_conflict_is_reported_gracefully(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
 
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = _clinic_today() + timedelta(days=1)
     busy_starts_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 10, 0, tzinfo=UTC)
     await _create_appointment(
         client,
@@ -983,8 +1042,7 @@ async def test_confirmar_cita_by_patient_name_changes_status(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    today = date.today()
-    starts_at = datetime(today.year, today.month, today.day, 10, 0, tzinfo=UTC)
+    starts_at = _soon_in_clinic_tz()
     appointment_id = await _create_appointment(
         client,
         headers,
@@ -1008,11 +1066,12 @@ async def test_confirmar_cita_by_patient_name_changes_status(
     executed = await result.pending.execute()
     assert executed.say == ""
 
+    starts_from, starts_to = _clinic_day_bounds_utc(_clinic_today())
     appointments = await agenda_service.list_appointments(
         db_session,
         clinic_id=clinic.id,
-        starts_from=datetime(today.year, today.month, today.day, tzinfo=UTC),
-        starts_to=datetime(today.year, today.month, today.day, 23, 59, tzinfo=UTC),
+        starts_from=starts_from,
+        starts_to=starts_to,
     )
     assert appointments[0]["status"] == "CONFIRMADA"
     assert appointments[0]["id"] == uuid.UUID(appointment_id)
@@ -1028,8 +1087,7 @@ async def test_registrar_llegada_changes_status_to_en_sala(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    today = date.today()
-    starts_at = datetime(today.year, today.month, today.day, 10, 0, tzinfo=UTC)
+    starts_at = _soon_in_clinic_tz()
     await _create_appointment(
         client,
         headers,
@@ -1052,11 +1110,12 @@ async def test_registrar_llegada_changes_status_to_en_sala(
     executed = await result.pending.execute()
     assert executed.say == ""
 
+    starts_from, starts_to = _clinic_day_bounds_utc(_clinic_today())
     appointments = await agenda_service.list_appointments(
         db_session,
         clinic_id=clinic.id,
-        starts_from=datetime(today.year, today.month, today.day, tzinfo=UTC),
-        starts_to=datetime(today.year, today.month, today.day, 23, 59, tzinfo=UTC),
+        starts_from=starts_from,
+        starts_to=starts_to,
     )
     assert appointments[0]["status"] == "EN_SALA"
 
@@ -1071,8 +1130,8 @@ async def test_reprogramar_cita_moves_the_appointment_keeping_the_time(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    today = date.today()
-    starts_at = datetime(today.year, today.month, today.day, 10, 0, tzinfo=UTC)
+    today = _clinic_today()
+    starts_at = _soon_in_clinic_tz()
     await _create_appointment(
         client,
         headers,
@@ -1096,6 +1155,11 @@ async def test_reprogramar_cita_moves_the_appointment_keeping_the_time(
     executed = await result.pending.execute()
     assert executed.say == "Listo, cita reprogramada."
 
+    # `_handle_reprogramar_cita` tambien guarda `new_starts_at` con un
+    # `datetime.combine(target_date, target_time, tzinfo=UTC)` literal (misma
+    # convencion que agendar -- la hora se conserva tal cual, ver docstring de
+    # `_soon_utc_at_whole_hour`), asi que la ventana de verificacion es el dia
+    # calendario UTC literal de `friday`, no la ventana "dia de la clinica".
     friday = today + timedelta(days=(4 - today.weekday()) % 7)
     appointments = await agenda_service.list_appointments(
         db_session,
@@ -1114,7 +1178,7 @@ async def test_reprogramar_cita_moves_the_appointment_keeping_the_time(
     # y que ninguna otra fila del mismo paciente quedo mutada en el lugar.
     reserved = [a for a in appointments if a["status"] == "RESERVADA"]
     assert len(reserved) == 1
-    assert reserved[0]["starts_at"].hour == 10
+    assert reserved[0]["starts_at"].hour == starts_at.hour
     assert reserved[0]["patient_id"] == uuid.UUID(patient_id)
     others = [a for a in appointments if a["id"] != reserved[0]["id"]]
     assert all(a["status"] != "RESERVADA" for a in others)
@@ -1499,7 +1563,10 @@ async def test_agenda_llm_fallback_agenda_cita_with_free_phrasing(
     executed = await result.pending.execute()
     assert "Listo, cita agendada" in executed.say
 
-    tomorrow = date.today() + timedelta(days=1)
+    # Mismo motivo que en test_agendar_cita_confirms_and_creates_the_appointment:
+    # la ruta LLM tambien guarda `starts_at` con `datetime.combine(..., tzinfo=UTC)`
+    # literal -- ventana por dia calendario UTC literal, no la de "dia de la clinica".
+    tomorrow = _clinic_today() + timedelta(days=1)
     starts_from = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
     appointments = await agenda_service.list_appointments(
         db_session,
@@ -1616,7 +1683,7 @@ async def test_huecos_libres_proposes_real_free_slots(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = _clinic_today() + timedelta(days=1)
     await _give_working_hours(
         db_session, clinic.id, provider_id, day=tomorrow, start_hour=9, end_hour=10
     )
@@ -1659,7 +1726,7 @@ async def test_agendar_cita_without_a_time_proposes_free_slots(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = _clinic_today() + timedelta(days=1)
     await _give_working_hours(
         db_session, clinic.id, provider_id, day=tomorrow, start_hour=9, end_hour=10
     )
@@ -1705,8 +1772,7 @@ async def test_cancelar_cita_by_time_with_reason_changes_status(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    today = date.today()
-    starts_at = datetime(today.year, today.month, today.day, 12, 0, tzinfo=UTC)
+    starts_at = _soon_utc_at_whole_hour()
     appointment_id = await _create_appointment(
         client,
         headers,
@@ -1720,7 +1786,7 @@ async def test_cancelar_cita_by_time_with_reason_changes_status(
         db_session,
         clinic_id=clinic.id,
         user_id=recepcion.id,
-        transcript="Dentia, cancela la cita de las 12, motivo: enfermedad",
+        transcript=f"Dentia, cancela la cita de las {starts_at.hour}, motivo: enfermedad",
         context=ScreenContext(),
         last_say=None,
         has_clinical=False,
@@ -1731,11 +1797,12 @@ async def test_cancelar_cita_by_time_with_reason_changes_status(
     executed = await result.pending.execute()
     assert "cancelada" in executed.say.lower()
 
+    starts_from, starts_to = _clinic_day_bounds_utc(starts_at.astimezone(_CLINIC_TZ).date())
     appointments = await agenda_service.list_appointments(
         db_session,
         clinic_id=clinic.id,
-        starts_from=datetime(today.year, today.month, today.day, tzinfo=UTC),
-        starts_to=datetime(today.year, today.month, today.day, 23, 59, tzinfo=UTC),
+        starts_from=starts_from,
+        starts_to=starts_to,
     )
     assert appointments[0]["id"] == uuid.UUID(appointment_id)
     assert appointments[0]["status"] == "CANCELADA"
@@ -1751,8 +1818,7 @@ async def test_no_show_suffix_phrasing_changes_status(
     provider_id = await _make_provider(
         client, make_user, clinic, db_session, full_name="Laura Ruiz", email="ruiz@example.com"
     )
-    today = date.today()
-    starts_at = datetime(today.year, today.month, today.day, 10, 0, tzinfo=UTC)
+    starts_at = _soon_in_clinic_tz()
     await _create_appointment(
         client,
         headers,
@@ -1775,11 +1841,12 @@ async def test_no_show_suffix_phrasing_changes_status(
     executed = await result.pending.execute()
     assert "registrado" in executed.say.lower()
 
+    starts_from, starts_to = _clinic_day_bounds_utc(_clinic_today())
     appointments = await agenda_service.list_appointments(
         db_session,
         clinic_id=clinic.id,
-        starts_from=datetime(today.year, today.month, today.day, tzinfo=UTC),
-        starts_to=datetime(today.year, today.month, today.day, 23, 59, tzinfo=UTC),
+        starts_from=starts_from,
+        starts_to=starts_to,
     )
     assert appointments[0]["status"] == "NO_SHOW"
 

@@ -79,6 +79,25 @@ por PID** — `uvicorn --reload` levanta un proceso "worker" aparte, y
 matarlo directamente puede dejarlo huérfano consumiendo ~400% de CPU. Usa
 siempre `stop-dentia.ps1`.
 
+### 2.1.1 Atajo rápido: verificar solo lo que cambió
+
+Para el día a día (iterar sobre un cambio concreto, no un release), correr
+la suite completa cada vez es lento y, si lo hace un agente, consume
+muchos tokens de más revisando módulos que ni se tocaron. `scripts\verify-changed.ps1`
+traduce `git diff` contra el último tag (o el que le indiques) a qué
+módulos de backend y qué archivos de frontend cambiaron, y corre SOLO esas
+pruebas:
+
+```powershell
+.\scripts\verify-changed.ps1              # compara contra el ultimo tag alcanzable
+.\scripts\verify-changed.ps1 -Base v1.0.5 # compara contra una version especifica
+.\scripts\verify-changed.ps1 -Full        # suite completa de siempre (ver 2.2/2.3)
+```
+
+Esto NO reemplaza una corrida completa antes de publicar un release real
+(el pipeline de CI, paso 4, siempre corre todo sin acotar de todas
+formas) — es para no pagar ese costo completo en cada iteración local.
+
 ### 2.2 Backend — pruebas automáticas
 
 Desde PowerShell, en `backend/` (con el entorno virtual activado):
@@ -153,6 +172,11 @@ versión que ya tenía.
 ---
 
 ## 4. Publicar una versión (esto sí dispara el pipeline automático)
+
+Antes o inmediatamente después de taggear, agrega la entrada de esta
+versión en `docs/CONTROL_DE_CAMBIOS.md` (fecha, commits incluidos,
+síntesis breve) -- es el historial de qué se publicó y cuándo, para no
+tener que releer commits viejos para saber qué trae cada versión instalada.
 
 Cuando tengas uno o varios commits listos para convertirse en una versión
 instalable, créale una etiqueta de git y súbela:

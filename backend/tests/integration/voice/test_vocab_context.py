@@ -3,8 +3,6 @@ Whisper por CONTEXTO -- catalogos administrables de la sucursal (B1) y
 nombres de pacientes, que el vocabulario fijo (`app/ai/vocab/terms.py`) no
 puede traer porque los define cada clinica."""
 
-from datetime import UTC, date, datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.catalogs import service as catalogs_service
@@ -16,6 +14,7 @@ from tests.integration.voice.test_dialogue import (
     _create_appointment,
     _make_patient,
     _make_provider,
+    _soon_in_clinic_tz,
 )
 
 
@@ -48,14 +47,13 @@ async def test_contextual_terms_includes_clinic_catalog_items_and_patients(
         "Authorization": f"Bearer {token_resp.json()['access_token']}",
         "X-Clinic-Id": str(clinic.id),
     }
-    today = date.today()
     await _create_appointment(
         client,
         headers,
         patient_id=today_patient_id,
         provider_id=provider_id,
         appointment_type="consulta",
-        starts_at=datetime(today.year, today.month, today.day, 10, 0, tzinfo=UTC),
+        starts_at=_soon_in_clinic_tz(),
     )
 
     screen_patient_id = await _make_patient(db_session, clinic, ("Benigno", "Quintanilla"))
