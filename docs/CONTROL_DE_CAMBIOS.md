@@ -14,7 +14,8 @@ qué cambió para quien no quiera leer cada mensaje de commit.
 
 ## v1.0.7 — 2026-10-28
 
-Commits: `6653f97`, `2adba0c`, `849fc2e`, `1248e33`, `470e927`, `1cc38d9`, `f3232d5`
+Commits: `6653f97`, `2adba0c`, `849fc2e`, `1248e33`, `470e927`, `1cc38d9`, `f3232d5`, `ac16aa4`,
+`e83c115`
 
 - Corrige bug real al editar un usuario ("Datos de entrada inválidos"): el
   formulario permitía escribir una contraseña de 8 caracteres pero el
@@ -38,6 +39,17 @@ Commits: `6653f97`, `2adba0c`, `849fc2e`, `1248e33`, `470e927`, `1cc38d9`, `f323
   fragilidad preexistente de los tests); agrega `docs/CONTROL_DE_CAMBIOS.md`
   (este documento) y `scripts/verify-changed.ps1` (verificación rápida
   acotada a lo que cambió desde el último release).
+- Corrige contraste insuficiente (WCAG AA) en el encabezado de fechas
+  pasadas del calendario de Agenda, detectado por el chequeo de
+  accesibilidad del pipeline.
+- Corrige una CVE CRITICAL (`brotli-libs`) detectada por el escaneo de
+  seguridad de la imagen del frontend.
+- Corrige otro caso de la misma fragilidad horaria de pruebas de voz: una
+  cita de prueba calculada cerca de la medianoche en hora de la clínica
+  (22:00-24:00, que coincide con la ventana en que corre el pipeline) podía
+  quedar registrada para "mañana" según la zona horaria de la clínica,
+  aunque la hora dicha coincidiera — la prueba nunca encontraba la cita al
+  intentar cancelarla.
 
 ## v1.0.6 — 2026-10-28
 
