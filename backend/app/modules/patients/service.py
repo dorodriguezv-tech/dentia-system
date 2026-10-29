@@ -391,6 +391,7 @@ async def create_contact(
         relationship_label=data.relationship_label,
         phone=data.phone,
         email=data.email,
+        occupation=data.occupation,
         created_by=actor_id,
     )
     db.add(contact)
@@ -421,7 +422,7 @@ async def update_contact(
     if contact is None or contact.patient_id != patient_id:
         raise AppError("NOT_FOUND", "Contacto no encontrado", status_code=404)
 
-    for field in ("full_name", "relationship_label", "phone", "email"):
+    for field in ("full_name", "relationship_label", "phone", "email", "occupation"):
         value = getattr(data, field)
         if value is not None:
             setattr(contact, field, value)

@@ -280,12 +280,122 @@ describe('NewPatientPage', () => {
     await fillRequiredFields()
     await userEvent.selectOptions(screen.getByLabelText('Tipo de paciente'), 'pediatrico')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Crear paciente' }))
+    // Pediatrico: el paso de contactos ahora exige un tutor con nombre y telefono
+    // antes de poder crear el paciente (ver pruebas dedicadas mas abajo).
+    await screen.findByRole('button', { name: 'Crear paciente' })
+    await userEvent.type(screen.getByLabelText('Nombre'), 'Mama de Jose')
+    await userEvent.type(screen.getByLabelText('Telefono'), '5551112222')
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar contacto' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Crear paciente' }))
 
     await waitFor(() =>
       expect(api.createPatient).toHaveBeenCalledWith(
         expect.objectContaining({ patient_type: 'pediatrico' }),
       ),
+    )
+  })
+
+  it('oculta Ocupacion y Estado civil del paciente cuando es pediatrico', async () => {
+    renderWizard()
+    await userEvent.type(screen.getByLabelText('Nombre(s)'), 'Jose')
+    await userEvent.type(screen.getByLabelText('Apellido paterno'), 'Perez')
+    const dob = screen.getByLabelText('Fecha de nacimiento')
+    const recentDob = new Date()
+    recentDob.setFullYear(recentDob.getFullYear() - 5)
+    await userEvent.type(dob, recentDob.toISOString().slice(0, 10))
+
+    expect(screen.queryByLabelText('Ocupación')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Estado civil')).not.toBeInTheDocument()
+  })
+
+  it('no oculta Ocupacion ni Estado civil para un paciente adulto', async () => {
+    renderWizard()
+    await fillRequiredFields()
+
+    expect(screen.getByLabelText('Ocupación')).toBeInTheDocument()
+    expect(screen.getByLabelText('Estado civil')).toBeInTheDocument()
+  })
+
+  it('exige un contacto tutor con nombre y telefono antes de crear un paciente pediatrico', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+
+    renderWizard()
+    await userEvent.type(screen.getByLabelText('Nombre(s)'), 'Jose')
+    await userEvent.type(screen.getByLabelText('Apellido paterno'), 'Perez')
+    const dob = screen.getByLabelText('Fecha de nacimiento')
+    const recentDob = new Date()
+    recentDob.setFullYear(recentDob.getFullYear() - 5)
+    await userEvent.type(dob, recentDob.toISOString().slice(0, 10))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    const createButton = await screen.findByRole('button', { name: 'Crear paciente' })
+    expect(createButton).toBeDisabled()
+    expect(
+      screen.getByText('Agrega al menos un contacto responsable (tutor/pariente) con nombre y teléfono.'),
+    ).toBeInTheDocument()
+
+    // El tipo de contacto ya viene preseleccionado como "Tutor o responsable".
+    expect(screen.getByLabelText('Tipo')).toHaveValue('guardian')
+
+    await userEvent.type(screen.getByLabelText('Nombre'), 'Mama de Jose')
+    await userEvent.type(screen.getByLabelText('Telefono'), '5551112222')
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar contacto' }))
+
+    expect(createButton).not.toBeDisabled()
+    expect(
+      screen.queryByText('Agrega al menos un contacto responsable (tutor/pariente) con nombre y teléfono.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('crea el paciente pediatrico con la ocupacion del tutor capturada en Contactos', async () => {
+    vi.mocked(api.checkDuplicates).mockResolvedValue([])
+    vi.mocked(api.createPatient).mockResolvedValue({
+      id: 'new-id',
+      expediente_number: '000003',
+      first_name: 'Jose',
+      last_name_paternal: 'Perez',
+      last_name_maternal: null,
+      full_name: 'Jose Perez',
+      date_of_birth: '2021-01-01',
+      sex: null,
+      patient_type: 'pediatrico',
+      phone: null,
+      email: null,
+      address: null,
+      status: 'activo',
+      has_photo: false,
+      default_resource_id: null,
+      primary_provider_id: null,
+    })
+
+    renderWizard()
+    await userEvent.type(screen.getByLabelText('Nombre(s)'), 'Jose')
+    await userEvent.type(screen.getByLabelText('Apellido paterno'), 'Perez')
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de paciente'), 'pediatrico')
+    const dob = screen.getByLabelText('Fecha de nacimiento')
+    await userEvent.type(dob, '2021-01-01')
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    await screen.findByRole('button', { name: 'Crear paciente' })
+    await userEvent.type(screen.getByLabelText('Nombre'), 'Mama de Jose')
+    await userEvent.type(screen.getByLabelText('Telefono'), '5551112222')
+    await userEvent.type(screen.getByLabelText('Ocupación'), 'Enfermera')
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar contacto' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Crear paciente' }))
+
+    await waitFor(() =>
+      expect(api.createContact).toHaveBeenCalledWith(
+        'new-id',
+        expect.objectContaining({
+          role: 'guardian',
+          full_name: 'Mama de Jose',
+          phone: '5551112222',
+          occupation: 'Enfermera',
+        }),
+      ),
+    )
+    expect(api.createPatient).toHaveBeenCalledWith(
+      expect.objectContaining({ occupation: null, marital_status: null }),
     )
   })
 })

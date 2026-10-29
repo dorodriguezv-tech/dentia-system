@@ -366,18 +366,21 @@ async def test_contacts_crud_flow(client: AsyncClient, make_user, clinic) -> Non
             "full_name": "Ana Perez",
             "relationship_label": "Hermana",
             "phone": "5551112222",
+            "occupation": "Enfermera",
         },
     )
     assert create_contact.status_code == 201
     contact_id = create_contact.json()["id"]
+    assert create_contact.json()["occupation"] == "Enfermera"
 
     update_contact = await client.patch(
         f"/api/v1/patients/{patient_id}/contacts/{contact_id}",
         headers=_headers(token, clinic.id),
-        json={"phone": "5559998888"},
+        json={"phone": "5559998888", "occupation": "Comerciante"},
     )
     assert update_contact.status_code == 200
     assert update_contact.json()["phone"] == "5559998888"
+    assert update_contact.json()["occupation"] == "Comerciante"
 
     list_response = await client.get(
         f"/api/v1/patients/{patient_id}/contacts", headers=_headers(token, clinic.id)

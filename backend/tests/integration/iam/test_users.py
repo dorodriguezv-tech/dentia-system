@@ -399,3 +399,40 @@ async def test_cannot_change_a_users_email_to_one_already_taken(
 
     assert response.status_code == 409
     assert response.json()["code"] == "EMAIL_TAKEN"
+
+
+async def test_resetting_a_users_password_below_the_policy_minimum_is_rejected(
+    client: AsyncClient, make_user, clinic: Clinic
+) -> None:
+    """Bug real reportado: "al editar un usuario aparece 'Datos de entrada
+    invalidos'". Causa raiz: el formulario de edicion (frontend) dejaba escribir
+    una contrasena nueva de 8 caracteres (su minLength estaba desalineado de
+    app.core.password_policy.MIN_PASSWORD_LENGTH, que exige 12), asi que el
+    administrador podia enviarla sin que el navegador la bloqueara -- y el backend
+    la rechazaba con un 422 generico que no decia cual campo fallaba, pareciendo
+    que el nombre (el primer campo del formulario) era invalido. Este caso cubre
+    el contrato del backend en si (la correccion real esta en el formulario:
+    frontend/src/modules/users/UsersPage.tsx, minLength ahora en 12)."""
+    # Correos propios de esta prueba (no "admin@example.com", que casi todas las demas
+    # pruebas de este archivo reutilizan) para que corra limpia incluso en paralelo.
+    await make_user(
+        email="admin.pwpolicy@example.com", password="Contrasena123", role_code="admin_clinica"
+    )
+    target = await make_user(email="objetivo.pwpolicy@example.com", role_code="recepcion")
+    target_id = target.id  # ver nota en login() sobre expire_on_commit
+    headers = {
+        "Authorization": f"Bearer {await _login(client, 'admin.pwpolicy@example.com')}",
+        "X-Clinic-Id": str(clinic.id),
+    }
+
+    response = await client.patch(
+        f"/api/v1/users/{target_id}",
+        headers=headers,
+        json={"new_password": "Corta123"},  # 8 caracteres: menos que el minimo de 12.
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert any(
+        error["loc"] == ["body", "new_password"] for error in response.json()["details"]
+    )

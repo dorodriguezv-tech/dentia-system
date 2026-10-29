@@ -10,6 +10,7 @@ import {
   canManageCatalogs,
   canManageDocumentSettings,
   canManageUsers,
+  canManageWorkingHours,
   canReadAgenda,
   canReadReports,
   canUseVoice,
@@ -173,7 +174,7 @@ export function Layout() {
               </NavLink>
             </li>
           )}
-          {canManageCatalogs(activeRole) && (
+          {canManageWorkingHours(activeRole) && (
             <li>
               <NavLink to="/configuracion/horarios" className={styles.navLink}>
                 Horarios

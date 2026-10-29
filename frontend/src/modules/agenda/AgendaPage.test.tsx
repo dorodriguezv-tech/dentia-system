@@ -157,8 +157,13 @@ describe('AgendaPage', () => {
     renderPage()
     await screen.findByText(/Jose Perez/)
 
+    // El primer slot (lunes de la semana en curso, 07:00) puede caer en el pasado
+    // segun el dia/hora real en que corra la prueba -- desde que la agenda sombrea y
+    // deshabilita el clic en horarios ya pasados (CLAUDE.md), hay que usar uno que
+    // siempre sea futuro: el ultimo slot de la grilla (ultimo dia de la semana, a
+    // las 20:30) nunca puede haber pasado ya respecto al momento en que se renderiza.
     const slots = await screen.findAllByRole('button', { name: /Agendar cita/ })
-    await userEvent.click(slots[0])
+    await userEvent.click(slots[slots.length - 1])
 
     expect(await screen.findByText(/Consulta \/ valoracion/)).toBeInTheDocument()
     const resourceSelect = screen.getByLabelText('Gabinete') as HTMLSelectElement

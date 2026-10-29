@@ -293,6 +293,52 @@ async def test_create_appointment_rejects_invalid_range(
     assert response.json()["code"] == "INVALID_RANGE"
 
 
+async def test_create_appointment_rejects_a_past_time_slot(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    """No se pueden agendar citas en un horario que ya paso (encargo de
+    agenda/horarios, punto 3)."""
+    headers, provider_id, patient_id, _odonto = await _setup(client, make_user, clinic, db_session)
+
+    response = await client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "consulta",
+            "starts_at": _iso(datetime.now(UTC) - timedelta(hours=1)),
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "PAST_TIME_SLOT"
+
+
+async def test_reschedule_rejects_a_past_time_slot(
+    client: AsyncClient, make_user, clinic, db_session: AsyncSession
+) -> None:
+    headers, provider_id, patient_id, _odonto = await _setup(client, make_user, clinic, db_session)
+    created = await client.post(
+        "/api/v1/appointments",
+        headers=headers,
+        json={
+            "patient_id": patient_id,
+            "provider_id": provider_id,
+            "appointment_type": "consulta",
+            "starts_at": _iso(MONDAY_9AM),
+        },
+    )
+    appointment_id = created.json()["id"]
+
+    response = await client.post(
+        f"/api/v1/appointments/{appointment_id}/reschedule",
+        headers=headers,
+        json={"starts_at": _iso(datetime.now(UTC) - timedelta(hours=1))},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "PAST_TIME_SLOT"
+
+
 async def test_create_appointment_rejects_overlap_same_provider(
     client: AsyncClient, make_user, clinic, db_session: AsyncSession
 ) -> None:

@@ -1,6 +1,6 @@
 import { STATUS_COLORS } from './catalog'
 import styles from './CalendarGrid.module.css'
-import { formatTime, toDateKey } from './dateUtils'
+import { combineDateAndTime, formatTime, startOfDay, toDateKey } from './dateUtils'
 import type { AppointmentListItemOut, WorkingHoursOut } from './types'
 
 const DAY_START_HOUR = 7
@@ -62,6 +62,13 @@ export function CalendarGrid({
     byDate.set(key, list)
   }
 
+  // No se pueden agendar citas en un horario que ya paso (el backend lo rechaza con
+  // PAST_TIME_SLOT, ver agenda/service.py::_assert_not_past); aqui solo se sombrea y
+  // se evita que parezca una opcion valida -- a diferencia de "fuera de horario
+  // laboral" (isOffHours), que sigue siendo clicable a proposito para urgencias.
+  const now = new Date()
+  const today = startOfDay(now)
+
   return (
     <div
       className={styles.grid}
@@ -69,7 +76,10 @@ export function CalendarGrid({
     >
       <div className={styles.corner} />
       {dates.map((date) => (
-        <div key={toDateKey(date)} className={styles.dayHeader}>
+        <div
+          key={toDateKey(date)}
+          className={startOfDay(date) < today ? `${styles.dayHeader} ${styles.dayHeaderPast}` : styles.dayHeader}
+        >
           {date.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}
         </div>
       ))}
@@ -98,28 +108,38 @@ export function CalendarGrid({
               // profesional) no se sombrea nada -- "no se sabe" no es "cerrado".
               const isOffHours =
                 workingHours.length > 0 && !isWorkingMinute(workingHours, date, hour * 60 + minute)
-              const label = `Agendar cita${isOffHours ? ' (fuera de horario laboral, solo urgencias)' : ''}: ${date.toLocaleDateString(
+              const isPast = combineDateAndTime(date, hour, minute) < now
+              const label = `Agendar cita${isPast ? ' (horario ya paso)' : isOffHours ? ' (fuera de horario laboral, solo urgencias)' : ''}: ${date.toLocaleDateString(
                 'es-MX',
                 { weekday: 'long', day: 'numeric', month: 'long' },
               )}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+              let className = styles.slot
+              if (isPast) className = `${styles.slot} ${styles.slotPast}`
+              else if (isOffHours) className = `${styles.slot} ${styles.slotOffHours}`
               return (
                 <div
                   key={i}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={isPast ? -1 : 0}
+                  aria-disabled={isPast}
                   aria-label={label}
-                  className={isOffHours ? `${styles.slot} ${styles.slotOffHours}` : styles.slot}
+                  className={className}
                   style={{ height: SLOT_PX }}
-                  onClick={() => onSlotClick(date, hour, minute)}
+                  onClick={() => {
+                    if (!isPast) onSlotClick(date, hour, minute)
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    if (!isPast && (e.key === 'Enter' || e.key === ' ')) {
                       e.preventDefault()
                       onSlotClick(date, hour, minute)
                     }
                   }}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    if (!isPast) e.preventDefault()
+                  }}
                   onDrop={(e) => {
                     e.preventDefault()
+                    if (isPast) return
                     const id = e.dataTransfer.getData('text/plain')
                     if (id) onDropAppointment(id, date, hour, minute)
                   }}

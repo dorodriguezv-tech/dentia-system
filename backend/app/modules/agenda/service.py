@@ -93,6 +93,25 @@ async def get_provider_for_user(
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+def _seed_default_working_hours(provider: Provider) -> list[ProviderWorkingHours]:
+    """Horario abierto por default (ver rules.DEFAULT_OPEN_WORKING_HOURS) para un
+    Provider recien creado automaticamente al dar de alta (o promover a) un usuario
+    con rol odontologo/especialista -- sin esto, un Provider nuevo no tiene filas en
+    ProviderWorkingHours y la agenda lo trata como sin disponibilidad ninguna hasta
+    que recepcion entra a configuracion/horarios a definirlo a mano.
+
+    A proposito NO se usa en `create_provider` (alta MANUAL via POST
+    /api/v1/providers): ese flujo asume que quien lo crea define el horario de
+    inmediato (ver test_availability.py), y sembrar aqui tambien duplicaria horarios
+    si ademas se llama a `create_working_hours` justo despues."""
+    return [
+        ProviderWorkingHours(
+            provider_id=provider.id, weekday=weekday, start_time=start_time, end_time=end_time
+        )
+        for weekday, start_time, end_time in rules.DEFAULT_OPEN_WORKING_HOURS
+    ]
+
+
 async def ensure_provider_for_user(
     db: AsyncSession, *, clinic_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID
 ) -> Provider:
@@ -116,6 +135,12 @@ async def ensure_provider_for_user(
     provider = Provider(clinic_id=clinic_id, user_id=user_id, color=color, created_by=actor_id)
     db.add(provider)
     await db.flush()
+
+    # Solo al crear el Provider por primera vez, no al reactivar uno existente (ese
+    # ya tiene su horario, aunque recepcion lo haya dejado en cero a proposito).
+    for working_hours in _seed_default_working_hours(provider):
+        db.add(working_hours)
+
     await audit_service.log(
         db,
         action="agenda.provider_created",
@@ -544,9 +569,35 @@ async def _validate_appointment_type(
 # ------------------------------------------------------------------------- citas
 
 
+def _assert_not_past(starts_at: datetime) -> None:
+    """No se pueden crear ni reprogramar citas en un horario que ya paso (CLAUDE.md
+    punto 3 del encargo de agenda/horarios). Comparacion en UTC, consistente con el
+    resto del modulo (columnas TIMESTAMPTZ, `datetime.now(UTC)` en el resto de este
+    archivo). Si `starts_at` llega sin zona horaria (no deberia, el esquema espera
+    datetime con tz), se asume UTC en vez de fallar con TypeError al comparar."""
+    reference = starts_at if starts_at.tzinfo is not None else starts_at.replace(tzinfo=UTC)
+    if reference < datetime.now(UTC):
+        raise AppError(
+            "PAST_TIME_SLOT",
+            "No se pueden agendar citas en un horario que ya paso",
+            status_code=422,
+        )
+
+
 async def create_appointment(
-    db: AsyncSession, *, clinic_id: uuid.UUID, data: AppointmentCreateRequest, actor_id: uuid.UUID
+    db: AsyncSession,
+    *,
+    clinic_id: uuid.UUID,
+    data: AppointmentCreateRequest,
+    actor_id: uuid.UUID,
+    allow_past: bool = False,
 ) -> tuple[Appointment, list[str]]:
+    """`allow_past` existe solo para `app/seed.py`, que siembra citas historicas a
+    proposito (atendida/no-show hace dias, para que el historial del paciente no
+    muestre unicamente reservas futuras) -- nunca debe pasarse como True desde el
+    router ni desde `app/voice/dialogue.py` (agendar por voz es un flujo real)."""
+    if not allow_past:
+        _assert_not_past(data.starts_at)
     await _get_patient_in_clinic(db, clinic_id=clinic_id, patient_id=data.patient_id)
     await get_provider_in_clinic(db, clinic_id=clinic_id, provider_id=data.provider_id)
     if data.resource_id is not None:
@@ -745,6 +796,7 @@ async def reschedule_appointment(
             f"No se puede reprogramar una cita en estado {old.status}",
             status_code=409,
         )
+    _assert_not_past(data.starts_at)
 
     new_provider_id = data.provider_id or old.provider_id
     new_resource_id = data.resource_id if data.resource_id is not None else old.resource_id

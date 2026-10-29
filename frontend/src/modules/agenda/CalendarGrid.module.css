@@ -69,6 +69,21 @@
   background-color: var(--color-danger-soft);
 }
 
+/* Horario que ya paso (CLAUDE.md: sombreado delicado, no es un error -- solo ya no
+   esta disponible para agendar una cita nueva ahi). pointer-events:none refuerza que
+   no es clicable ni recibe drop de una cita arrastrada, ademas de los handlers en JS. */
+.slotPast {
+  background-color: var(--color-border);
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Encabezado de una fecha que ya paso: mismo sombreado delicado. */
+.dayHeaderPast {
+  opacity: 0.55;
+}
+
 .slot:focus-visible,
 .appointment:focus-visible {
   outline: 2px solid var(--color-primary);

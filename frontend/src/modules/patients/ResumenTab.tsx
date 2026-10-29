@@ -324,6 +324,7 @@ export function ResumenTab({ patientId }: { patientId: string }) {
   const [contactName, setContactName] = useState('')
   const [contactRelationship, setContactRelationship] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [contactOccupation, setContactOccupation] = useState('')
 
   const addContactMutation = useMutation({
     mutationFn: () =>
@@ -332,11 +333,13 @@ export function ResumenTab({ patientId }: { patientId: string }) {
         full_name: contactName,
         relationship_label: contactRelationship || null,
         phone: contactPhone || null,
+        occupation: contactOccupation || null,
       }),
     onSuccess: () => {
       setContactName('')
       setContactRelationship('')
       setContactPhone('')
+      setContactOccupation('')
       queryClient.invalidateQueries({ queryKey: ['patient-contacts', patientId] })
     },
   })
@@ -548,6 +551,7 @@ export function ResumenTab({ patientId }: { patientId: string }) {
             <span>
               {contact.full_name} — {CONTACT_ROLE_LABELS[contact.role]}
               {contact.phone && ` · ${contact.phone}`}
+              {contact.occupation && ` · ${contact.occupation}`}
             </span>
             {canWrite && (
               <button
@@ -599,6 +603,12 @@ export function ResumenTab({ patientId }: { patientId: string }) {
               placeholder="Telefono"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Ocupacion"
+              value={contactOccupation}
+              onChange={(e) => setContactOccupation(e.target.value)}
             />
             <button className={styles.primaryButton} type="submit" disabled={addContactMutation.isPending}>
               Agregar contacto

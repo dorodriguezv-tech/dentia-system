@@ -127,8 +127,11 @@ export function NewPatientPage() {
         religion: patient.religion || null,
         ethnic_group: patient.ethnic_group || null,
         race: patient.race || null,
-        occupation: patient.occupation || null,
-        marital_status: patient.marital_status || null,
+        // Pacientes pediatricos: estos campos estan ocultos en el paso "Datos" (ver
+        // arriba) -- se fuerza null aqui por si el usuario los habia llenado antes de
+        // cambiar el tipo de paciente a pediatrico y el campo oculto conservo el valor.
+        occupation: isPediatricPreview ? null : patient.occupation || null,
+        marital_status: isPediatricPreview ? null : patient.marital_status || null,
       })
       for (const contact of contacts) {
         await api.createContact(created.id, contact)
@@ -154,7 +157,7 @@ export function NewPatientPage() {
           <span>›</span>
           <span className={step === 'contactos' ? styles.stepActive : undefined}>
             3. Contactos
-            {isPediatricPreview && ' (recomendado: tutor/responsable)'}
+            {isPediatricPreview && ' (obligatorio: tutor/responsable)'}
           </span>
         </div>
 
@@ -369,22 +372,31 @@ export function NewPatientPage() {
                   onChange={(e) => updateField('race', e.target.value)}
                 />
               </div>
-              <div className={styles.field}>
-                <label htmlFor="occupation">Ocupación</label>
-                <input
-                  id="occupation"
-                  value={patient.occupation ?? ''}
-                  onChange={(e) => updateField('occupation', e.target.value)}
-                />
-              </div>
-              <div className={styles.field}>
-                <label htmlFor="marital_status">Estado civil</label>
-                <input
-                  id="marital_status"
-                  value={patient.marital_status ?? ''}
-                  onChange={(e) => updateField('marital_status', e.target.value)}
-                />
-              </div>
+              {/* Pacientes pediatricos: Ocupacion y Estado civil no tienen sentido
+                  preguntarselos a un menor -- se ocultan aqui y, en su lugar, el paso
+                  "Contactos" captura la ocupacion del tutor/responsable (ver
+                  ContactsStep abajo). Estado civil no tiene equivalente de tutor: para
+                  un paciente pediatrico simplemente no se captura. */}
+              {!isPediatricPreview && (
+                <div className={styles.field}>
+                  <label htmlFor="occupation">Ocupación</label>
+                  <input
+                    id="occupation"
+                    value={patient.occupation ?? ''}
+                    onChange={(e) => updateField('occupation', e.target.value)}
+                  />
+                </div>
+              )}
+              {!isPediatricPreview && (
+                <div className={styles.field}>
+                  <label htmlFor="marital_status">Estado civil</label>
+                  <input
+                    id="marital_status"
+                    value={patient.marital_status ?? ''}
+                    onChange={(e) => updateField('marital_status', e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <div className={styles.actions}>
               <button
@@ -444,7 +456,7 @@ export function NewPatientPage() {
             onBack={() => setStep('datos')}
             onSubmit={handleCreate}
             creating={creating}
-            highlightGuardian={isPediatricPreview}
+            requireGuardian={isPediatricPreview}
           />
         )}
       </div>
@@ -458,19 +470,31 @@ function ContactsStep({
   onBack,
   onSubmit,
   creating,
-  highlightGuardian,
+  requireGuardian,
 }: {
   contacts: ContactCreateInput[]
   onChange: (contacts: ContactCreateInput[]) => void
   onBack: () => void
   onSubmit: () => void
   creating: boolean
-  highlightGuardian?: boolean
+  requireGuardian?: boolean
 }) {
+  // 'guardian' (tutor/responsable) preseleccionado siempre -- para un paciente
+  // pediatrico evita que el usuario tenga que elegirlo; sigue siendo editable para
+  // registrar otros tipos de contacto (emergencia, otro) en cualquier caso.
   const [role, setRole] = useState<ContactRole>('guardian')
   const [fullName, setFullName] = useState('')
   const [relationshipLabel, setRelationshipLabel] = useState('')
   const [phone, setPhone] = useState('')
+  const [occupation, setOccupation] = useState('')
+
+  // Paciente pediatrico (CLAUDE.md): este paso deja de ser opcional -- se exige al
+  // menos un contacto "guardian" con nombre y telefono antes de poder crear el
+  // paciente. Para adultos no cambia nada (sigue siendo 100% opcional).
+  const hasValidGuardian = contacts.some(
+    (c) => c.role === 'guardian' && c.full_name.trim() && (c.phone ?? '').trim(),
+  )
+  const blockedByMissingGuardian = Boolean(requireGuardian) && !hasValidGuardian
 
   function addContact() {
     if (!fullName.trim()) return
@@ -481,21 +505,25 @@ function ContactsStep({
         full_name: fullName,
         relationship_label: relationshipLabel || null,
         phone: phone || null,
+        occupation: occupation || null,
       },
     ])
     setFullName('')
     setRelationshipLabel('')
     setPhone('')
+    setOccupation('')
   }
 
   return (
     <div>
-      <p>Tutor/responsable y contacto de emergencia (opcional, puedes agregarlos despues).</p>
-      {highlightGuardian && (
+      {requireGuardian ? (
         <div className={styles.warningBox}>
-          Paciente pediátrico: se recomienda capturar aquí al tutor o responsable, con su
-          teléfono y/o correo, ya que el paciente no tiene por qué tener los suyos propios.
+          Paciente pediátrico: antes de crear el expediente necesitamos los datos del tutor o
+          responsable (nombre y teléfono) -- el paciente no tiene por qué tener los suyos
+          propios.
         </div>
+      ) : (
+        <p>Tutor/responsable y contacto de emergencia (opcional, puedes agregarlos despues).</p>
       )}
 
       <div className={styles.contactList}>
@@ -517,8 +545,12 @@ function ContactsStep({
 
       <div className={styles.grid}>
         <div className={styles.field}>
-          <label>Tipo</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as ContactRole)}>
+          <label htmlFor="contact_role">Tipo</label>
+          <select
+            id="contact_role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as ContactRole)}
+          >
             {Object.entries(CONTACT_ROLE_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
                 {label}
@@ -527,16 +559,32 @@ function ContactsStep({
           </select>
         </div>
         <div className={styles.field}>
-          <label>Nombre</label>
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <label htmlFor="contact_full_name">Nombre</label>
+          <input
+            id="contact_full_name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
         </div>
         <div className={styles.field}>
-          <label>Parentesco</label>
-          <input value={relationshipLabel} onChange={(e) => setRelationshipLabel(e.target.value)} />
+          <label htmlFor="contact_relationship_label">Parentesco</label>
+          <input
+            id="contact_relationship_label"
+            value={relationshipLabel}
+            onChange={(e) => setRelationshipLabel(e.target.value)}
+          />
         </div>
         <div className={styles.field}>
-          <label>Telefono</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <label htmlFor="contact_phone">Telefono</label>
+          <input id="contact_phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="contact_occupation">Ocupación</label>
+          <input
+            id="contact_occupation"
+            value={occupation}
+            onChange={(e) => setOccupation(e.target.value)}
+          />
         </div>
       </div>
       <div className={styles.actions}>
@@ -544,6 +592,12 @@ function ContactsStep({
           Agregar contacto
         </button>
       </div>
+
+      {blockedByMissingGuardian && (
+        <div className={styles.errorBox}>
+          Agrega al menos un contacto responsable (tutor/pariente) con nombre y teléfono.
+        </div>
+      )}
 
       <div className={styles.actionsSpaced}>
         <button className={styles.secondaryButton} type="button" onClick={onBack}>
@@ -553,7 +607,7 @@ function ContactsStep({
           className={styles.primaryButton}
           type="button"
           onClick={onSubmit}
-          disabled={creating}
+          disabled={creating || blockedByMissingGuardian}
         >
           {creating ? 'Creando...' : 'Crear paciente'}
         </button>

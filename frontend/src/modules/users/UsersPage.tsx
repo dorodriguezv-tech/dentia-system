@@ -14,6 +14,15 @@ import type { ClinicAssignmentInput } from './types'
 // necesitan elegir un gabinete por defecto.
 const PROVIDER_ROLE_CODES = new Set(['odontologo', 'especialista'])
 
+// Copia minima de app/core/password_policy.py::MIN_PASSWORD_LENGTH (fuente de verdad
+// real). Bug real reportado ("al editar un usuario aparece 'Datos de entrada
+// invalidos'"): este formulario aceptaba contrasenas de 8 caracteres (minLength
+// desalineado del backend, que exige MIN_PASSWORD_LENGTH=12) y el backend las
+// rechazaba con un 422 generico que no deja claro cual campo fallo -- se veia como
+// si el formulario completo (incluido el nombre) fuera invalido. Si cambia alla,
+// cambia aqui tambien.
+const MIN_PASSWORD_LENGTH = 12
+
 function initials(fullName: string): string {
   return fullName
     .split(' ')
@@ -199,10 +208,11 @@ function UserRow({ user, role }: { user: UserOut; role: RoleOut }) {
               </label>
             )}
             <label>
-              Nueva contrasena (dejar en blanco para no cambiarla)
+              Nueva contrasena (dejar en blanco para no cambiarla, minimo{' '}
+              {MIN_PASSWORD_LENGTH} caracteres)
               <input
                 type="password"
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
@@ -390,11 +400,11 @@ export function UsersPage() {
             />
           </label>
           <label>
-            Contrasena temporal
+            Contrasena temporal (minimo {MIN_PASSWORD_LENGTH} caracteres)
             <input
               type="password"
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

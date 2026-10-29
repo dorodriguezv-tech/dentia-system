@@ -794,6 +794,9 @@ async def _seed_example_patient(
             notes="Valoracion inicial, paciente con expediente de ejemplo.",
         ),
         actor_id=admin_id,
+        # Cita historica sembrada a proposito en el pasado (ver comentario arriba) --
+        # agenda_service.create_appointment rechaza horarios pasados por default.
+        allow_past=True,
     )
     await agenda_service.change_status(
         db,
@@ -822,6 +825,7 @@ async def _seed_example_patient(
             notes="Limpieza programada, paciente con expediente de ejemplo.",
         ),
         actor_id=admin_id,
+        allow_past=True,
     )
     await agenda_service.change_status(
         db,

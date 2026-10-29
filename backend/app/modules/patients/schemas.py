@@ -19,6 +19,9 @@ class ContactCreateRequest(BaseModel):
     relationship_label: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=30)
     email: Email | None = None
+    # Alta de paciente pediatrico (CLAUDE.md): ocupacion del tutor/responsable, no del
+    # paciente -- reemplaza al campo Patient.occupation que se oculta en ese caso.
+    occupation: str | None = Field(default=None, max_length=150)
 
 
 class ContactUpdateRequest(BaseModel):
@@ -26,6 +29,7 @@ class ContactUpdateRequest(BaseModel):
     relationship_label: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=30)
     email: Email | None = None
+    occupation: str | None = Field(default=None, max_length=150)
 
 
 class ContactOut(BaseModel):
@@ -35,6 +39,7 @@ class ContactOut(BaseModel):
     relationship_label: str | None
     phone: str | None
     email: str | None
+    occupation: str | None
 
     model_config = {"from_attributes": True}
 

@@ -135,6 +135,9 @@ export interface ContactOut {
   relationship_label: string | null
   phone: string | null
   email: string | null
+  // Alta de paciente pediatrico (CLAUDE.md): ocupacion del tutor/responsable, no del
+  // paciente -- reemplaza al campo Patient.occupation, que se oculta en ese caso.
+  occupation: string | null
 }
 
 export interface ContactCreateInput {
@@ -143,6 +146,7 @@ export interface ContactCreateInput {
   relationship_label?: string | null
   phone?: string | null
   email?: string | null
+  occupation?: string | null
 }
 
 export const STATUS_LABELS: Record<StatusCode, string> = {

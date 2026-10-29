@@ -88,3 +88,7 @@ class PatientContact(AuditedMixin, Base):
     relationship_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Pacientes pediatricos (CLAUDE.md, alta asistida): la ocupacion relevante para un
+    # menor es la del tutor/responsable, no la del paciente -- por eso vive aqui y no en
+    # Patient.occupation (que se oculta en el formulario cuando el paciente es pediatrico).
+    occupation: Mapped[str | None] = mapped_column(String(150), nullable=True)

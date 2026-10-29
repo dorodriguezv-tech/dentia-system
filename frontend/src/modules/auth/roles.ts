@@ -110,6 +110,18 @@ export function canReadAgenda(roleCode: string | null): boolean {
   return hasRole(roleCode, ROLES_THAT_READ_AGENDA)
 }
 
+/** Roles que pueden administrar los horarios de atencion de los odontologos
+ * (pantalla de configuracion/horarios). No es `agenda.write` generico (eso
+ * cubre crear/mover citas); es la configuracion de disponibilidad, que en la
+ * practica gestiona recepcion del dia a dia y admin_clinica/superadmin como
+ * respaldo administrativo -- no es dato clinico, por lo que superadmin si
+ * entra aqui (a diferencia de canManageCatalogs). */
+const ROLES_THAT_MANAGE_WORKING_HOURS = new Set(['superadmin', 'admin_clinica', 'recepcion'])
+
+export function canManageWorkingHours(roleCode: string | null): boolean {
+  return hasRole(roleCode, ROLES_THAT_MANAGE_WORKING_HOURS)
+}
+
 /** Roles con los permisos `diagnosis.write`/`diagnosis.read` (ver docs/MATRIZ_PERMISOS.md). */
 const ROLES_THAT_WRITE_DIAGNOSIS = new Set(['odontologo', 'especialista'])
 const ROLES_THAT_READ_DIAGNOSIS = new Set(['odontologo', 'especialista'])

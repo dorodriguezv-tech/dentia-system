@@ -4,6 +4,8 @@ Catalogos configurables (CLAUDE.md sec. 7): valores por defecto razonables, a va
 con la clinica (ver docs/PENDIENTES_CLINICOS.md).
 """
 
+from datetime import time
+
 APPOINTMENT_STATUSES = (
     "RESERVADA",
     "CONFIRMADA",
@@ -77,3 +79,17 @@ PROVIDER_COLOR_PALETTE = (
 
 def next_provider_color(existing_provider_count: int) -> str:
     return PROVIDER_COLOR_PALETTE[existing_provider_count % len(PROVIDER_COLOR_PALETTE)]
+
+
+# Horario abierto por default al crear un Provider nuevo (odontologo/especialista
+# recien dado de alta): sin esto, un Provider nuevo no tiene filas en
+# ProviderWorkingHours y la agenda lo trata como sin disponibilidad ninguna hasta que
+# recepcion entra a configuracion/horarios a definirlo a mano. Se siembra UNA sola vez
+# (ensure_provider_for_user, al crear -- no al reactivar) para que recepcion lo ajuste
+# despues; valor por defecto a validar con la clinica real (ver
+# docs/PENDIENTES_CLINICOS.md): lunes a sabado (weekday 0-5, FDI/ISO: 0=lunes) de 08:00
+# a 20:00. No se siembra domingo (weekday 6) -- convencion comun en clinicas dentales
+# en Mexico, tambien ajustable.
+DEFAULT_OPEN_WORKING_HOURS: tuple[tuple[int, time, time], ...] = tuple(
+    (weekday, time(8, 0), time(20, 0)) for weekday in range(0, 6)
+)

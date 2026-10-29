@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CalendarGrid } from './CalendarGrid'
 import type { WorkingHoursOut } from './types'
 
@@ -50,5 +50,58 @@ describe('CalendarGrid', () => {
     renderGrid([MONDAY], [])
     const slot = screen.getByRole('button', { name: /lunes.*14:00$/ })
     expect(slot.getAttribute('aria-label')).not.toMatch(/fuera de horario/)
+  })
+
+  describe('horarios ya pasados', () => {
+    beforeEach(() => {
+      // "Ahora" fijo a lunes 10:00 -- 09:00 del mismo lunes ya paso, 11:00 todavia no.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 10, 2, 10, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('sombrea un horario ya pasado y no dispara onSlotClick al hacer clic', () => {
+      const onSlotClick = vi.fn()
+      render(
+        <CalendarGrid
+          dates={[MONDAY]}
+          appointments={[]}
+          workingHours={mondayWorkingHours}
+          onSlotClick={onSlotClick}
+          onDropAppointment={vi.fn()}
+          onAppointmentClick={vi.fn()}
+        />,
+      )
+
+      const pastSlot = screen.getByRole('button', { name: /lunes.*09:00$/ })
+      expect(pastSlot.getAttribute('aria-label')).toMatch(/horario ya paso/)
+      expect(pastSlot).toHaveAttribute('aria-disabled', 'true')
+
+      fireEvent.click(pastSlot)
+      expect(onSlotClick).not.toHaveBeenCalled()
+    })
+
+    it('un horario futuro del mismo dia sigue siendo clicable', () => {
+      const onSlotClick = vi.fn()
+      render(
+        <CalendarGrid
+          dates={[MONDAY]}
+          appointments={[]}
+          workingHours={mondayWorkingHours}
+          onSlotClick={onSlotClick}
+          onDropAppointment={vi.fn()}
+          onAppointmentClick={vi.fn()}
+        />,
+      )
+
+      const futureSlot = screen.getByRole('button', { name: /lunes.*15:00$/ })
+      expect(futureSlot.getAttribute('aria-label')).not.toMatch(/horario ya paso/)
+
+      fireEvent.click(futureSlot)
+      expect(onSlotClick).toHaveBeenCalledWith(MONDAY, 15, 0)
+    })
   })
 })

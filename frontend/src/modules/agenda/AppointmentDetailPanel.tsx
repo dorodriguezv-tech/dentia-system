@@ -169,7 +169,15 @@ export function AppointmentDetailPanel({
             </button>
           ) : (
             <div className={styles.actionsRow}>
-              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+              {/* El backend rechaza un horario pasado (PAST_TIME_SLOT); `min` aqui solo
+                  evita que la fecha parezca una opcion valida en el selector nativo,
+                  igual criterio que el sombreado de CalendarGrid.tsx. */}
+              <input
+                type="date"
+                min={new Date().toISOString().slice(0, 10)}
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+              />
               <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
               <button
                 type="button"

@@ -71,8 +71,11 @@ export const router = createBrowserRouter([
                   { path: 'configuracion/asistente-ia', element: <AiSettingsPage /> },
                   { path: 'configuracion/cobranza', element: <BillingSettingsPage /> },
                   { path: 'configuracion/catalogos', element: <CatalogsPage /> },
-                  { path: 'configuracion/horarios', element: <WorkingHoursPage /> },
                 ],
+              },
+              {
+                element: <RequireRole roles={['admin_clinica', 'recepcion', 'superadmin']} />,
+                children: [{ path: 'configuracion/horarios', element: <WorkingHoursPage /> }],
               },
               {
                 element: <RequireRole roles={['admin_clinica', 'caja']} />,

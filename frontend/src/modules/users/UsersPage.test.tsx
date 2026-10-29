@@ -100,7 +100,10 @@ describe('UsersPage', () => {
 
     await userEvent.type(screen.getByLabelText('Correo'), 'nuevo@example.com')
     await userEvent.type(screen.getByLabelText('Nombre completo'), 'Nuevo Usuario')
-    await userEvent.type(screen.getByLabelText('Contrasena temporal'), 'Contrasena123')
+    await userEvent.type(
+      screen.getByLabelText('Contrasena temporal (minimo 12 caracteres)'),
+      'Contrasena123',
+    )
     await userEvent.selectOptions(screen.getByLabelText('Rol'), 'odontologo')
 
     await userEvent.type(await screen.findByLabelText('Cedula profesional'), '1234567')
@@ -129,6 +132,26 @@ describe('UsersPage', () => {
     })
   })
 
+  // Bug real reportado: "al editar un usuario aparece 'Datos de entrada invalidos'".
+  // Causa raiz: el input de "Contrasena temporal" aceptaba 8 caracteres (minLength
+  // desalineado de app/core/password_policy.py::MIN_PASSWORD_LENGTH, que exige 12),
+  // asi que el formulario dejaba enviar al backend una contrasena que este siempre
+  // rechazaba con un 422 generico -- sin indicar que el problema era la contrasena.
+  // No se prueba via el bloqueo nativo de envio del formulario (jsdom no implementa
+  // minLength en su motor de validacion, a diferencia de un navegador real) sino
+  // comprobando directamente el minLength configurado en el input, que es la causa
+  // raiz exacta del bug.
+  it('el input de contrasena temporal exige el minimo de la politica del backend (12 caracteres)', async () => {
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar usuario' }))
+
+    const passwordInput = screen.getByLabelText<HTMLInputElement>(
+      'Contrasena temporal (minimo 12 caracteres)',
+    )
+
+    expect(passwordInput.minLength).toBe(12)
+  })
+
   it('edita un usuario existente, incluida la contrasena', async () => {
     vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])
     renderPage()
@@ -138,7 +161,7 @@ describe('UsersPage', () => {
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Usuario Renombrado')
     await userEvent.type(
-      screen.getByLabelText('Nueva contrasena (dejar en blanco para no cambiarla)'),
+      screen.getByLabelText('Nueva contrasena (dejar en blanco para no cambiarla, minimo 12 caracteres)'),
       'NuevaContrasena123',
     )
     await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
@@ -153,6 +176,21 @@ describe('UsersPage', () => {
         new_password: 'NuevaContrasena123',
       },
     ])
+  })
+
+  // Mismo bug que el caso de arriba, pero en el formulario de editar (donde se
+  // reporto originalmente): el input de "Nueva contrasena" tambien exige ahora el
+  // minimo real de la politica (12).
+  it('el input de nueva contrasena al editar exige el minimo de la politica del backend (12 caracteres)', async () => {
+    vi.mocked(api.listUsers).mockReset().mockResolvedValue([existingUser])
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar' }))
+    const passwordInput = screen.getByLabelText<HTMLInputElement>(
+      'Nueva contrasena (dejar en blanco para no cambiarla, minimo 12 caracteres)',
+    )
+
+    expect(passwordInput.minLength).toBe(12)
   })
 
   it(
