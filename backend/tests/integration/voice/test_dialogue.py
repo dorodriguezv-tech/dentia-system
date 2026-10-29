@@ -67,10 +67,31 @@ def _soon_utc_at_whole_hour(hours_ahead: int = 2) -> datetime:
     H") y la hora GUARDADA coincidan literalmente (`extract_time_of_day` no
     convierte zona horaria: compara la hora tal como se dice, ver
     `app/voice/datetime_parse.py`). El colchon de horas evita que redondear
-    hacia abajo caiga en el pasado."""
-    return (datetime.now(UTC) + timedelta(hours=hours_ahead)).replace(
+    hacia abajo caiga en el pasado.
+
+    Ademas se mantiene dentro de la ventana de "hoy" de la clinica: antes de
+    comparar la hora, `_find_todays_appointment` filtra las citas por
+    `_local_day_bounds_utc` (hora de la clinica). Sumar `hours_ahead` a la
+    hora UTC real puede cruzar la medianoche LOCAL de la clinica sin cruzar
+    la medianoche UTC (p. ej. entre las 22:00 y las 24:00 hora de Mexico --
+    04:00 a 06:00 UTC, que es justo cuando corre el pipeline de CI) -- en ese
+    caso la cita "de hoy" en UTC cae en "mañana" para la clinica y la
+    busqueda nunca la encuentra, aunque la hora dicha coincida. Se recorta el
+    candidato para que no cruce esa medianoche local."""
+    now_utc = datetime.now(UTC)
+    local_midnight_utc = _clinic_day_bounds_utc(_clinic_today())[1]
+    candidate = (now_utc + timedelta(hours=hours_ahead)).replace(
         minute=0, second=0, microsecond=0
     )
+    if candidate >= local_midnight_utc:
+        candidate = (local_midnight_utc - timedelta(hours=1)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        if candidate <= now_utc:
+            candidate = (now_utc + timedelta(hours=1)).replace(
+                minute=0, second=0, microsecond=0
+            )
+    return candidate
 
 
 def _fake_chat(actions: list[dict], unrecognized: list[dict] | None = None):
