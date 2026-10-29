@@ -23,6 +23,13 @@ RUN xcaddy build --with github.com/WeidiDeng/caddy-cloudflare-ip
 
 # --- Etapa 3: imagen final -----------------------------------------------
 FROM caddy:2-alpine
+# El pipeline escanea la imagen final con Trivy y detiene la publicacion si
+# encuentra una CVE CRITICAL -- `caddy:2-alpine` es un tag flotante, asi que
+# puede traer paquetes de Alpine ya parchados en el repositorio pero
+# todavia no reflejados en la imagen base subida por upstream. Se actualiza
+# explicitamente aqui (no depende de cuando upstream vuelva a publicar su
+# imagen) para no quedar bloqueados esperando un rebuild ajeno.
+RUN apk update && apk upgrade --no-cache
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 COPY --from=frontend-build /app/dist /srv
 # El Caddyfile real se monta como volumen de solo lectura (docker-compose.yml)
