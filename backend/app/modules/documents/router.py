@@ -12,6 +12,7 @@ from app.modules.documents.schemas import (
     AnnulRequest,
     ConsentCreateRequest,
     ConsentOut,
+    ConsentPrefillOut,
     DocumentTemplateCreateRequest,
     DocumentTemplateOut,
 )
@@ -63,6 +64,25 @@ async def list_consents(
 ) -> list[ConsentOut]:
     items = await service.list_consents(db, clinic_id=clinic_id, patient_id=patient_id)
     return [ConsentOut.model_validate(i) for i in items]
+
+
+@router.get("/patients/{patient_id}/consents/prefill", response_model=ConsentPrefillOut)
+async def get_consent_prefill(
+    patient_id: uuid.UUID,
+    template_code: str,
+    encounter_id: uuid.UUID,
+    clinic_id: uuid.UUID = Depends(get_clinic_id),
+    actor: User = Depends(require_permission("documents.read")),
+    db: AsyncSession = Depends(get_db),
+) -> ConsentPrefillOut:
+    return await service.build_consent_prefill(
+        db,
+        clinic_id=clinic_id,
+        patient_id=patient_id,
+        template_code=template_code,
+        encounter_id=encounter_id,
+        actor=actor,
+    )
 
 
 @router.post("/patients/{patient_id}/consents", response_model=ConsentOut, status_code=201)

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -84,3 +85,15 @@ class Consent(_AnnullableMixin, AuditedMixin, Base):
     pdf_path: Mapped[str] = mapped_column(String(500))
     content_hash: Mapped[str] = mapped_column(String(64))
     signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    # Integracion de los formatos oficiales de docs/formatos (ver plan
+    # aprobado): lo que se escribio en los campos libres que ese formato pidio
+    # (rules.TEMPLATE_EXTRA_FIELDS), para auditoria -- lo mismo que ya quedo
+    # sustituido en el PDF firmado, pero queryable. Nullable porque la mayoria
+    # de formatos no tiene ningun campo libre.
+    extra_fields: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
+    # Nombre de hasta 2 testigos (texto libre, opcional): se imprimen en las
+    # lineas de testigo que ya trae el formato original, en blanco para firma
+    # a mano si no se capturan (no hay firma digital de testigos).
+    witness1_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    witness2_name: Mapped[str | None] = mapped_column(String(200), nullable=True)

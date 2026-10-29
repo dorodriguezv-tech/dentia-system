@@ -2,6 +2,7 @@ import { apiRequest, apiRequestBlobUrl } from '../../api/client'
 import type {
   ConsentCreateInput,
   ConsentOut,
+  ConsentPrefillOut,
   CounterReferralNoteCreateInput,
   CounterReferralNoteOut,
   DocumentTemplateCreateInput,
@@ -10,6 +11,7 @@ import type {
   PrescriptionOut,
   ReferralNoteCreateInput,
   ReferralNoteOut,
+  TemplateCode,
 } from './types'
 
 export async function listTemplates(): Promise<DocumentTemplateOut[]> {
@@ -38,6 +40,15 @@ export async function createConsent(
     method: 'POST',
     body: input,
   })
+}
+
+export async function getConsentPrefill(
+  patientId: string,
+  templateCode: TemplateCode,
+  encounterId: string,
+): Promise<ConsentPrefillOut> {
+  const query = new URLSearchParams({ template_code: templateCode, encounter_id: encounterId })
+  return apiRequest<ConsentPrefillOut>(`/patients/${patientId}/consents/prefill?${query}`)
 }
 
 export async function getConsentPdfBlobUrl(consentId: string): Promise<string> {
@@ -74,7 +85,10 @@ export function getPrescriptionPdfBlobUrl(prescriptionId: string): Promise<strin
   return apiRequestBlobUrl(`/clinical-documents/prescriptions/${prescriptionId}/pdf`)
 }
 
-export function annulPrescription(prescriptionId: string, reason: string): Promise<PrescriptionOut> {
+export function annulPrescription(
+  prescriptionId: string,
+  reason: string,
+): Promise<PrescriptionOut> {
   return apiRequest<PrescriptionOut>(`/clinical-documents/prescriptions/${prescriptionId}/annul`, {
     method: 'POST',
     body: { reason },
@@ -99,7 +113,10 @@ export function getReferralNotePdfBlobUrl(referralNoteId: string): Promise<strin
   return apiRequestBlobUrl(`/clinical-documents/referral-notes/${referralNoteId}/pdf`)
 }
 
-export function annulReferralNote(referralNoteId: string, reason: string): Promise<ReferralNoteOut> {
+export function annulReferralNote(
+  referralNoteId: string,
+  reason: string,
+): Promise<ReferralNoteOut> {
   return apiRequest<ReferralNoteOut>(`/clinical-documents/referral-notes/${referralNoteId}/annul`, {
     method: 'POST',
     body: { reason },
@@ -123,7 +140,9 @@ export function createCounterReferralNote(
 }
 
 export function getCounterReferralNotePdfBlobUrl(counterReferralNoteId: string): Promise<string> {
-  return apiRequestBlobUrl(`/clinical-documents/counter-referral-notes/${counterReferralNoteId}/pdf`)
+  return apiRequestBlobUrl(
+    `/clinical-documents/counter-referral-notes/${counterReferralNoteId}/pdf`,
+  )
 }
 
 export function annulCounterReferralNote(

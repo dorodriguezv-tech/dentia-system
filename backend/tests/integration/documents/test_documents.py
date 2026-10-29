@@ -49,7 +49,7 @@ async def _setup(client: AsyncClient, make_user, clinic, db_session: AsyncSessio
         "/api/v1/document-templates",
         headers=headers,
         json={
-            "code": "general",
+            "code": "toma_radiografias",
             "name": "Consentimiento general",
             "html_content": "<p>Autorizo el tratamiento de {{paciente.nombre}}.</p>",
         },
@@ -67,7 +67,7 @@ async def test_create_template_then_a_new_version_retires_the_old_one(
         "/api/v1/document-templates",
         headers=headers,
         json={
-            "code": "general",
+            "code": "toma_radiografias",
             "name": "Consentimiento general v2",
             "html_content": "<p>Nuevo texto</p>",
         },
@@ -76,11 +76,13 @@ async def test_create_template_then_a_new_version_retires_the_old_one(
     assert second.json()["version"] == 2
 
     current = await client.get("/api/v1/document-templates", headers=headers)
-    general = [t for t in current.json() if t["code"] == "general"]
-    assert len(general) == 1
-    assert general[0]["version"] == 2
+    toma_rx = [t for t in current.json() if t["code"] == "toma_radiografias"]
+    assert len(toma_rx) == 1
+    assert toma_rx[0]["version"] == 2
 
-    history = await client.get("/api/v1/document-templates/general/history", headers=headers)
+    history = await client.get(
+        "/api/v1/document-templates/toma_radiografias/history", headers=headers
+    )
     assert [v["version"] for v in history.json()] == [2, 1]
     assert history.json()[1]["is_current"] is False
 
@@ -95,7 +97,7 @@ async def test_create_consent_generates_pdf_with_hash(
         headers=headers,
         json={
             "encounter_id": encounter_id,
-            "template_code": "general",
+            "template_code": "toma_radiografias",
             "signer_name": "Jose Perez",
             "signer_relationship": "paciente",
             "signature_png_base64": _signature_base64(),
@@ -145,7 +147,7 @@ async def test_create_consent_without_a_configured_template_fails(
         headers=headers,
         json={
             "encounter_id": encounter_id,
-            "template_code": "extraccion",
+            "template_code": "limpieza_dental",
             "signer_name": "Ana Diaz",
             "signer_relationship": "paciente",
             "signature_png_base64": _signature_base64(),
@@ -164,7 +166,7 @@ async def test_consent_rejects_both_procedure_and_plan_link(
         headers=headers,
         json={
             "encounter_id": encounter_id,
-            "template_code": "general",
+            "template_code": "toma_radiografias",
             "procedure_planned_id": str(uuid.uuid4()),
             "treatment_plan_id": str(uuid.uuid4()),
             "signer_name": "Jose Perez",
@@ -184,7 +186,7 @@ async def test_annul_consent_requires_reason_and_keeps_pdf(
         headers=headers,
         json={
             "encounter_id": encounter_id,
-            "template_code": "general",
+            "template_code": "toma_radiografias",
             "signer_name": "Jose Perez",
             "signer_relationship": "paciente",
             "signature_png_base64": _signature_base64(),
@@ -222,7 +224,7 @@ async def test_sign_consent_denied_without_documents_sign_permission(
         headers=_headers(recepcion_token, clinic.id),
         json={
             "encounter_id": encounter_id,
-            "template_code": "general",
+            "template_code": "toma_radiografias",
             "signer_name": "Jose Perez",
             "signer_relationship": "paciente",
             "signature_png_base64": _signature_base64(),

@@ -20,6 +20,11 @@ ignore = ["B008"]
 # (F, B, SIM, UP) se mantiene activo por si hay un bug real.
 "alembic/env.py" = ["E501", "I001"]
 "alembic/versions/*.py" = ["E501", "I001"]
+# Texto literal de los 24 formatos oficiales de docs/formatos (ver plan
+# aprobado): son parrafos legales copiados tal cual, no codigo -- partirlos
+# en varias lineas de 100 caracteres no mejora nada y arriesga alterar el
+# texto. Generado por scratchpad/emit_default_templates.py, no a mano.
+"app/modules/documents/default_templates.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

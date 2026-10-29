@@ -14,8 +14,8 @@ import * as treatmentApi from '../treatment/api'
 
 const template: DocumentTemplateOut = {
   id: 'tpl-1',
-  code: 'general',
-  name: 'Consentimiento general',
+  code: 'toma_radiografias',
+  name: 'Toma de radiografías',
   version: 1,
   html_content: '<p>Autorizo</p>',
   is_current: true,
@@ -32,6 +32,9 @@ const consent: ConsentOut = {
   professional_id: 'prof-1',
   signer_name: 'Jose Perez',
   signer_relationship: 'paciente',
+  extra_fields: null,
+  witness1_name: null,
+  witness2_name: null,
   content_hash: 'abc123',
   signed_at: '2026-10-05T12:00:00Z',
   is_active: true,
@@ -59,23 +62,25 @@ describe('ConsentsTab', () => {
     vi.mocked(api.listConsents).mockReset().mockResolvedValue([consent])
     vi.mocked(api.createConsent).mockReset()
     vi.mocked(api.annulConsent).mockReset()
-    vi.mocked(encountersApi.listPatientEncounters).mockReset().mockResolvedValue([
-      {
-        id: 'enc-1',
-        patient_id: 'pat-1',
-        professional_id: 'prof-1',
-        appointment_id: null,
-        started_at: '2026-10-05T12:00:00Z',
-        ended_at: null,
-        chief_complaint: 'Dolor',
-      },
-    ])
+    vi.mocked(encountersApi.listPatientEncounters)
+      .mockReset()
+      .mockResolvedValue([
+        {
+          id: 'enc-1',
+          patient_id: 'pat-1',
+          professional_id: 'prof-1',
+          appointment_id: null,
+          started_at: '2026-10-05T12:00:00Z',
+          ended_at: null,
+          chief_complaint: 'Dolor',
+        },
+      ])
     vi.mocked(treatmentApi.listPlans).mockReset().mockResolvedValue([])
   })
 
   it('muestra las plantillas y los consentimientos firmados', async () => {
     renderTab()
-    expect(await screen.findByText(/Consentimiento general/)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Toma de radiografías/ })).toBeInTheDocument()
     expect(await screen.findByText(/Jose Perez/)).toBeInTheDocument()
   })
 
@@ -106,10 +111,74 @@ describe('ConsentsTab', () => {
     expect(screen.queryByPlaceholderText('Nombre de la plantilla')).not.toBeInTheDocument()
 
     expect(screen.queryByText('Autorizo')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /Consentimiento general/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Toma de radiografías/ }))
     expect(await screen.findByText('Autorizo')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /Consentimiento general/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Toma de radiografías/ }))
     expect(screen.queryByText('Autorizo')).not.toBeInTheDocument()
+  })
+
+  it('el selector de formatos agrupa por categoria', async () => {
+    renderTab()
+    await screen.findByText(/Jose Perez/)
+    const select = screen
+      .getByText('Selecciona un formato...')
+      .closest('select') as HTMLSelectElement
+    const groupLabels = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label)
+    expect(groupLabels).toEqual(['Consentimientos informados'])
+  })
+
+  it('el paso 2 no aparece hasta elegir un formato, y pide el prefill al elegirlo', async () => {
+    vi.mocked(api.getConsentPrefill).mockResolvedValue({
+      variables: { paciente: { nombre: 'Jose Perez', edad: 30, expediente: 'EXP-1' } },
+      extra_fields: {},
+    })
+    renderTab()
+    await screen.findByText(/Jose Perez/)
+
+    expect(screen.queryByText('Datos correctos, continuar')).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getAllByLabelText('Atencion')[0], 'enc-1')
+    const select = screen
+      .getByText('Selecciona un formato...')
+      .closest('select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'toma_radiografias')
+
+    expect(await screen.findByText('Datos correctos, continuar')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(api.getConsentPrefill).toHaveBeenCalledWith('pat-1', 'toma_radiografias', 'enc-1'),
+    )
+    // Sin campos extra para este formato: no hay ninguna seccion de "Falta completar".
+    expect(screen.queryByText('Falta completar')).not.toBeInTheDocument()
+  })
+
+  it('el boton de firmar permanece deshabilitado hasta confirmar los datos y llenar lo obligatorio', async () => {
+    vi.mocked(api.getConsentPrefill).mockResolvedValue({
+      variables: { paciente: { nombre: 'Jose Perez', edad: 30, expediente: 'EXP-1' } },
+      extra_fields: {
+        tipo_protesis: {
+          label: 'Tipo de prótesis a colocar',
+          required: true,
+          multiline: false,
+          value: null,
+        },
+      },
+    })
+    renderTab()
+    await screen.findByText(/Jose Perez/)
+
+    await userEvent.selectOptions(screen.getAllByLabelText('Atencion')[0], 'enc-1')
+    const select = screen
+      .getByText('Selecciona un formato...')
+      .closest('select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'toma_radiografias')
+    await userEvent.click(await screen.findByText('Datos correctos, continuar'))
+
+    const submitButton = screen.getByRole('button', { name: 'Firmar y generar PDF' })
+    expect(submitButton).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/Tipo de prótesis a colocar/), 'Corona')
+    await userEvent.type(screen.getByPlaceholderText('Nombre de quien firma'), 'Jose Perez')
+    expect(submitButton).toBeDisabled() // todavia falta la firma en el canvas
   })
 })

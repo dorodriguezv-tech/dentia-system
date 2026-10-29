@@ -32,7 +32,6 @@ from app.modules.catalogs.schemas import CatalogItemCreateRequest
 from app.modules.diagnosis import service as diagnosis_service
 from app.modules.diagnosis.schemas import DiagnosisCreateRequest
 from app.modules.documents import service as documents_service
-from app.modules.documents.schemas import DocumentTemplateCreateRequest, TemplateCode
 from app.modules.encounters import service as encounters_service
 from app.modules.encounters.schemas import (
     ClinicalNoteCreateRequest,
@@ -995,58 +994,21 @@ async def _seed_treatment(
     )
 
 
-# Correccion A6 (docs/06_INSTRUCCIONES...): sin esto, el selector de plantillas al
-# firmar un consentimiento quedaba vacio -- "Firmar y generar PDF" nunca podia
-# habilitarse porque no habia nada que elegir. "Ejemplo" en el nombre porque el texto
-# legal real lo debe redactar/validar la clinica (ver docs/PENDIENTES_CLINICOS.md).
-DOCUMENT_TEMPLATE_SEEDS: list[tuple[TemplateCode, str, str]] = [
-    (
-        "general",
-        "Ejemplo — validar con la clinica: consentimiento general",
-        "<p>Yo, {{paciente.nombre}}, de {{paciente.edad}} anos, autorizo a "
-        "{{clinica.nombre}} y al profesional {{profesional.nombre}} (cedula "
-        "profesional {{profesional.cedula}}) a realizar el tratamiento dental que "
-        "se me explico, incluidos sus riesgos y alternativas. Fecha: {{fecha}}.</p>",
-    ),
-    (
-        "extraccion",
-        "Ejemplo — validar con la clinica: extraccion dental",
-        "<p>Autorizo a {{profesional.nombre}} (cedula profesional "
-        "{{profesional.cedula}}) a realizar la extraccion de la pieza indicada en "
-        "mi expediente. Entiendo los riesgos (sangrado, infeccion, dano a piezas "
-        "vecinas) y las alternativas de tratamiento. Procedimiento: "
-        "{{procedimiento.nombre}}. Fecha: {{fecha}}.</p>",
-    ),
-    (
-        "endodoncia",
-        "Ejemplo — validar con la clinica: endodoncia (tratamiento de conductos)",
-        "<p>Autorizo a {{profesional.nombre}} (cedula profesional "
-        "{{profesional.cedula}}) a realizar el tratamiento de conductos "
-        "(endodoncia) indicado en mi plan de tratamiento "
-        "{{plan.titulo}}. Entiendo que puede requerir mas de una cita y que existe "
-        "riesgo de fractura o perdida de la pieza. Fecha: {{fecha}}.</p>",
-    ),
-    (
-        "anestesia",
-        "Ejemplo — validar con la clinica: anestesia local",
-        "<p>Autorizo la aplicacion de anestesia local para mi tratamiento en "
-        "{{clinica.nombre}}. He informado al profesional {{profesional.nombre}} "
-        "(cedula profesional {{profesional.cedula}}) de mis alergias y "
-        "antecedentes medicos conocidos. Fecha: {{fecha}}.</p>",
-    ),
-]
-
-
+# Integracion de los 24 formatos oficiales reales de docs/formatos (ver plan
+# aprobado en C:/Users/danie/.claude/plans/zesty-wobbling-micali.md): ya no se
+# siembran los 4 de ejemplo ("Ejemplo — validar con la clinica") que existian
+# antes -- se retiran y se reemplazan por el catalogo real
+# (documents/default_templates.py), igual en este seed de demo que en una
+# clinica real (app/bootstrap_clinic.py).
 async def _seed_document_templates(
     db: AsyncSession, *, clinic_id: uuid.UUID, actor_id: uuid.UUID
 ) -> None:
-    for code, name, html_content in DOCUMENT_TEMPLATE_SEEDS:
-        await documents_service.create_template_version(
-            db,
-            clinic_id=clinic_id,
-            data=DocumentTemplateCreateRequest(code=code, name=name, html_content=html_content),
-            actor_id=actor_id,
-        )
+    await documents_service.retire_legacy_example_templates(
+        db, clinic_id=clinic_id, actor_id=actor_id
+    )
+    await documents_service.seed_default_document_templates(
+        db, clinic_id=clinic_id, actor_id=actor_id
+    )
 
 
 # Correccion B1 (docs/06_INSTRUCCIONES..., Parte B): hasta esta fase, estos catalogos

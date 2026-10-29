@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clinic_bootstrap import get_or_create_clinic, get_or_create_organization
 from app.core.db import async_session_factory
 from app.core.security import hash_password
+from app.modules.documents import service as documents_service
 from app.modules.iam.models import Role, User, UserClinic
 
 # code de Role -> (prefijo del correo, nombre completo por defecto, editable
@@ -82,6 +83,21 @@ async def bootstrap(
         await db.flush()
         db.add(UserClinic(user_id=user.id, clinic_id=clinic.id, role_id=role.id))
         created.append(email)
+
+    if not dry_run:
+        # Formatos oficiales reales de consentimiento/aviso de privacidad/cartas
+        # (docs/formatos, ver plan aprobado): se siembran aqui tambien (no solo
+        # en el seed de demo) para que una clinica real recien dada de alta ya
+        # tenga el catalogo completo sin pasos manuales. Idempotente: no hace
+        # nada si ya estaban sembrados (p.ej. al volver a correr este script).
+        admin_email = f"admin@{email_domain}"
+        admin_user = (await db.execute(select(User).where(User.email == admin_email))).scalar_one()
+        await documents_service.retire_legacy_example_templates(
+            db, clinic_id=clinic.id, actor_id=admin_user.id
+        )
+        await documents_service.seed_default_document_templates(
+            db, clinic_id=clinic.id, actor_id=admin_user.id
+        )
 
     if dry_run:
         await db.rollback()

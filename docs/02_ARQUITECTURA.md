@@ -72,18 +72,37 @@ sugerencias automáticamente todavía — ver `docs/PENDIENTES_CLINICOS.md`). Ta
 ai.suggestion_accepted` que crea `applier.py` (`entity_type`/`entity_id` de la fila que
 realmente se creó).
 
-### DocumentTemplate y Consent (Fase 9)
+### DocumentTemplate y Consent (Fase 9; catálogo real integrado en la fase de
+### "formatos oficiales", ver docs/PENDIENTES_CLINICOS.md)
 `DocumentTemplate`: `id, clinic_id, code, name, version, html_content, supersedes_id, is_current`
 -- versionada como `ToothFinding` (regla 7): editarla crea una fila nueva con `version`
-incrementada, nunca sobrescribe `html_content`.
+incrementada, nunca sobrescribe `html_content`. `code` ya no son 4 plantillas de
+ejemplo: son los **24 formatos oficiales reales** de `docs/formatos/` (21
+consentimientos informados + aviso de privacidad + cartas), sembrados por clínica
+vía `documents/service.py::seed_default_document_templates` (contenido literal en
+`documents/default_templates.py`) y agrupados en 3 categorías para el selector
+(`documents/rules.py::TEMPLATE_CATEGORIES`): `consentimiento`/`aviso_privacidad`/
+`carta`. Las 4 plantillas de ejemplo originales (`general`/`extraccion`/
+`endodoncia`/`anestesia`) se retiran (`is_current=False`, sin borrarse --
+`retire_legacy_example_templates`); `endodoncia` sigue existiendo como código real
+("Procedimiento endodóntico"), los otros 3 quedan sin reemplazo.
 
 `Consent`: `id, clinic_id, patient_id, encounter_id, template_id, procedure_planned_id?,
-treatment_plan_id?, professional_id, signer_name, signer_relationship, signature_path,
-pdf_path, content_hash (sha256), signed_at, is_active, annul_reason?`
+treatment_plan_id?, professional_id, signer_name, signer_relationship, extra_fields?
+(jsonb), witness1_name?, witness2_name?, signature_path, pdf_path, content_hash (sha256),
+signed_at, is_active, annul_reason?`
 -- se crea ya firmado (capturar la firma y generar el PDF es un solo acto atómico);
 despues no se edita, solo se anula con motivo (regla 2). `template_id` apunta a la
 versión exacta de la plantilla usada, no al código, para que un cambio de plantilla
-posterior no altere retroactivamente lo que un paciente ya firmó.
+posterior no altere retroactivamente lo que un paciente ya firmó. `extra_fields` guarda
+los datos libres que un formato puntual pide y el expediente no tiene (p.ej. tipo de
+prótesis, motivo de suspensión del tratamiento) -- el catálogo de qué formato pide qué
+campo vive en `documents/rules.py::TEMPLATE_EXTRA_FIELDS`, con prellenado automático
+donde se puede (`documents/service.py::build_consent_prefill`, expuesto en
+`GET /patients/{id}/consents/prefill`): tutor/parentesco desde `PatientContact`,
+diagnóstico desde la última nota clínica del encuentro, hora de entrada/salida desde
+`Encounter`. `witness1_name`/`witness2_name` son texto libre opcional (sin firma digital,
+se imprimen en blanco para firma a mano si no se capturan).
 
 ### Image (Fase 9)
 `id, clinic_id, patient_id, encounter_id, study_type, tooth_fdi?, procedure_planned_id?,
@@ -164,6 +183,7 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
 | GET | /ai/status; GET/PUT /ai/settings | Estado de Ollama/Whisper; modelo preferido por sucursal (permiso `ai.configure`) |
 | GET/POST | /document-templates; /document-templates/{code}/history | Plantillas de consentimiento, versionadas (regla 7) |
 | GET/POST | /patients/{id}/consents | Firmar un consentimiento (genera el PDF y el hash en el mismo acto) |
+| GET | /patients/{id}/consents/prefill | Datos ya conocidos + campos libres faltantes para el formato elegido, antes de firmar |
 | GET | /consents/{id}/pdf | PDF firmado (lectura auditada) |
 | POST | /consents/{id}/annul | Anula un consentimiento con motivo (regla 2) |
 | POST/GET | /patients/{id}/images | Subir (uno o varios archivos) y listar imágenes/radiografías |
@@ -664,11 +684,27 @@ Solo se permiten INSERT: se revoca UPDATE/DELETE al usuario de la aplicación y 
   codigo, para que editar la plantilla despues no altere retroactivamente lo que un
   paciente ya firmo.
 - **Las plantillas son HTML de verdad, con una sustitucion deliberadamente simple:**
-  `render_template` solo reemplaza rutas conocidas (`{{paciente.nombre}}`,
-  `{{procedimiento.nombre}}`, `{{plan.titulo}}`, `{{clinica.nombre}}`, `{{fecha}}`,
-  `{{profesional.nombre}}`) con un regex, sin condicionales ni expresiones -- a proposito,
-  para que una plantilla editable por la clinica (permiso `documents.write`) no pueda
-  ejecutar nada mas que texto. Cada valor se escapa con `html.escape` antes de insertarse.
+  `render_template` solo reemplaza rutas conocidas (`{{paciente.nombre/edad/sexo/
+  fecha_nacimiento/expediente}}`, `{{firmante.nombre}}`, `{{tutor.parentesco}}` vía
+  `{{extra.*}}`, `{{procedimiento.nombre}}`, `{{plan.titulo}}`, `{{clinica.nombre}}`,
+  `{{fecha}}`, `{{profesional.nombre/cedula}}`, `{{encuentro.hora_entrada/hora_salida}}`,
+  `{{testigos.uno/dos}}`, `{{extra.<clave>}}`) con un regex, sin condicionales ni
+  expresiones -- a proposito, para que una plantilla editable por la clinica (permiso
+  `documents.write`) no pueda ejecutar nada mas que texto. Cada valor se escapa con
+  `html.escape` antes de insertarse.
+- **Integración de los 24 formatos oficiales reales (`docs/formatos/`):** el cuerpo
+  clínico/legal de cada uno se copió literal (objetivo, beneficios, riesgos,
+  alternativas, párrafo de autorización, bloque de denegación/revocación); se
+  descartó el encabezado institucional SEDENA/Escuela Militar (ya lo cubre el
+  encabezado configurable de `pdf_header.py`). Los pocos datos libres que un formato
+  puntual pide y el expediente no tiene (tipo de prótesis, motivo de suspensión,
+  diagnóstico/lesiones de la carta médico-legal, etc.) están catalogados en
+  `rules.TEMPLATE_EXTRA_FIELDS` y se guardan en `Consent.extra_fields`; el nuevo
+  `GET /patients/{id}/consents/prefill` le dice al frontend qué ya viene prellenado y
+  qué falta, para el flujo en 2 pasos de `ConsentsTab.tsx` (elegir formato → revisar
+  datos y completar lo que falte → firmar). La carta de notificación de caso médico
+  legal (sin paciente firmante) reutiliza el mismo mecanismo con
+  `signer_relationship = "otro"`, sin modelo nuevo.
 - **xhtml2pdf en vez de reportlab/platypus armado a mano (a diferencia del presupuesto de
   la Fase 7):** la plantilla ya es HTML real, asi que se necesita un renderizador de HTML
   a PDF en vez de construir el documento con Table/Paragraph. Trajo consigo una version
