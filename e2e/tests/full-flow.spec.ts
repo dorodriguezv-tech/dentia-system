@@ -262,7 +262,9 @@ test('flujo completo: paciente, cita, atencion, IA, odontograma, diagnostico, pl
     await plantillas.getByLabel('Atencion').selectOption({ index: 1 })
     await categoria.getByRole('combobox').selectOption({ label: 'Toma de radiografías' })
 
-    await expect(plantillas.getByText('TOMA DE RADIOGRAFÍAS')).toBeVisible()
+    // Sin "exact: true", la busqueda por texto no distingue mayusculas/minusculas
+    // y tambien matchea la opcion "Toma de radiografías" del select de arriba.
+    await expect(plantillas.getByText('TOMA DE RADIOGRAFÍAS', { exact: true })).toBeVisible()
 
     await plantillas
       .getByPlaceholder('Nombre de quien firma')
