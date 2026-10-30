@@ -240,30 +240,35 @@ test('flujo completo: paciente, cita, atencion, IA, odontograma, diagnostico, pl
     await expect(page.getByText('realizado')).toBeVisible()
   })
 
-  await test.step('Odontologo: ver una plantilla existente y firmar consentimiento', async () => {
-    await page.getByRole('button', { name: 'Consentimientos' }).click()
-    await page.getByText('Plantillas de consentimiento').click()
+  await test.step('Odontologo: ver un formato existente y firmar', async () => {
+    await page.getByRole('button', { name: 'Formatos' }).click()
 
-    // Las plantillas ya no se crean desde la ficha del paciente (contenido
-    // legal, a cargo de la clinica) -- solo se consultan y se puede ver como
-    // se verian; aqui se usa la "General" ya sembrada.
-    await page.getByRole('button', { name: /^General:/ }).click()
-    await expect(page.getByText('Asi se vera para este paciente')).toBeVisible()
-
-    // El formulario de nuevo consentimiento vive en otro <details> que el de
-    // plantillas (que tambien tiene su propio combobox de codigo) -- hay que
-    // acotar la busqueda a "Consentimientos firmados" para no mezclarlos.
-    const newConsentSection = page.locator('details', {
-      has: page.getByText('Consentimientos firmados', { exact: true }),
+    // "Plantillas" reemplaza a las antiguas "Plantillas de consentimiento" +
+    // "Consentimientos firmados": un solo lugar que ve el documento ya
+    // resuelto y lo firma. Acotar a este <details> evita mezclar sus propios
+    // controles ("Atencion", comboboxes) con los de "Otros formatos clinicos".
+    const plantillas = page.locator('details', {
+      has: page.getByText('Plantillas', { exact: true }),
     })
-    await newConsentSection.getByRole('combobox').nth(0).selectOption({ index: 1 })
-    await newConsentSection.getByRole('combobox').nth(1).selectOption({ label: 'General' })
-    await newConsentSection.getByRole('combobox').nth(2).selectOption({ label: planTitle })
-    await newConsentSection
+
+    // Las categorias empiezan cerradas; se abren con su propia flecha. La de
+    // "Consentimientos informados" tiene mas de 5 formatos, asi que se lista
+    // en un select alfabetico en vez de un boton por formato.
+    const categoria = plantillas.locator('details', {
+      has: page.getByText(/^Consentimientos informados \(\d+\)$/),
+    })
+    await categoria.locator('summary').click()
+
+    await plantillas.getByLabel('Atencion').selectOption({ index: 1 })
+    await categoria.getByRole('combobox').selectOption({ label: 'Toma de radiografías' })
+
+    await expect(plantillas.getByText('TOMA DE RADIOGRAFÍAS')).toBeVisible()
+
+    await plantillas
       .getByPlaceholder('Nombre de quien firma')
       .fill(`${PATIENT_FIRST_NAME} ${PATIENT_LAST_NAME}`)
 
-    const canvas = page.getByRole('img', { name: /Area para firmar/ })
+    const canvas = plantillas.getByRole('img', { name: /Area para firmar/ })
     // page.mouse usa coordenadas absolutas del viewport y, a diferencia de
     // locator.click(), no hace scroll automatico -- sin esto el canvas puede
     // quedar fuera de pantalla y el trazo nunca llega al elemento correcto.
@@ -277,9 +282,9 @@ test('flujo completo: paciente, cita, atencion, IA, odontograma, diagnostico, pl
     await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.25)
     await page.mouse.up()
 
-    await page.getByRole('button', { name: 'Firmar y generar PDF' }).click()
+    await plantillas.getByRole('button', { name: 'Imprimir / Generar PDF' }).click()
     await expect(
-      newConsentSection.getByText(`${PATIENT_FIRST_NAME} ${PATIENT_LAST_NAME}`).first(),
+      plantillas.getByText(`${PATIENT_FIRST_NAME} ${PATIENT_LAST_NAME}`).first(),
     ).toBeVisible()
   })
 
