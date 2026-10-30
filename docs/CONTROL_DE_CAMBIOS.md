@@ -49,6 +49,28 @@ resultado.
 
 ---
 
+## v1.0.8 — 2026-10-29
+
+Commits: `e18ad84`, `5a877c0`, `1ee808d`
+
+- Integra al módulo de Formatos (antes "Consentimientos") los 24 formatos
+  oficiales reales de `docs/formatos/` (consentimientos informados, aviso de
+  privacidad y cartas, incluida la de notificación de caso médico legal),
+  reemplazando las 4 plantillas de ejemplo. Prellena automáticamente los
+  datos ya conocidos del expediente (paciente, tutor, profesional, hora de
+  la atención) y solo pide los campos libres que cada formato puntual
+  necesita (tipo de prótesis, motivo de suspensión, etc.).
+- Rediseña el menú "Formatos" del expediente (antes "Consentimientos"): ya
+  no hay un submenú aparte para firmar — "Plantillas" despliega el
+  documento elegido ya resuelto (encabezado, logos, título, datos
+  conocidos) con los campos faltantes señalados para completarlos antes de
+  firmar e imprimir el PDF; la opción de anular sigue disponible debajo de
+  cada formato. Las categorías con más de 5 formatos se listan en un
+  selector alfabético en vez de saturar la pantalla, y corrige que el
+  listado de plantillas mostrara el nombre repetido y el número de versión.
+- Reorganiza las instrucciones de este documento, separando las dirigidas a
+  Claude Code de las dirigidas al usuario.
+
 ## v1.0.7 — 2026-10-28
 
 Commits: `6653f97`, `2adba0c`, `849fc2e`, `1248e33`, `470e927`, `1cc38d9`, `f3232d5`, `ac16aa4`,
