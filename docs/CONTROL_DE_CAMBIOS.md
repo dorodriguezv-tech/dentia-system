@@ -51,7 +51,7 @@ resultado.
 
 ## v1.0.8 — 2026-10-29
 
-Commits: `e18ad84`, `5a877c0`, `1ee808d`, `e246838`
+Commits: `e18ad84`, `5a877c0`, `1ee808d`, `e246838`, `1aa2967`
 
 - Integra al módulo de Formatos (antes "Consentimientos") los 24 formatos
   oficiales reales de `docs/formatos/` (consentimientos informados, aviso de
@@ -71,8 +71,9 @@ Commits: `e18ad84`, `5a877c0`, `1ee808d`, `e246838`
 - Reorganiza las instrucciones de este documento, separando las dirigidas a
   Claude Code de las dirigidas al usuario.
 - Corrige la prueba E2E `full-flow.spec.ts`, que todavía buscaba el menú
-  "Consentimientos" viejo y hacía fallar el pipeline de release (sin efecto
-  en el sistema desplegado, solo en la verificación automática).
+  "Consentimientos" viejo (y luego una ambigüedad de texto al elegir el
+  formato) e hacía fallar el pipeline de release — sin efecto en el sistema
+  desplegado, solo en la verificación automática.
 
 ## v1.0.7 — 2026-10-28
 
